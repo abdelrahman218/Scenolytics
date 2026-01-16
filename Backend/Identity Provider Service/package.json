@@ -1,0 +1,17 @@
+{
+  "name": "identity-provider-service",
+  "version": "1.0.0",
+  "description": "This service is responsible for all user authorization and authentication for scenolytics system",
+  "main": "index.js",
+  "author": "",
+  "license": "",
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "knex": "^3.1.0",
+    "mysql": "^2.18.1"
+  }
+}
