@@ -1,0 +1,58 @@
+import jwt from "jsonwebtoken";
+import User from "../models/user.js";
+
+const JWT_SECRET = process.env.JWT_SECRET;
+
+export const signUp = async (req, res, next) => {
+  try {
+    const { email, password, role } = req.body;
+
+    // Create user
+    const newUser = await User.Create(email, password, role);
+
+    res.status(201).json({
+      message: "User created successfully",
+      user: {
+        user_id: newUser.user_id,
+        email: newUser.email,
+        role: newUser.role
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const logIn = async (req, res, next) => {
+  try {
+    const { email, password } = req.body;
+
+    // Find user
+    let user = await User.Login(email, password);
+    
+    if (!user) {
+      return res.status(401).json({
+        message: "Invalid email or password",
+      });
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { user_id: user.user_id, role: user.role },
+      JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    res.json({
+      message: "Login successful",
+      token,
+      user: {
+        user_id: user.user_id,
+        email: user.email,
+        role: user.role
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
