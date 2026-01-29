@@ -1,0 +1,18 @@
+{
+  "name": "audition-training-service",
+  "version": "1.0.0",
+  "description": "Manages audition submissions, portfolios, and audition lifecycle for the scenolytics system",
+  "main": "index.js",
+  "type": "module",
+  "author": "",
+  "license": "",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "mysql2": "^3.16.1",
+    "knex": "^3.1.0",
+    "uuid": "^9.0.0",
+    "axios": "^1.6.0"
+  }
+}

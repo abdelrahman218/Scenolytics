@@ -1,20 +1,71 @@
-name: Scenolytics-Backend-Services
+version: "3.9"
+
 services:
+  # ================= API GATEWAY =================
+  api-gateway:
+    build: ./API_Gateway
+    container_name: api-gateway
+    ports:
+      - "80:80"
+    depends_on:
+      - identity-provider-service
+      - user-management-service
+      - audition-training-service
+      - video-processing-service
+      - ai-evaluation-service
+      - casting-management-service
+      - notification-service
+    networks:
+      - scenolytics-network
+    restart: unless-stopped
+
+  # ================= MESSAGE BROKER =================
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: scenolytics-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      timeout: 20s
+      retries: 10
+      interval: 10s
+    networks:
+      - scenolytics-network
+    restart: unless-stopped
+
+  # ================= REDIS =================
+  redis:
+    image: redis:7-alpine
+    container_name: scenolytics-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      timeout: 20s
+      retries: 10
+      interval: 10s
+    networks:
+      - scenolytics-network
+    restart: unless-stopped
+
+  # ================= IDENTITY PROVIDER =================
   identity-provider-mysql:
     image: mysql:8.0
     container_name: identity-provider-mysql
     environment:
-      MYSQL_PORT: ${DATABASE_PORT:-3306}
       MYSQL_ROOT_PASSWORD: ${ROOT_PASSWORD}
-      MYSQL_DATABASE: ${IDENTITY_PROVIDER_SERVICE_DATABASE_NAME:-identity_provider_db}
-      MYSQL_USER: ${DATABASE_USER}
-      MYSQL_PASSWORD: ${DATABASE_PASSWORD}
+      MYSQL_DATABASE: ${IDENTITY_PROVIDER_SERVICE_DATABASE_NAME}
     ports:
-      - "5432:${DATABASE_PORT:-3306}"
+      - "33061:3306"
     volumes:
       - ./Identity_Provider_Service/create_database.sql:/docker-entrypoint-initdb.d/01_create_database.sql
       - ./Identity_Provider_Service/create_tables.sql:/docker-entrypoint-initdb.d/02_create_tables.sql
-      - mysql_data:/var/lib/mysql
+      - identity_provider_data:/var/lib/mysql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       timeout: 20s
@@ -22,21 +73,22 @@ services:
       interval: 10s
     networks:
       - scenolytics-network
+    restart: unless-stopped
 
   identity-provider-service:
     build: ./Identity_Provider_Service
     container_name: identity-provider-service
     environment:
-      NODE_ENV: ${NODE_ENV:-production}
+      NODE_ENV: ${NODE_ENV}
       JWT_SECRET: ${JWT_SECRET}
-      IDENTITY_PROVIDER_SERVICE_PORT: ${IDENTITY_PROVIDER_SERVICE_PORT:-5000}
-      IDENTITY_PROVIDER_SERVICE_DATABASE_HOST: ${IDENTITY_PROVIDER_SERVICE_DATABASE_HOST}
-      DATABASE_PORT: ${DATABASE_PORT:-3306}
+      IDENTITY_PROVIDER_SERVICE_PORT: ${IDENTITY_PROVIDER_SERVICE_PORT}
+      IDENTITY_PROVIDER_SERVICE_DATABASE_HOST: identity-provider-mysql
+      DATABASE_PORT: ${DATABASE_PORT}
       DATABASE_USER: ${DATABASE_USER}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
       IDENTITY_PROVIDER_SERVICE_DATABASE_NAME: ${IDENTITY_PROVIDER_SERVICE_DATABASE_NAME}
     ports:
-      - "${IDENTITY_PROVIDER_SERVICE_PORT:-5000}:${IDENTITY_PROVIDER_SERVICE_PORT:-5000}"
+      - "${IDENTITY_PROVIDER_SERVICE_PORT}:${IDENTITY_PROVIDER_SERVICE_PORT}"
     depends_on:
       identity-provider-mysql:
         condition: service_healthy
@@ -44,8 +96,269 @@ services:
       - scenolytics-network
     restart: unless-stopped
 
+  # ================= USER MANAGEMENT =================
+  user-management-mysql:
+    image: mysql:8.0
+    container_name: user-management-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${ROOT_PASSWORD}
+      MYSQL_DATABASE: ${USER_MANAGEMENT_SERVICE_DATABASE_NAME}
+    ports:
+      - "33062:3306"
+    volumes:
+      - ./User_Management_Service/create_database.sql:/docker-entrypoint-initdb.d/01_create_database.sql
+      - ./User_Management_Service/create_tables.sql:/docker-entrypoint-initdb.d/02_create_tables.sql
+      - user_management_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+      interval: 10s
+    networks:
+      - scenolytics-network
+    restart: unless-stopped
+
+  user-management-service:
+    build: ./User_Management_Service
+    container_name: user-management-service
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      USER_MANAGEMENT_SERVICE_PORT: ${USER_MANAGEMENT_SERVICE_PORT}
+      USER_MANAGEMENT_SERVICE_DATABASE_HOST: user-management-mysql
+      DATABASE_PORT: ${DATABASE_PORT}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      USER_MANAGEMENT_SERVICE_DATABASE_NAME: ${USER_MANAGEMENT_SERVICE_DATABASE_NAME}
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    ports:
+      - "${USER_MANAGEMENT_SERVICE_PORT}:${USER_MANAGEMENT_SERVICE_PORT}"
+    depends_on:
+      user-management-mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - scenolytics-network
+    restart: unless-stopped
+
+  # ================= AUDITION TRAINING =================
+  audition-training-mysql:
+    image: mysql:8.0
+    container_name: audition-training-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${ROOT_PASSWORD}
+      MYSQL_DATABASE: ${AUDITION_TRAINING_SERVICE_DATABASE_NAME}
+    ports:
+      - "33063:3306"
+    volumes:
+      - ./Audition_Training_Service/create_database.sql:/docker-entrypoint-initdb.d/01_create_database.sql
+      - ./Audition_Training_Service/create_tables.sql:/docker-entrypoint-initdb.d/02_create_tables.sql
+      - audition_training_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+      interval: 10s
+    networks:
+      - scenolytics-network
+    restart: unless-stopped
+
+  audition-training-service:
+    build: ./Audition_Training_Service
+    container_name: audition-training-service
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      AUDITION_TRAINING_SERVICE_PORT: ${AUDITION_TRAINING_SERVICE_PORT}
+      AUDITION_TRAINING_SERVICE_DATABASE_HOST: audition-training-mysql
+      DATABASE_PORT: ${DATABASE_PORT}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      AUDITION_TRAINING_SERVICE_DATABASE_NAME: ${AUDITION_TRAINING_SERVICE_DATABASE_NAME}
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    ports:
+      - "${AUDITION_TRAINING_SERVICE_PORT}:${AUDITION_TRAINING_SERVICE_PORT}"
+    depends_on:
+      audition-training-mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - scenolytics-network
+    restart: unless-stopped
+
+  # ================= VIDEO PROCESSING =================
+  video-processing-mysql:
+    image: mysql:8.0
+    container_name: video-processing-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${ROOT_PASSWORD}
+      MYSQL_DATABASE: ${VIDEO_PROCESSING_SERVICE_DATABASE_NAME}
+    ports:
+      - "33064:3306"
+    volumes:
+      - ./Video_Processing_Service/create_database.sql:/docker-entrypoint-initdb.d/01_create_database.sql
+      - ./Video_Processing_Service/create_tables.sql:/docker-entrypoint-initdb.d/02_create_tables.sql
+      - video_processing_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+      interval: 10s
+    networks:
+      - scenolytics-network
+    restart: unless-stopped
+
+  video-processing-service:
+    build: ./Video_Processing_Service
+    container_name: video-processing-service
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      VIDEO_PROCESSING_SERVICE_PORT: ${VIDEO_PROCESSING_SERVICE_PORT}
+      VIDEO_PROCESSING_SERVICE_DATABASE_HOST: video-processing-mysql
+      DATABASE_PORT: ${DATABASE_PORT}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      VIDEO_PROCESSING_SERVICE_DATABASE_NAME: ${VIDEO_PROCESSING_SERVICE_DATABASE_NAME}
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    ports:
+      - "${VIDEO_PROCESSING_SERVICE_PORT}:${VIDEO_PROCESSING_SERVICE_PORT}"
+    depends_on:
+      video-processing-mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - scenolytics-network
+    restart: unless-stopped
+    volumes:
+      - ./Video_Processing_Service/uploads:/app/uploads
+
+  # ================= AI EVALUATION =================
+  ai-evaluation-mysql:
+    image: mysql:8.0
+    container_name: ai-evaluation-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${ROOT_PASSWORD}
+      MYSQL_DATABASE: ${AI_EVALUATION_SERVICE_DATABASE_NAME}
+    ports:
+      - "33065:3306"
+    volumes:
+      - ./AI_Evaluation_Service/create_database.sql:/docker-entrypoint-initdb.d/01_create_database.sql
+      - ./AI_Evaluation_Service/create_tables.sql:/docker-entrypoint-initdb.d/02_create_tables.sql
+      - ai_evaluation_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+      interval: 10s
+    networks:
+      - scenolytics-network
+    restart: unless-stopped
+
+  ai-evaluation-service:
+    build: ./AI_Evaluation_Service
+    container_name: ai-evaluation-service
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      AI_EVALUATION_SERVICE_PORT: ${AI_EVALUATION_SERVICE_PORT}
+      AI_EVALUATION_SERVICE_DATABASE_HOST: ai-evaluation-mysql
+      DATABASE_PORT: ${DATABASE_PORT}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      AI_EVALUATION_SERVICE_DATABASE_NAME: ${AI_EVALUATION_SERVICE_DATABASE_NAME}
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    ports:
+      - "${AI_EVALUATION_SERVICE_PORT}:${AI_EVALUATION_SERVICE_PORT}"
+    depends_on:
+      ai-evaluation-mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - scenolytics-network
+    restart: unless-stopped
+
+  # ================= CASTING MANAGEMENT =================
+  casting-management-mysql:
+    image: mysql:8.0
+    container_name: casting-management-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${ROOT_PASSWORD}
+      MYSQL_DATABASE: ${CASTING_MANAGEMENT_SERVICE_DATABASE_NAME}
+    ports:
+      - "33066:3306"
+    volumes:
+      - ./Casting_Management_Service/create_database.sql:/docker-entrypoint-initdb.d/01_create_database.sql
+      - ./Casting_Management_Service/create_tables.sql:/docker-entrypoint-initdb.d/02_create_tables.sql
+      - casting_management_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+      interval: 10s
+    networks:
+      - scenolytics-network
+    restart: unless-stopped
+
+  casting-management-service:
+    build: ./Casting_Management_Service
+    container_name: casting-management-service
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      CASTING_MANAGEMENT_SERVICE_PORT: ${CASTING_MANAGEMENT_SERVICE_PORT}
+      CASTING_MANAGEMENT_SERVICE_DATABASE_HOST: casting-management-mysql
+      DATABASE_PORT: ${DATABASE_PORT}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      CASTING_MANAGEMENT_SERVICE_DATABASE_NAME: ${CASTING_MANAGEMENT_SERVICE_DATABASE_NAME}
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    ports:
+      - "${CASTING_MANAGEMENT_SERVICE_PORT}:${CASTING_MANAGEMENT_SERVICE_PORT}"
+    depends_on:
+      casting-management-mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - scenolytics-network
+    restart: unless-stopped
+
+  # ================= NOTIFICATION SERVICE =================
+  notification-service:
+    build: ./Notification_Service
+    container_name: notification-service
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      NOTIFICATION_SERVICE_PORT: ${NOTIFICATION_SERVICE_PORT}
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+    ports:
+      - "${NOTIFICATION_SERVICE_PORT}:${NOTIFICATION_SERVICE_PORT}"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - scenolytics-network
+    restart: unless-stopped
+
 volumes:
-  mysql_data:
+  identity_provider_data:
+    driver: local
+  user_management_data:
+    driver: local
+  audition_training_data:
+    driver: local
+  video_processing_data:
+    driver: local
+  ai_evaluation_data:
+    driver: local
+  casting_management_data:
     driver: local
 
 networks:
