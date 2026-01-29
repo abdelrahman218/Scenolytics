@@ -1,0 +1,975 @@
+# Egyptian Arabic Video Transcription (Memory Optimized)
+
+This notebook includes memory optimization techniques to handle the large Seamless M4T v2 model.
+
+**Solutions included:**
+1. Automatic audio chunking for long videos
+2. Memory clearing between chunks
+3. 8-bit quantization option (reduces memory by ~50%)
+4. Batch size optimization
+## Step 1: Install Required Packages
+
+!pip install -q moviepy
+!pip install -q librosa soundfile
+!pip install transformers==4.55.4
+
+## Step 2: Import Libraries
+import torch
+import torchaudio
+from transformers import AutoProcessor, SeamlessM4Tv2Model
+from moviepy.editor import VideoFileClip
+import librosa
+import soundfile as sf
+import numpy as np
+from google.colab import files
+import os
+import gc
+from google.colab import drive
+import os
+
+# Mount Google Drive
+print("Mounting Google Drive...")
+drive.mount('/content/drive')
+
+# Get all items in MyDrive and find the exact folder name
+mydrive_path = '/content/drive/MyDrive'
+all_items = os.listdir(mydrive_path)
+
+# Find folders that contain "seamless"
+print("\n--- Searching for folders containing 'seamless' ---")
+seamless_folders = [item for item in all_items if 'seamless' in item.lower()]
+
+if seamless_folders:
+    for folder in seamless_folders:
+        print(f"Found: '{folder}'")
+        print(f"  Length: {len(folder)} characters")
+        print(f"  Repr: {repr(folder)}")
+        print(f"  Bytes: {folder.encode()}")
+
+        # Try to use this folder
+        full_path = os.path.join(mydrive_path, folder)
+        print(f"  Full path: {full_path}")
+        print(f"  Exists: {os.path.exists(full_path)}")
+        print(f"  Is directory: {os.path.isdir(full_path)}")
+
+        # If it exists and is a directory, use it
+        if os.path.exists(full_path) and os.path.isdir(full_path):
+            print(f"\n✓ Using this folder!")
+            model_dir = full_path
+
+            # Check if model files exist
+            config_path = os.path.join(model_dir, 'config.json')
+            model_files_exist = os.path.exists(config_path)
+
+            if model_files_exist:
+                print("Model files found! Loading from Google Drive...")
+                processor = AutoProcessor.from_pretrained(model_dir, local_files_only=True)
+                model = SeamlessM4Tv2Model.from_pretrained(
+                    model_dir,
+                    load_in_8bit=True,
+                    device_map="auto",
+                    local_files_only=True
+                )
+                print("✓ Model loaded successfully!")
+            else:
+                print("Folder is empty. Starting download...")
+                processor = AutoProcessor.from_pretrained("facebook/seamless-m4t-v2-large")
+                model = SeamlessM4Tv2Model.from_pretrained(
+                    "facebook/seamless-m4t-v2-large",
+                    load_in_8bit=True,
+                    device_map="auto"
+                )
+                print("Saving model to Google Drive...")
+                processor.save_pretrained(model_dir)
+                model.save_pretrained(model_dir)
+                print(f"✓ Model saved to: {model_dir}")
+
+            # Check memory
+            if torch.cuda.is_available():
+                print(f"\nGPU Memory Used: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
+            break
+else:
+    print("❌ No folder containing 'seamless' found!")
+    print("\nAll folders in MyDrive:")
+    for item in all_items:
+        if os.path.isdir(os.path.join(mydrive_path, item)):
+            print(f"  - {item}")
+from google.colab import drive
+import os
+import torch
+from transformers import AutoProcessor, SeamlessM4Tv2Model
+
+# Check GPU
+if torch.cuda.is_available():
+    device = "cuda:0"
+    print(f"GPU: {torch.cuda.get_device_name(0)}")
+else:
+    device = "cpu"
+    print("WARNING: No GPU detected!")
+
+# Mount Google Drive
+print("Mounting Google Drive...")
+drive.mount('/content/drive')
+
+# Find the model folder automatically
+mydrive_path = '/content/drive/MyDrive'
+all_items = os.listdir(mydrive_path)
+seamless_folders = [item for item in all_items if 'seamless' in item.lower()]
+
+if seamless_folders:
+    folder = seamless_folders[0]  # Use the first match
+    model_dir = os.path.join(mydrive_path, folder)
+    print(f"Found model folder: {folder}")
+
+    # Load the model from Google Drive
+    print("Loading model from Google Drive...")
+    processor = AutoProcessor.from_pretrained(model_dir, local_files_only=True)
+    model = SeamlessM4Tv2Model.from_pretrained(
+        model_dir,
+        load_in_8bit=True,
+        device_map="auto",
+        local_files_only=True
+    )
+    print("✓ Model loaded successfully from Google Drive!")
+
+    # Check memory
+    if torch.cuda.is_available():
+        print(f"GPU Memory Used: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
+        print(f"GPU Memory Available: {(torch.cuda.get_device_properties(0).total_memory - torch.cuda.memory_allocated(0)) / 1e9:.2f} GB")
+else:
+    print("❌ Model folder not found!")
+## Step 5: Upload Your Video
+print("Please upload your video file:")
+uploaded = files.upload()
+video_filename = list(uploaded.keys())[0]
+print(f"Video uploaded: {video_filename}")
+## Step 6: Extract Audio from Video
+print("Extracting audio from video...")
+video = VideoFileClip(video_filename)
+audio_filename = "extracted_audio.wav"
+video.audio.write_audiofile(audio_filename, codec='pcm_s16le')
+video.close()
+print(f"Audio extracted to: {audio_filename}")
+## Step 7: Load and Check Audio Duration
+print("Loading audio...")
+audio_array, sample_rate = librosa.load(audio_filename, sr=16000)
+duration = len(audio_array) / sample_rate
+print(f"Audio duration: {duration:.2f} seconds ({duration/60:.2f} minutes)")
+print(f"Sample rate: {sample_rate} Hz")
+# Play the extracted audio
+from IPython.display import Audio, display
+
+print("Playing extracted audio:")
+display(Audio(audio_filename, autoplay=False))
+
+# Alternative: Play with more controls
+# from google.colab import output
+# output.serve_kernel_port_as_window(8888)
+# display(Audio(audio_filename, rate=16000))
+## Step 8: Transcribe with Automatic Chunking
+
+This processes audio in chunks to avoid memory issues.
+def transcribe_with_chunking(audio_array, chunk_length_seconds=20, overlap_seconds=1):
+    """
+    Transcribe audio in chunks with memory management.
+
+    Args:
+        audio_array: Audio data
+        chunk_length_seconds: Length of each chunk (reduce if still getting OOM)
+        overlap_seconds: Overlap between chunks for continuity
+    """
+    sample_rate = 16000
+    chunk_size = chunk_length_seconds * sample_rate
+    overlap_size = overlap_seconds * sample_rate
+
+    transcriptions = []
+    total_chunks = int(np.ceil(len(audio_array) / (chunk_size - overlap_size)))
+
+    print(f"Processing {total_chunks} chunks of ~{chunk_length_seconds} seconds each...\n")
+
+    for i in range(0, len(audio_array), chunk_size - overlap_size):
+        chunk_num = i // (chunk_size - overlap_size) + 1
+        chunk = audio_array[i:i + chunk_size]
+
+        # Skip if chunk is too short
+        if len(chunk) < sample_rate * 0.5:  # Less than 0.5 seconds
+            continue
+
+        print(f"Chunk {chunk_num}/{total_chunks} ({len(chunk)/sample_rate:.1f}s)...", end=" ")
+
+        try:
+            # Clear cache before processing
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
+
+            # Process chunk
+            audio_inputs = processor(
+                audios=chunk,
+                sampling_rate=sample_rate,
+                return_tensors="pt"
+            ).to(device)
+
+            # Generate transcription with memory-efficient settings
+            with torch.no_grad():
+                output_tokens = model.generate(
+                    **audio_inputs,
+                    tgt_lang="arz",
+                    generate_speech=False,
+                    max_new_tokens=256  # Limit output length
+                )
+
+            # Decode
+            chunk_transcription = processor.decode(
+                output_tokens[0].tolist()[0],
+                skip_special_tokens=True
+            )
+
+            transcriptions.append(chunk_transcription)
+            print(f"✓ Done")
+
+            # Clean up
+            del audio_inputs, output_tokens
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+        except Exception as e:
+            print(f"✗ Error: {str(e)}")
+            # Try to continue with smaller chunk if possible
+            continue
+
+    return " ".join(transcriptions)
+
+# Run transcription
+print("Starting transcription...\n")
+transcription = transcribe_with_chunking(audio_array, chunk_length_seconds=20)
+
+print("\n" + "="*60)
+print("TRANSCRIPTION (Egyptian Arabic):")
+print("="*60)
+print(transcription)
+print("="*60)
+!pip install whisperx==3.7.4
+!pip install -q moviepy
+!pip install -q librosa soundfile
+import whisperx
+import gc
+import torch.serialization
+
+# Add safe globals for WhisperX compatibility with PyTorch 2.6
+try:
+    from omegaconf.listconfig import ListConfig
+    from omegaconf.dictconfig import DictConfig
+    torch.serialization.add_safe_globals([ListConfig, DictConfig])
+except ImportError:
+    pass
+
+print("Loading WhisperX model for Arabic alignment...")
+device = "cuda" if torch.cuda.is_available() else "cpu"
+compute_type = "float16" if device == "cuda" else "float32"
+
+# Load WhisperX model with weights_only=False for compatibility
+import torch
+_original_load = torch.load
+torch.load = lambda *args, **kwargs: _original_load(*args, **{**kwargs, 'weights_only': False})
+
+try:
+    whisperx_model = whisperx.load_model("large-v2", device, compute_type=compute_type)
+    print(f"✓ WhisperX model loaded on {device}")
+    if torch.cuda.is_available():
+        print(f"GPU Memory Used: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
+finally:
+    # Restore original torch.load
+    torch.load = _original_load
+def align_with_whisperx(audio_array, transcription, sample_rate=16000):
+    """
+    Accurate word-level alignment using WhisperX
+    Works well with Egyptian Arabic
+    """
+    print("\n" + "="*60)
+    print("Performing accurate alignment with WhisperX...")
+    print("="*60)
+
+    # Save audio temporarily
+    temp_audio = "/content/temp_audio_for_alignment.wav"
+    sf.write(temp_audio, audio_array, sample_rate)
+
+    # Load audio in WhisperX format
+    audio = whisperx.load_audio(temp_audio)
+
+    # Step 1: Get initial transcription with timestamps from Whisper
+    print("Step 1: Getting initial timestamps from Whisper...")
+    result = whisperx_model.transcribe(audio, batch_size=16, language="ar")
+
+    print(f"✓ Found {len(result['segments'])} segments")
+
+    # Step 2: Align with Arabic model for word-level timestamps
+    print("\nStep 2: Aligning word-level timestamps...")
+    try:
+        model_a, metadata = whisperx.load_align_model(language_code="ar", device=device)
+        result_aligned = whisperx.align(
+            result["segments"],
+            model_a,
+            metadata,
+            audio,
+            device,
+            return_char_alignments=False
+        )
+
+        print("✓ Word-level alignment completed!")
+
+        # Clean up alignment model
+        del model_a
+        gc.collect()
+        torch.cuda.empty_cache()
+
+    except Exception as e:
+        print(f"⚠️ Alignment model failed: {e}")
+        print("Using segment-level timestamps instead...")
+        result_aligned = result
+
+    # Extract word-level timestamps
+    word_timestamps = []
+
+    for segment in result_aligned["segments"]:
+        # Check if we have word-level timestamps
+        if "words" in segment and segment["words"]:
+            for word_info in segment["words"]:
+                if word_info.get("word", "").strip():
+                    word_timestamps.append({
+                        'word': word_info["word"].strip(),
+                        'start': round(word_info["start"], 3),
+                        'end': round(word_info["end"], 3),
+                        'duration': round(word_info["end"] - word_info["start"], 3)
+                    })
+        else:
+            # Fallback: use segment timestamps and split by words
+            segment_text = segment["text"].strip()
+            words = segment_text.split()
+
+            if words:
+                segment_duration = segment["end"] - segment["start"]
+                word_duration = segment_duration / len(words)
+
+                for i, word in enumerate(words):
+                    word_start = segment["start"] + (i * word_duration)
+                    word_end = word_start + word_duration
+
+                    word_timestamps.append({
+                        'word': word,
+                        'start': round(word_start, 3),
+                        'end': round(word_end, 3),
+                        'duration': round(word_duration, 3)
+                    })
+
+    print(f"\n✓ Extracted {len(word_timestamps)} word timestamps")
+
+    # Clean up
+    os.remove(temp_audio)
+
+    return word_timestamps
+
+# Run alignment
+print("\nAligning Seamless M4T transcription with WhisperX...")
+aligned_segments = align_with_whisperx(audio_array, transcription)
+
+# Display results
+print("\n" + "="*80)
+print("ACCURATE WORD-LEVEL TIMESTAMPS (WhisperX Alignment)")
+print("="*80)
+
+for i, segment in enumerate(aligned_segments, 1):  # Show first 20
+    print(f"{i:3d}. [{segment['start']:7.3f}s - {segment['end']:7.3f}s] "
+          f"({segment['duration']:5.3f}s)  {segment['word']}")
+
+if len(aligned_segments) > 20:
+    print(f"\n... and {len(aligned_segments) - 20} more words")
+
+print("="*80)
+print(f"\nTotal words: {len(aligned_segments)}")
+if aligned_segments:
+    print(f"Total duration: {aligned_segments[-1]['end']:.3f}s")
+    avg_duration = sum(s['duration'] for s in aligned_segments) / len(aligned_segments)
+    print(f"Average word duration: {avg_duration:.3f}s")
+from google.colab import files
+import difflib
+import re
+import pandas as pd
+from IPython.display import HTML, display
+
+# Upload your original script
+print("Upload your original script file (txt, json, or srt):")
+uploaded_script = files.upload()
+SCRIPT_FILE = list(uploaded_script.keys())[0]
+print(f"✓ Script uploaded: {SCRIPT_FILE}")
+# =========================
+# CELL 21: LOAD AND PREPARE SCRIPT FOR COMPARISON
+# =========================
+
+import json
+import re
+
+def parse_srt_with_timestamps(content):
+    """Parse SRT format with timestamps."""
+    segments = []
+    lines = content.strip().split('\n')
+    i = 0
+
+    while i < len(lines):
+        # Skip index
+        if lines[i].strip().isdigit():
+            i += 1
+
+        # Parse timestamp line
+        if i < len(lines) and '-->' in lines[i]:
+            timestamp_line = lines[i]
+            times = timestamp_line.split('-->')
+            start = srt_time_to_seconds(times[0].strip())
+            end = srt_time_to_seconds(times[1].strip().split()[0])
+            i += 1
+
+            # Get text (may be multiple lines)
+            text_lines = []
+            while i < len(lines) and lines[i].strip() and not lines[i].strip().isdigit():
+                text_lines.append(lines[i].strip())
+                i += 1
+
+            text = ' '.join(text_lines)
+            if text:
+                segments.append({'text': text, 'start': start, 'end': end})
+        i += 1
+
+    return segments
+
+def srt_time_to_seconds(time_str):
+    """Convert SRT timestamp to seconds."""
+    # Format: 00:00:10,500
+    time_str = time_str.replace(',', '.')
+    parts = time_str.split(':')
+    hours = int(parts[0])
+    minutes = int(parts[1])
+    seconds = float(parts[2])
+    return hours * 3600 + minutes * 60 + seconds
+
+def load_script_with_timestamps(file_path):
+    """Load script and return segments with timestamps if available."""
+    with open(file_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    if file_path.endswith('.json'):
+        data = json.loads(content)
+        if isinstance(data, list) and len(data) > 0 and 'start' in data[0]:
+            # Already has timestamps
+            return data, True
+        elif isinstance(data, dict) and 'text' in data:
+            return [{'text': data['text'], 'start': 0, 'end': 0}], False
+    elif file_path.endswith('.srt'):
+        return parse_srt_with_timestamps(content), True
+
+    # Plain text - no timestamps
+    return [{'text': content, 'start': 0, 'end': 0}], False
+
+def normalize_text(text):
+    """Basic text normalization for comparison."""
+    text = text.lower()
+    text = re.sub(r'\s+', ' ', text)
+    text = re.sub(r'[^\w\s]', '', text)
+    return text.strip()
+
+
+# =========================
+# LOAD SCRIPT FILE
+# =========================
+
+print("\n" + "="*80)
+print("📜 LOADING SCRIPT FILE")
+print("="*80)
+
+# Load the script file that was uploaded in Cell 20
+if 'SCRIPT_FILE' in dir():
+    script_segments, script_has_timestamps = load_script_with_timestamps(SCRIPT_FILE)
+    script_text = ' '.join([seg['text'].strip() for seg in script_segments])
+    print(f"✓ Script loaded from: {SCRIPT_FILE}")
+    print(f"✓ Script segments: {len(script_segments)}")
+    print(f"✓ Script characters: {len(script_text)}")
+    print(f"✓ Has timestamps: {script_has_timestamps}")
+else:
+    print("❌ ERROR: SCRIPT_FILE not found!")
+    print("Please run Cell 20 first to upload your script file.")
+    script_segments = []
+    script_text = ""
+    script_has_timestamps = False
+
+
+# =========================
+# LOAD TRANSCRIPT DATA (WITH WORD-LEVEL TIMESTAMPS FROM WHISPERX)
+# =========================
+
+print("\n" + "="*80)
+print("🎤 LOADING TRANSCRIPT DATA")
+print("="*80)
+
+# Use aligned_segments from align_with_whisperx (has word-level timestamps!)
+if 'aligned_segments' in dir() and aligned_segments:
+    transcript_segments = aligned_segments  # This has word-level timestamps!
+    transcript_text = ' '.join([seg['word'].strip() for seg in aligned_segments])
+    print(f"✓ Using aligned_segments from align_with_whisperx")
+    print(f"✓ Transcript words: {len(aligned_segments)}")
+    print(f"✓ Transcript characters: {len(transcript_text)}")
+    print(f"✓ Has word-level timestamps: YES")
+
+    # Show timestamp info
+    if aligned_segments:
+        print(f"✓ First word: '{aligned_segments[0]['word']}' at {aligned_segments[0]['start']:.2f}s")
+        print(f"✓ Last word: '{aligned_segments[-1]['word']}' at {aligned_segments[-1]['end']:.2f}s")
+
+# Fallback: Use original transcription if aligned_segments doesn't exist
+elif 'transcription' in dir() and transcription:
+    transcript_text = transcription.strip()
+    # Create simple segment without timestamps
+    transcript_segments = [{'text': transcript_text, 'start': 0, 'end': 0}]
+    print(f"⚠ Using transcription (no timestamps available)")
+    print(f"✓ Transcript characters: {len(transcript_text)}")
+    print(f"✓ Has word-level timestamps: NO")
+
+else:
+    print("❌ ERROR: No transcript data found!")
+    print("Please run the align_with_whisperx cell first.")
+    transcript_segments = []
+    transcript_text = ""
+
+
+# =========================
+# PREVIEW
+# =========================
+
+if script_text and transcript_text:
+    print("\n" + "="*80)
+    print("👀 PREVIEW")
+    print("="*80)
+    print(f"\nScript preview (first 200 chars):")
+    print(f"  {script_text[:200]}...")
+    print(f"\nTranscript preview (first 200 chars):")
+    print(f"  {transcript_text[:200]}...")
+    print("\n✓ Ready for word-by-word comparison with timestamps!")
+else:
+    print("\n❌ Missing data - cannot proceed with comparison")
+    if not script_text:
+        print("  Missing: script_text")
+    if not transcript_text:
+        print("  Missing: transcript_text")
+# =========================
+# ARABIC TEXT NORMALIZATION
+# =========================
+
+def normalize_arabic(text):
+    """Normalize Arabic text for better comparison."""
+    import re
+
+    # Convert to lowercase (for Latin characters if any)
+    text = text.lower()
+
+    # Remove diacritics (tashkeel)
+    arabic_diacritics = re.compile("""
+        ّ    | # Shadda
+        َ    | # Fatha
+        ً    | # Tanwin Fath
+        ُ    | # Damma
+        ٌ    | # Tanwin Damm
+        ِ    | # Kasra
+        ٍ    | # Tanwin Kasr
+        ْ    | # Sukun
+        ـ     # Tatweel/Kashida
+    """, re.VERBOSE)
+    text = re.sub(arabic_diacritics, '', text)
+
+    # Normalize Arabic letters
+    text = re.sub("[إأآا]", "ا", text)  # Normalize Alef
+    text = re.sub("ى", "ي", text)        # Normalize Ya
+    text = re.sub("ة", "ه", text)        # Normalize Ta Marbuta
+    text = re.sub("گ", "ك", text)        # Normalize Kaf variants
+
+    # Remove punctuation
+    text = re.sub(r'[^\w\s]', '', text)
+
+    # Normalize whitespace
+    text = re.sub(r'\s+', ' ', text)
+
+    return text.strip()
+
+
+# =========================
+# NORMALIZE SCRIPT AND TRANSCRIPT
+# =========================
+
+print("\n" + "="*80)
+print("🔄 NORMALIZING TEXT")
+print("="*80)
+
+# Normalize the script text
+normalized_script_text = normalize_arabic(script_text)
+print(f"✓ Script normalized: {len(normalized_script_text)} characters")
+
+# Normalize the transcript (from aligned_segments with timestamps)
+if 'aligned_segments' in globals() and aligned_segments:
+    normalized_transcription = ' '.join([normalize_arabic(seg['word']) for seg in aligned_segments])
+    print(f"✓ Transcript normalized: {len(normalized_transcription)} characters")
+    print(f"✓ Using word-level timestamps from WhisperX alignment")
+else:
+    normalized_transcription = normalize_arabic(transcript_text)
+    print(f"✓ Transcript normalized: {len(normalized_transcription)} characters")
+    print(f"⚠ No word-level timestamps available")
+
+
+# =========================
+# VISUAL SCRIPT vs TRANSCRIPT (HIGHLIGHTED)
+# =========================
+
+from IPython.display import HTML, display
+import difflib
+import pandas as pd
+
+def display_highlighted_script_vs_transcript(df, script_words_normalized, transcript_words_normalized):
+    """Display script and transcript side-by-side with color highlighting."""
+    script_display = []
+    transcript_display = []
+
+    script_idx = 0
+    transcript_idx = 0
+
+    for _, row in df.iterrows():
+        status = row['Status'].strip()
+        s_word = row['Script Word']
+        t_word = row['Transcript Word']
+
+        # SCRIPT LINE (using normalized words)
+        if s_word != '-' and script_idx < len(script_words_normalized):
+            if status == '🔴 Skipped':
+                script_display.append(
+                    f"<span style='background:#ffcccc;padding:2px 6px;border-radius:4px'>{script_words_normalized[script_idx]}</span>"
+                )
+            elif status == '🟡 Changed':
+                script_display.append(
+                    f"<span style='background:#fff3b0;padding:2px 6px;border-radius:4px'>{script_words_normalized[script_idx]}</span>"
+                )
+            else:
+                script_display.append(script_words_normalized[script_idx])
+            script_idx += 1
+
+        # TRANSCRIPT LINE (using normalized words)
+        if t_word != '-' and transcript_idx < len(transcript_words_normalized):
+            if status == '🟢 Added':
+                transcript_display.append(
+                    f"<span style='background:#ccffcc;padding:2px 6px;border-radius:4px'>{transcript_words_normalized[transcript_idx]}</span>"
+                )
+            elif status == '🟡 Changed':
+                transcript_display.append(
+                    f"<span style='background:#fff3b0;padding:2px 6px;border-radius:4px'>{transcript_words_normalized[transcript_idx]}</span>"
+                )
+            else:
+                transcript_display.append(transcript_words_normalized[transcript_idx])
+            transcript_idx += 1
+
+    html = f"""
+    <div style="font-size:18px; line-height:2; margin-bottom:30px; font-family: Arial, sans-serif;">
+        <b style="font-size:20px;">📜 Script (Normalized)</b><br>
+        <div style="padding:10px; background:#f9f9f9; border-radius:8px; margin:10px 0;">
+            {' '.join(script_display)}
+        </div>
+        <hr style="margin:20px 0;">
+        <b style="font-size:20px;">🎤 Transcript (Normalized)</b><br>
+        <div style="padding:10px; background:#f9f9f9; border-radius:8px; margin:10px 0;">
+            {' '.join(transcript_display)}
+        </div>
+    </div>
+    """
+
+    display(HTML(html))
+
+
+# =========================
+# WORD-BY-WORD COMPARISON WITH TIMESTAMPS
+# =========================
+
+def word_by_word_comparison_with_timestamps():
+    """Create detailed word-by-word comparison with word-level timestamps from WhisperX."""
+
+    # Check if we have normalized text
+    if 'normalized_transcription' not in globals() or not normalized_transcription:
+        print("❌ ERROR: normalized_transcription not found!")
+        return None, None, None
+
+    if 'normalized_script_text' not in globals() or not normalized_script_text:
+        print("❌ ERROR: normalized_script_text not found!")
+        return None, None, None
+
+    # Split into words
+    script_words = normalized_script_text.split()
+    transcript_words = normalized_transcription.split()
+
+    print(f"Script words: {len(script_words)}")
+    print(f"Transcript words: {len(transcript_words)}")
+
+    comparison_data = []
+
+    # Create word-level timestamp mapping from aligned_segments
+    transcript_word_timestamps = []
+
+    if 'aligned_segments' in globals() and aligned_segments:
+        print(f"✓ Using {len(aligned_segments)} word-level timestamps from WhisperX")
+
+        for seg in aligned_segments:
+            # Normalize the word to match our normalized transcript
+            normalized_word = normalize_arabic(seg['word'])
+            transcript_word_timestamps.append({
+                'word': normalized_word,
+                'start': seg['start'],
+                'end': seg['end'],
+                'duration': seg['duration']
+            })
+    else:
+        print("⚠ No word-level timestamps available")
+
+    # Use difflib to compare word by word
+    matcher = difflib.SequenceMatcher(None, script_words, transcript_words)
+
+    transcript_idx = 0
+    position = 0
+
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == 'equal':
+            # Words match
+            for i in range(i1, i2):
+                # Get timestamp info if available
+                ts_info = None
+                timestamp = 'N/A'
+
+                if transcript_idx < len(transcript_word_timestamps):
+                    ts_info = transcript_word_timestamps[transcript_idx]
+                    timestamp = f"{ts_info['start']:.2f}s"
+
+                comparison_data.append({
+                    'Position': position,
+                    'Status': '✓ Match',
+                    'Script Word': script_words[i],
+                    'Transcript Word': transcript_words[j1 + (i - i1)],
+                    'Timestamp': timestamp,
+                    'Note': ''
+                })
+                position += 1
+                transcript_idx += 1
+
+        elif tag == 'replace':
+            # Words changed
+            max_len = max(i2 - i1, j2 - j1)
+            for idx in range(max_len):
+                script_word = script_words[i1 + idx] if (i1 + idx) < i2 else ''
+                transcript_word = transcript_words[j1 + idx] if (j1 + idx) < j2 else ''
+
+                # Get timestamp info if available
+                ts_info = None
+                timestamp = 'N/A'
+
+                if transcript_word and transcript_idx < len(transcript_word_timestamps):
+                    ts_info = transcript_word_timestamps[transcript_idx]
+                    timestamp = f"{ts_info['start']:.2f}s"
+
+                if script_word and transcript_word:
+                    status = '🟡 Changed'
+                    note = f'Changed from "{script_word}" to "{transcript_word}"'
+                elif script_word and not transcript_word:
+                    status = '🔴 Skipped'
+                    note = f'Word "{script_word}" was skipped'
+                    timestamp = 'N/A'
+                else:
+                    status = '🟢 Added'
+                    note = f'Word "{transcript_word}" was added at {timestamp}'
+
+                comparison_data.append({
+                    'Position': position,
+                    'Status': status,
+                    'Script Word': script_word if script_word else '-',
+                    'Transcript Word': transcript_word if transcript_word else '-',
+                    'Timestamp': timestamp,
+                    'Note': note
+                })
+                position += 1
+                if transcript_word:
+                    transcript_idx += 1
+
+        elif tag == 'delete':
+            # Words were skipped from script
+            for i in range(i1, i2):
+                comparison_data.append({
+                    'Position': position,
+                    'Status': '🔴 Skipped',
+                    'Script Word': script_words[i],
+                    'Transcript Word': '-',
+                    'Timestamp': 'N/A',
+                    'Note': f'Word "{script_words[i]}" was not said'
+                })
+                position += 1
+
+        elif tag == 'insert':
+            # Words were added to transcript
+            for j in range(j1, j2):
+                # Get timestamp info if available
+                ts_info = None
+                timestamp = 'N/A'
+
+                if transcript_idx < len(transcript_word_timestamps):
+                    ts_info = transcript_word_timestamps[transcript_idx]
+                    timestamp = f"{ts_info['start']:.2f}s"
+
+                comparison_data.append({
+                    'Position': position,
+                    'Status': '🟢 Added',
+                    'Script Word': '-',
+                    'Transcript Word': transcript_words[j],
+                    'Timestamp': timestamp,
+                    'Note': f'Word "{transcript_words[j]}" was added at {timestamp}'
+                })
+                position += 1
+                transcript_idx += 1
+
+    return pd.DataFrame(comparison_data), script_words, transcript_words
+
+
+# =========================
+# RUN + DISPLAY
+# =========================
+
+print("\n" + "="*100)
+print("📝 WORD-BY-WORD COMPARISON WITH WORD-LEVEL TIMESTAMPS")
+print("="*100)
+print("🟡 Changed | 🔴 Skipped | 🟢 Added")
+print("Using normalized Arabic text for accurate comparison")
+print("Using word-level timestamps from WhisperX align_with_whisperx")
+print("="*100 + "\n")
+
+result_comparison = word_by_word_comparison_with_timestamps()
+
+if result_comparison[0] is not None:
+    df_word_comparison, normalized_script_words, normalized_transcript_words = result_comparison
+
+    # 🔥 VISUAL DISPLAY FIRST (WITH NORMALIZED TEXT)
+    display_highlighted_script_vs_transcript(df_word_comparison, normalized_script_words, normalized_transcript_words)
+
+    # Set pandas display options
+    pd.set_option('display.max_rows', None)
+    pd.set_option('display.max_columns', None)
+    pd.set_option('display.width', None)
+    pd.set_option('display.max_colwidth', 50)
+
+    print(f"\n📋 COMPLETE WORD-BY-WORD COMPARISON ({len(df_word_comparison)} total positions)")
+    print("="*100)
+    display(df_word_comparison)
+
+    # =========================
+    # SUMMARY
+    # =========================
+
+    total_words = len(df_word_comparison)
+    matched = len(df_word_comparison[df_word_comparison['Status'] == '✓ Match'])
+    changed = len(df_word_comparison[df_word_comparison['Status'] == '🟡 Changed'])
+    skipped = len(df_word_comparison[df_word_comparison['Status'] == '🔴 Skipped'])
+    added = len(df_word_comparison[df_word_comparison['Status'] == '🟢 Added'])
+
+    print("\n" + "="*100)
+    print("📊 SUMMARY")
+    print("="*100)
+    print(f"Total Positions: {total_words}")
+    print(f"✓ Matched Words: {matched} ({matched/total_words*100:.1f}%)")
+    print(f"🟡 Changed Words: {changed} ({changed/total_words*100:.1f}%)")
+    print(f"🔴 Skipped Words: {skipped} ({skipped/total_words*100:.1f}%)")
+    print(f"🟢 Added Words: {added} ({added/total_words*100:.1f}%)")
+
+    accuracy = (matched / total_words * 100) if total_words > 0 else 0
+    print(f"\n🎯 Overall Accuracy: {accuracy:.1f}%")
+
+    # =========================
+    # FILTERED TABLES
+    # =========================
+
+    skipped_df = df_word_comparison[df_word_comparison['Status'] == '🔴 Skipped']
+    if not skipped_df.empty:
+        print(f"\n🔴 SKIPPED WORDS ONLY ({len(skipped_df)} words):")
+        print("="*100)
+        display(skipped_df[['Position', 'Script Word', 'Note']])
+
+    added_df = df_word_comparison[df_word_comparison['Status'] == '🟢 Added']
+    if not added_df.empty:
+        print(f"\n🟢 ADDED WORDS ONLY ({len(added_df)} words):")
+        print("="*100)
+        display(added_df[['Position', 'Transcript Word', 'Timestamp', 'Note']])
+
+    changed_df = df_word_comparison[df_word_comparison['Status'].str.strip() == '🟡 Changed']
+    if not changed_df.empty:
+        print(f"\n🟡 CHANGED WORDS ONLY ({len(changed_df)} words):")
+        print("="*100)
+        display(changed_df[['Position', 'Script Word', 'Transcript Word', 'Timestamp', 'Note']])
+
+    # =========================
+    # TIMESTAMP ANALYSIS
+    # =========================
+
+    if 'aligned_segments' in globals() and aligned_segments:
+        print("\n" + "="*100)
+        print("⏱️ TIMESTAMP ANALYSIS")
+        print("="*100)
+
+        # Analyze timestamps for added/skipped words
+        added_with_time = added_df[added_df['Timestamp'] != 'N/A']
+        if not added_with_time.empty:
+            print(f"\n🟢 Added words with timestamps ({len(added_with_time)}):")
+            for _, row in added_with_time.head(10).iterrows():
+                print(f"  • '{row['Transcript Word']}' at {row['Timestamp']}")
+            if len(added_with_time) > 10:
+                print(f"  ... and {len(added_with_time) - 10} more")
+
+        # Show timing of changes
+        changed_with_time = changed_df[changed_df['Timestamp'] != 'N/A']
+        if not changed_with_time.empty:
+            print(f"\n🟡 Changed words with timestamps ({len(changed_with_time)}):")
+            for _, row in changed_with_time.head(10).iterrows():
+                print(f"  • '{row['Script Word']}' → '{row['Transcript Word']}' at {row['Timestamp']}")
+            if len(changed_with_time) > 10:
+                print(f"  ... and {len(changed_with_time) - 10} more")
+
+    # =========================
+    # EXPORT OPTION
+    # =========================
+
+    print("\n" + "="*100)
+    print("💾 EXPORT OPTIONS")
+    print("="*100)
+    print("To save the comparison results with timestamps, run:")
+    print("  df_word_comparison.to_csv('word_comparison_with_timestamps.csv', index=False, encoding='utf-8-sig')")
+    print("  df_word_comparison.to_excel('word_comparison_with_timestamps.xlsx', index=False)")
+
+    # Calculate some additional statistics
+    print("\n" + "="*100)
+    print("📈 ADDITIONAL STATISTICS")
+    print("="*100)
+    print(f"Script length: {len(normalized_script_words)} words")
+    print(f"Transcript length: {len(normalized_transcript_words)} words")
+
+    if len(normalized_script_words) > 0:
+        completion_rate = (len(normalized_transcript_words) / len(normalized_script_words)) * 100
+        print(f"Completion rate: {completion_rate:.1f}% (transcript/script ratio)")
+
+    if matched > 0:
+        word_accuracy = (matched / (matched + changed + skipped)) * 100 if (matched + changed + skipped) > 0 else 0
+        print(f"Word accuracy (of spoken words): {word_accuracy:.1f}%")
+
+    # Timestamp coverage
+    if 'aligned_segments' in globals() and aligned_segments:
+        timestamps_available = len([row for _, row in df_word_comparison.iterrows() if row['Timestamp'] != 'N/A'])
+        print(f"Words with timestamps: {timestamps_available}/{total_words} ({timestamps_available/total_words*100:.1f}%)")
+
+else:
+    print("\n❌ Comparison failed. Please ensure:")
+    print("  1. You ran the align_with_whisperx cell")
+    print("  2. Variable 'aligned_segments' exists with word-level timestamps")
+    print("  3. You uploaded and loaded the script file (Cell 20-21)")
+    print("  4. Variable 'script_text' exists")
