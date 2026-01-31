@@ -56,3 +56,28 @@ export const logIn = async (req, res, next) => {
     next(error);
   }
 };
+
+export const validateUserExists = async (req, res, next) => {
+  try {
+    const { user_id } = req.params;
+
+    const user = await User.FindById(user_id);
+    
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found"
+      });
+    }
+
+    res.status(200).json({
+      message: "User exists",
+      user: {
+        user_id: user.user_id,
+        email: user.email,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};

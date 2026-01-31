@@ -28,4 +28,9 @@ export default class User {
 
     return user ? true : false;
   }
+
+  static async FindById(user_id) {
+    const user = await mysql("Users").where({ user_id }).first();
+    return user || null;
+  }
 }

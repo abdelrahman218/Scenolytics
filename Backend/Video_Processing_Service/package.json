@@ -1,0 +1,22 @@
+{
+  "name": "video-processing-service",
+  "version": "1.0.0",
+  "description": "Handles video uploads, encoding, transcoding, and artifact extraction for the scenolytics system",
+  "main": "index.js",
+  "type": "module",
+  "author": "",
+  "license": "",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "multer": "^1.4.5-lts.1",
+    "mysql2": "^3.16.1",
+    "knex": "^3.1.0",
+    "uuid": "^9.0.0",
+    "bull": "^4.11.3",
+    "redis": "^4.6.10",
+    "amqplib": "^0.10.3",
+    "fluent-ffmpeg": "^2.1.2"
+  }
+}
