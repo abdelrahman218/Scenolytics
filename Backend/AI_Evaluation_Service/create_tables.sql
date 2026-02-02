@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS evaluations (
   submission_id VARCHAR(36),
   emotional_expression_score DECIMAL(5, 2),
   vocal_tone_score DECIMAL(5, 2),
+  script_alignment_score DECIMAL(5, 2),
   overall_performance_score DECIMAL(5, 2),
   detected_emotions JSON,
   ai_feedback TEXT,

@@ -31,7 +31,7 @@ router.get('/sessions/:session_id', async (req, res, next) => {
 });
 
 // Get actor sessions
-router.get('/actors/:actor_id/sessions', async (req, res, next) => {
+router.get('/sessions/:actor_id/sessions', async (req, res, next) => {
   try {
     const sessions = await trainingService.getActorSessions(req.params.actor_id);
     res.status(200).json(sessions);

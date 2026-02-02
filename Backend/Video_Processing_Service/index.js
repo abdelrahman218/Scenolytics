@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import mediaRoutes from './routes/media.js';
+import { connectRabbitMQ, closeRabbitMQ } from './utils/rabbitmq.js';
+import { connectRedis, closeRedis } from './utils/redis.js';
 
 dotenv.config({filepath: `./.env`});
 
@@ -25,6 +27,30 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+const server = app.listen(PORT, async () => {
   console.log(`Video Processing Service running on port: ${PORT}`);
+  
+  // Connect to RabbitMQ
+  try {
+    await connectRabbitMQ();
+  } catch (error) {
+    console.error('Failed to connect to RabbitMQ:', error);
+  }
+
+  // Connect to Redis
+  try {
+    await connectRedis();
+  } catch (error) {
+    console.error('Failed to connect to Redis:', error);
+  }
+});
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM received, shutting down gracefully');
+  server.close(async () => {
+    await closeRabbitMQ();
+    await closeRedis();
+    process.exit(0);
+  });
 });

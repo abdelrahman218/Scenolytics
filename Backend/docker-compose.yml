@@ -8,13 +8,27 @@ services:
     ports:
       - "80:80"
     depends_on:
-      - identity-provider-service
-      - user-management-service
-      - audition-training-service
-      - video-processing-service
-      - ai-evaluation-service
-      - casting-management-service
-      - notification-service
+      - identity-provider-service-1
+      - identity-provider-service-2
+      - identity-provider-service-3
+      - user-management-service-1
+      - user-management-service-2
+      - user-management-service-3
+      - audition-training-service-1
+      - audition-training-service-2
+      - audition-training-service-3
+      - video-processing-service-1
+      - video-processing-service-2
+      - video-processing-service-3
+      - ai-evaluation-service-1
+      - ai-evaluation-service-2
+      - ai-evaluation-service-3
+      - casting-management-service-1
+      - casting-management-service-2
+      - casting-management-service-3
+      - notification-service-1
+      - notification-service-2
+      - notification-service-3
     networks:
       - scenolytics-network
     restart: unless-stopped
@@ -75,20 +89,65 @@ services:
       - scenolytics-network
     restart: unless-stopped
 
-  identity-provider-service:
+  identity-provider-service-1:
     build: ./Identity_Provider_Service
-    container_name: identity-provider-service
+    container_name: identity-provider-service-1
     environment:
       NODE_ENV: ${NODE_ENV}
       JWT_SECRET: ${JWT_SECRET}
-      IDENTITY_PROVIDER_SERVICE_PORT: ${IDENTITY_PROVIDER_SERVICE_PORT}
+      IDENTITY_PROVIDER_SERVICE_PORT: 5000
       IDENTITY_PROVIDER_SERVICE_DATABASE_HOST: identity-provider-mysql
+      IDENTITY_PROVIDER_SERVICE_URL: http://identity-provider-service-1:5000
       DATABASE_PORT: ${DATABASE_PORT}
       DATABASE_USER: ${DATABASE_USER}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
       IDENTITY_PROVIDER_SERVICE_DATABASE_NAME: ${IDENTITY_PROVIDER_SERVICE_DATABASE_NAME}
     ports:
-      - "${IDENTITY_PROVIDER_SERVICE_PORT}:${IDENTITY_PROVIDER_SERVICE_PORT}"
+      - "5000:5000"
+    depends_on:
+      identity-provider-mysql:
+        condition: service_healthy
+    networks:
+      - scenolytics-network
+    restart: unless-stopped
+
+  identity-provider-service-2:
+    build: ./Identity_Provider_Service
+    container_name: identity-provider-service-2
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      JWT_SECRET: ${JWT_SECRET}
+      IDENTITY_PROVIDER_SERVICE_PORT: 5000
+      IDENTITY_PROVIDER_SERVICE_DATABASE_HOST: identity-provider-mysql
+      IDENTITY_PROVIDER_SERVICE_URL: http://identity-provider-service-2:5000
+      DATABASE_PORT: ${DATABASE_PORT}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      IDENTITY_PROVIDER_SERVICE_DATABASE_NAME: ${IDENTITY_PROVIDER_SERVICE_DATABASE_NAME}
+    ports:
+      - "5010:5000"
+    depends_on:
+      identity-provider-mysql:
+        condition: service_healthy
+    networks:
+      - scenolytics-network
+    restart: unless-stopped
+
+  identity-provider-service-3:
+    build: ./Identity_Provider_Service
+    container_name: identity-provider-service-3
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      JWT_SECRET: ${JWT_SECRET}
+      IDENTITY_PROVIDER_SERVICE_PORT: 5000
+      IDENTITY_PROVIDER_SERVICE_DATABASE_HOST: identity-provider-mysql
+      IDENTITY_PROVIDER_SERVICE_URL: http://identity-provider-service-3:5000
+      DATABASE_PORT: ${DATABASE_PORT}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      IDENTITY_PROVIDER_SERVICE_DATABASE_NAME: ${IDENTITY_PROVIDER_SERVICE_DATABASE_NAME}
+    ports:
+      - "5011:5000"
     depends_on:
       identity-provider-mysql:
         condition: service_healthy
@@ -118,20 +177,75 @@ services:
       - scenolytics-network
     restart: unless-stopped
 
-  user-management-service:
+  user-management-service-1:
     build: ./User_Management_Service
-    container_name: user-management-service
+    container_name: user-management-service-1
     environment:
       NODE_ENV: ${NODE_ENV}
-      USER_MANAGEMENT_SERVICE_PORT: ${USER_MANAGEMENT_SERVICE_PORT}
+      USER_MANAGEMENT_SERVICE_PORT: 5009
       USER_MANAGEMENT_SERVICE_DATABASE_HOST: user-management-mysql
+      USER_MANAGEMENT_SERVICE_URL: http://user-management-service-1:5009
+      IDENTITY_PROVIDER_SERVICE_URL: http://identity-provider-service-1:5000
+      VIDEO_PROCESSING_SERVICE_URL: http://video-processing-service-1:5002
       DATABASE_PORT: ${DATABASE_PORT}
       DATABASE_USER: ${DATABASE_USER}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
       USER_MANAGEMENT_SERVICE_DATABASE_NAME: ${USER_MANAGEMENT_SERVICE_DATABASE_NAME}
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
     ports:
-      - "${USER_MANAGEMENT_SERVICE_PORT}:${USER_MANAGEMENT_SERVICE_PORT}"
+      - "5009:5009"
+    depends_on:
+      user-management-mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - scenolytics-network
+    restart: unless-stopped
+
+  user-management-service-2:
+    build: ./User_Management_Service
+    container_name: user-management-service-2
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      USER_MANAGEMENT_SERVICE_PORT: 5009
+      USER_MANAGEMENT_SERVICE_DATABASE_HOST: user-management-mysql
+      USER_MANAGEMENT_SERVICE_URL: http://user-management-service-2:5009
+      IDENTITY_PROVIDER_SERVICE_URL: http://identity-provider-service-2:5000
+      VIDEO_PROCESSING_SERVICE_URL: http://video-processing-service-2:5002
+      DATABASE_PORT: ${DATABASE_PORT}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      USER_MANAGEMENT_SERVICE_DATABASE_NAME: ${USER_MANAGEMENT_SERVICE_DATABASE_NAME}
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    ports:
+      - "5019:5009"
+    depends_on:
+      user-management-mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - scenolytics-network
+    restart: unless-stopped
+
+  user-management-service-3:
+    build: ./User_Management_Service
+    container_name: user-management-service-3
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      USER_MANAGEMENT_SERVICE_PORT: 5009
+      USER_MANAGEMENT_SERVICE_DATABASE_HOST: user-management-mysql
+      USER_MANAGEMENT_SERVICE_URL: http://user-management-service-3:5009
+      IDENTITY_PROVIDER_SERVICE_URL: http://identity-provider-service-3:5000
+      VIDEO_PROCESSING_SERVICE_URL: http://video-processing-service-3:5002
+      DATABASE_PORT: ${DATABASE_PORT}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      USER_MANAGEMENT_SERVICE_DATABASE_NAME: ${USER_MANAGEMENT_SERVICE_DATABASE_NAME}
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    ports:
+      - "5020:5009"
     depends_on:
       user-management-mysql:
         condition: service_healthy
@@ -163,20 +277,72 @@ services:
       - scenolytics-network
     restart: unless-stopped
 
-  audition-training-service:
+  audition-training-service-1:
     build: ./Audition_Training_Service
-    container_name: audition-training-service
+    container_name: audition-training-service-1
     environment:
       NODE_ENV: ${NODE_ENV}
-      AUDITION_TRAINING_SERVICE_PORT: ${AUDITION_TRAINING_SERVICE_PORT}
+      AUDITION_TRAINING_SERVICE_PORT: 5001
       AUDITION_TRAINING_SERVICE_DATABASE_HOST: audition-training-mysql
+      AUDITION_TRAINING_SERVICE_URL: http://audition-training-service-1:5001
+      IDENTITY_PROVIDER_SERVICE_URL: http://identity-provider-service-1:5000
       DATABASE_PORT: ${DATABASE_PORT}
       DATABASE_USER: ${DATABASE_USER}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
       AUDITION_TRAINING_SERVICE_DATABASE_NAME: ${AUDITION_TRAINING_SERVICE_DATABASE_NAME}
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
     ports:
-      - "${AUDITION_TRAINING_SERVICE_PORT}:${AUDITION_TRAINING_SERVICE_PORT}"
+      - "5001:5001"
+    depends_on:
+      audition-training-mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - scenolytics-network
+    restart: unless-stopped
+
+  audition-training-service-2:
+    build: ./Audition_Training_Service
+    container_name: audition-training-service-2
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      AUDITION_TRAINING_SERVICE_PORT: 5001
+      AUDITION_TRAINING_SERVICE_DATABASE_HOST: audition-training-mysql
+      AUDITION_TRAINING_SERVICE_URL: http://audition-training-service-2:5001
+      IDENTITY_PROVIDER_SERVICE_URL: http://identity-provider-service-2:5000
+      DATABASE_PORT: ${DATABASE_PORT}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      AUDITION_TRAINING_SERVICE_DATABASE_NAME: ${AUDITION_TRAINING_SERVICE_DATABASE_NAME}
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    ports:
+      - "5012:5001"
+    depends_on:
+      audition-training-mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - scenolytics-network
+    restart: unless-stopped
+
+  audition-training-service-3:
+    build: ./Audition_Training_Service
+    container_name: audition-training-service-3
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      AUDITION_TRAINING_SERVICE_PORT: 5001
+      AUDITION_TRAINING_SERVICE_DATABASE_HOST: audition-training-mysql
+      AUDITION_TRAINING_SERVICE_URL: http://audition-training-service-3:5001
+      IDENTITY_PROVIDER_SERVICE_URL: http://identity-provider-service-3:5000
+      DATABASE_PORT: ${DATABASE_PORT}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      AUDITION_TRAINING_SERVICE_DATABASE_NAME: ${AUDITION_TRAINING_SERVICE_DATABASE_NAME}
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    ports:
+      - "5013:5001"
     depends_on:
       audition-training-mysql:
         condition: service_healthy
@@ -208,13 +374,15 @@ services:
       - scenolytics-network
     restart: unless-stopped
 
-  video-processing-service:
+  video-processing-service-1:
     build: ./Video_Processing_Service
-    container_name: video-processing-service
+    container_name: video-processing-service-1
     environment:
       NODE_ENV: ${NODE_ENV}
-      VIDEO_PROCESSING_SERVICE_PORT: ${VIDEO_PROCESSING_SERVICE_PORT}
+      VIDEO_PROCESSING_SERVICE_PORT: 5002
       VIDEO_PROCESSING_SERVICE_DATABASE_HOST: video-processing-mysql
+      VIDEO_PROCESSING_SERVICE_URL: http://video-processing-service-1:5002
+      IDENTITY_PROVIDER_SERVICE_URL: http://identity-provider-service-1:5000
       DATABASE_PORT: ${DATABASE_PORT}
       DATABASE_USER: ${DATABASE_USER}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
@@ -222,7 +390,67 @@ services:
       REDIS_URL: redis://redis:6379
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
     ports:
-      - "${VIDEO_PROCESSING_SERVICE_PORT}:${VIDEO_PROCESSING_SERVICE_PORT}"
+      - "5002:5002"
+    depends_on:
+      video-processing-mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - scenolytics-network
+    restart: unless-stopped
+    volumes:
+      - ./Video_Processing_Service/uploads:/app/uploads
+
+  video-processing-service-2:
+    build: ./Video_Processing_Service
+    container_name: video-processing-service-2
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      VIDEO_PROCESSING_SERVICE_PORT: 5002
+      VIDEO_PROCESSING_SERVICE_DATABASE_HOST: video-processing-mysql
+      VIDEO_PROCESSING_SERVICE_URL: http://video-processing-service-2:5002
+      IDENTITY_PROVIDER_SERVICE_URL: http://identity-provider-service-2:5000
+      DATABASE_PORT: ${DATABASE_PORT}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      VIDEO_PROCESSING_SERVICE_DATABASE_NAME: ${VIDEO_PROCESSING_SERVICE_DATABASE_NAME}
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    ports:
+      - "5014:5002"
+    depends_on:
+      video-processing-mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - scenolytics-network
+    restart: unless-stopped
+    volumes:
+      - ./Video_Processing_Service/uploads:/app/uploads
+
+  video-processing-service-3:
+    build: ./Video_Processing_Service
+    container_name: video-processing-service-3
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      VIDEO_PROCESSING_SERVICE_PORT: 5002
+      VIDEO_PROCESSING_SERVICE_DATABASE_HOST: video-processing-mysql
+      VIDEO_PROCESSING_SERVICE_URL: http://video-processing-service-3:5002
+      IDENTITY_PROVIDER_SERVICE_URL: http://identity-provider-service-3:5000
+      DATABASE_PORT: ${DATABASE_PORT}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      VIDEO_PROCESSING_SERVICE_DATABASE_NAME: ${VIDEO_PROCESSING_SERVICE_DATABASE_NAME}
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    ports:
+      - "5015:5002"
     depends_on:
       video-processing-mysql:
         condition: service_healthy
@@ -258,20 +486,75 @@ services:
       - scenolytics-network
     restart: unless-stopped
 
-  ai-evaluation-service:
+  ai-evaluation-service-1:
     build: ./AI_Evaluation_Service
-    container_name: ai-evaluation-service
+    container_name: ai-evaluation-service-1
     environment:
       NODE_ENV: ${NODE_ENV}
-      AI_EVALUATION_SERVICE_PORT: ${AI_EVALUATION_SERVICE_PORT}
+      AI_EVALUATION_SERVICE_PORT: 5003
       AI_EVALUATION_SERVICE_DATABASE_HOST: ai-evaluation-mysql
+      AI_EVALUATION_SERVICE_URL: http://ai-evaluation-service-1:5003
+      IDENTITY_PROVIDER_SERVICE_URL: http://identity-provider-service-1:5000
+      VIDEO_PROCESSING_SERVICE_URL: http://video-processing-service-1:5002
       DATABASE_PORT: ${DATABASE_PORT}
       DATABASE_USER: ${DATABASE_USER}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
       AI_EVALUATION_SERVICE_DATABASE_NAME: ${AI_EVALUATION_SERVICE_DATABASE_NAME}
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
     ports:
-      - "${AI_EVALUATION_SERVICE_PORT}:${AI_EVALUATION_SERVICE_PORT}"
+      - "5003:5003"
+    depends_on:
+      ai-evaluation-mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - scenolytics-network
+    restart: unless-stopped
+
+  ai-evaluation-service-2:
+    build: ./AI_Evaluation_Service
+    container_name: ai-evaluation-service-2
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      AI_EVALUATION_SERVICE_PORT: 5003
+      AI_EVALUATION_SERVICE_DATABASE_HOST: ai-evaluation-mysql
+      AI_EVALUATION_SERVICE_URL: http://ai-evaluation-service-2:5003
+      IDENTITY_PROVIDER_SERVICE_URL: http://identity-provider-service-2:5000
+      VIDEO_PROCESSING_SERVICE_URL: http://video-processing-service-2:5002
+      DATABASE_PORT: ${DATABASE_PORT}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      AI_EVALUATION_SERVICE_DATABASE_NAME: ${AI_EVALUATION_SERVICE_DATABASE_NAME}
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    ports:
+      - "5016:5003"
+    depends_on:
+      ai-evaluation-mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - scenolytics-network
+    restart: unless-stopped
+
+  ai-evaluation-service-3:
+    build: ./AI_Evaluation_Service
+    container_name: ai-evaluation-service-3
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      AI_EVALUATION_SERVICE_PORT: 5003
+      AI_EVALUATION_SERVICE_DATABASE_HOST: ai-evaluation-mysql
+      AI_EVALUATION_SERVICE_URL: http://ai-evaluation-service-3:5003
+      IDENTITY_PROVIDER_SERVICE_URL: http://identity-provider-service-3:5000
+      VIDEO_PROCESSING_SERVICE_URL: http://video-processing-service-3:5002
+      DATABASE_PORT: ${DATABASE_PORT}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      AI_EVALUATION_SERVICE_DATABASE_NAME: ${AI_EVALUATION_SERVICE_DATABASE_NAME}
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    ports:
+      - "5017:5003"
     depends_on:
       ai-evaluation-mysql:
         condition: service_healthy
@@ -303,20 +586,22 @@ services:
       - scenolytics-network
     restart: unless-stopped
 
-  casting-management-service:
+  casting-management-service-1:
     build: ./Casting_Management_Service
-    container_name: casting-management-service
+    container_name: casting-management-service-1
     environment:
       NODE_ENV: ${NODE_ENV}
-      CASTING_MANAGEMENT_SERVICE_PORT: ${CASTING_MANAGEMENT_SERVICE_PORT}
+      CASTING_MANAGEMENT_SERVICE_PORT: 5004
       CASTING_MANAGEMENT_SERVICE_DATABASE_HOST: casting-management-mysql
+      CASTING_MANAGEMENT_SERVICE_URL: http://casting-management-service-1:5004
+      IDENTITY_PROVIDER_SERVICE_URL: http://identity-provider-service-1:5000
       DATABASE_PORT: ${DATABASE_PORT}
       DATABASE_USER: ${DATABASE_USER}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
       CASTING_MANAGEMENT_SERVICE_DATABASE_NAME: ${CASTING_MANAGEMENT_SERVICE_DATABASE_NAME}
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
     ports:
-      - "${CASTING_MANAGEMENT_SERVICE_PORT}:${CASTING_MANAGEMENT_SERVICE_PORT}"
+      - "5004:5004"
     depends_on:
       casting-management-mysql:
         condition: service_healthy
@@ -326,21 +611,156 @@ services:
       - scenolytics-network
     restart: unless-stopped
 
-  # ================= NOTIFICATION SERVICE =================
-  notification-service:
-    build: ./Notification_Service
-    container_name: notification-service
+  casting-management-service-2:
+    build: ./Casting_Management_Service
+    container_name: casting-management-service-2
     environment:
       NODE_ENV: ${NODE_ENV}
-      NOTIFICATION_SERVICE_PORT: ${NOTIFICATION_SERVICE_PORT}
+      CASTING_MANAGEMENT_SERVICE_PORT: 5004
+      CASTING_MANAGEMENT_SERVICE_DATABASE_HOST: casting-management-mysql
+      CASTING_MANAGEMENT_SERVICE_URL: http://casting-management-service-2:5004
+      IDENTITY_PROVIDER_SERVICE_URL: http://identity-provider-service-2:5000
+      DATABASE_PORT: ${DATABASE_PORT}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      CASTING_MANAGEMENT_SERVICE_DATABASE_NAME: ${CASTING_MANAGEMENT_SERVICE_DATABASE_NAME}
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    ports:
+      - "5021:5004"
+    depends_on:
+      casting-management-mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - scenolytics-network
+    restart: unless-stopped
+
+  casting-management-service-3:
+    build: ./Casting_Management_Service
+    container_name: casting-management-service-3
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      CASTING_MANAGEMENT_SERVICE_PORT: 5004
+      CASTING_MANAGEMENT_SERVICE_DATABASE_HOST: casting-management-mysql
+      CASTING_MANAGEMENT_SERVICE_URL: http://casting-management-service-3:5004
+      IDENTITY_PROVIDER_SERVICE_URL: http://identity-provider-service-3:5000
+      DATABASE_PORT: ${DATABASE_PORT}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      CASTING_MANAGEMENT_SERVICE_DATABASE_NAME: ${CASTING_MANAGEMENT_SERVICE_DATABASE_NAME}
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    ports:
+      - "5022:5004"
+    depends_on:
+      casting-management-mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - scenolytics-network
+    restart: unless-stopped
+
+  # ================= NOTIFICATION =================
+  notification-mysql:
+    image: mysql:8.0
+    container_name: notification-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${ROOT_PASSWORD}
+      MYSQL_DATABASE: ${NOTIFICATION_SERVICE_DATABASE_NAME}
+    ports:
+      - "33067:3306"
+    volumes:
+      - ./Notification_Service/create_database.sql:/docker-entrypoint-initdb.d/01_create_database.sql
+      - ./Notification_Service/create_tables.sql:/docker-entrypoint-initdb.d/02_create_tables.sql
+      - notification_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+      interval: 10s
+    networks:
+      - scenolytics-network
+    restart: unless-stopped
+
+  notification-service-1:
+    build: ./Notification_Service
+    container_name: notification-service-1
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      NOTIFICATION_SERVICE_PORT: 5005
+      NOTIFICATION_SERVICE_DATABASE_HOST: notification-mysql
+      NOTIFICATION_SERVICE_URL: http://notification-service-1:5005
+      DATABASE_PORT: ${DATABASE_PORT}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      NOTIFICATION_SERVICE_DATABASE_NAME: ${NOTIFICATION_SERVICE_DATABASE_NAME}
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
       SMTP_HOST: ${SMTP_HOST}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER}
       SMTP_PASSWORD: ${SMTP_PASSWORD}
     ports:
-      - "${NOTIFICATION_SERVICE_PORT}:${NOTIFICATION_SERVICE_PORT}"
+      - "5005:5005"
     depends_on:
+      notification-mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - scenolytics-network
+    restart: unless-stopped
+
+  notification-service-2:
+    build: ./Notification_Service
+    container_name: notification-service-2
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      NOTIFICATION_SERVICE_PORT: 5005
+      NOTIFICATION_SERVICE_DATABASE_HOST: notification-mysql
+      NOTIFICATION_SERVICE_URL: http://notification-service-2:5005
+      DATABASE_PORT: ${DATABASE_PORT}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      NOTIFICATION_SERVICE_DATABASE_NAME: ${NOTIFICATION_SERVICE_DATABASE_NAME}
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+    ports:
+      - "5018:5005"
+    depends_on:
+      notification-mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - scenolytics-network
+    restart: unless-stopped
+
+  notification-service-3:
+    build: ./Notification_Service
+    container_name: notification-service-3
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      NOTIFICATION_SERVICE_PORT: 5005
+      NOTIFICATION_SERVICE_DATABASE_HOST: notification-mysql
+      NOTIFICATION_SERVICE_URL: http://notification-service-3:5005
+      DATABASE_PORT: ${DATABASE_PORT}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      NOTIFICATION_SERVICE_DATABASE_NAME: ${NOTIFICATION_SERVICE_DATABASE_NAME}
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+    ports:
+      - "5023:5005"
+    depends_on:
+      notification-mysql:
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
     networks:
@@ -359,6 +779,8 @@ volumes:
   ai_evaluation_data:
     driver: local
   casting_management_data:
+    driver: local
+  notification_data:
     driver: local
 
 networks:

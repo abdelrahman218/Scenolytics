@@ -37,7 +37,7 @@ router.get('/callbacks/:callback_id', async (req, res, next) => {
 });
 
 // Get actor callbacks
-router.get('/actors/:actor_id/callbacks', async (req, res, next) => {
+router.get('/callbacks/:actor_id/callbacks', async (req, res, next) => {
   try {
     const callbacks = await callbackService.getActorCallbacks(req.params.actor_id);
     res.status(200).json(callbacks);
@@ -87,7 +87,7 @@ router.get('/callbacks/:callback_id/submissions', async (req, res, next) => {
 });
 
 // Review callback submission
-router.patch('/submissions/:submission_id/review', async (req, res, next) => {
+router.patch('/callbacks/:submission_id/review', async (req, res, next) => {
   try {
     const { status, director_notes } = req.body;
     if (!status) {

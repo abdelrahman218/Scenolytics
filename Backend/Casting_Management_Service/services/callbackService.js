@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { Callback, CallbackSubmission } from '../models/callback.js';
-import { identityProviderService, userManagementService, mediaProcessingService, notificationService } from '../utils/serviceClient.js';
+import { identityProviderService, userManagementService, videoProcessingService, notificationService } from '../utils/serviceClient.js';
 
 export const sendCallback = async (audition_id, director_id, actor_id, scriptContent, scriptUrl) => {
   try {
@@ -82,7 +82,7 @@ export const respondToCallback = async (callback_id, status) => {
 export const submitCallbackVideo = async (callback_id, media_id) => {
   try {
     // Validate media exists
-    const media = await mediaProcessingService.getMedia(media_id);
+    const media = await videoProcessingService.getMedia(media_id);
     if (!media) {
       throw new Error('Media not found in Media Processing Service');
     }

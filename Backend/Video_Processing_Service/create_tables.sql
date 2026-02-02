@@ -1,4 +1,4 @@
-USE media_processing_db;
+USE  media_processing_db;
 
 CREATE TABLE IF NOT EXISTS media (
   id VARCHAR(36) PRIMARY KEY,

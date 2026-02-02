@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import notificationRoutes from './routes/notification.js';
+import { connectRabbitMQ, closeRabbitMQ, EXCHANGES, QUEUES, ROUTING_KEYS, assertExchange, assertQueue, bindQueue, consumeMessages } from './utils/rabbitmq.js';
+import { setupEventSubscribers } from './services/eventSubscriber.js';
 
 dotenv.config({filepath: `./.env`});
 
@@ -25,6 +27,25 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+const server = app.listen(PORT, async () => {
   console.log(`Notification Service running on port: ${PORT}`);
+  
+  // Connect to RabbitMQ
+  try {
+    await connectRabbitMQ();
+    
+    // Setup event subscribers
+    await setupEventSubscribers();
+  } catch (error) {
+    console.error('Failed to setup RabbitMQ subscribers:', error);
+  }
+});
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM received, shutting down gracefully');
+  server.close(async () => {
+    await closeRabbitMQ();
+    process.exit(0);
+  });
 });
