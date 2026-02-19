@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const host = process.env.IDENTITY_PROVIDER_SERVICE_DATABASE_HOST;
-const port = process.env.DATABASE_PORT;
+const port = process.env.DATABASE_PORT || 3306;
 const user = process.env.DATABASE_USER;
 const password = process.env.DATABASE_PASSWORD;
 const database = process.env.IDENTITY_PROVIDER_SERVICE_DATABASE_NAME;
