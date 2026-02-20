@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import User from "../models/user.js";
+import { EXCHANGES, publishMessage, ROUTING_KEYS } from "../utils/rabbitmq.js";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -10,13 +11,17 @@ export const signUp = async (req, res, next) => {
     // Create user
     const newUser = await User.Create(email, password, role);
 
+    const user = {
+      user_id: newUser.user_id,
+      email: newUser.email,
+      role: newUser.role,
+    }
+
+    publishMessage(EXCHANGES.USERS, ROUTING_KEYS.USER_CREATED, user);
+
     res.status(201).json({
       message: "User created successfully",
-      user: {
-        user_id: newUser.user_id,
-        email: newUser.email,
-        role: newUser.role,
-      },
+      user
     });
   } catch (error) {
     next(error);
@@ -94,6 +99,8 @@ export const deleteUser = async (req, res, next) => {
       });
     }
 
+    publishMessage(EXCHANGES.USERS, ROUTING_KEYS.USER_DELETED, { user_id });
+    
     res.status(200).json({
       message: "User deleted successfully",
     });
