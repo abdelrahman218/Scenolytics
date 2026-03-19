@@ -1,0 +1,5 @@
+$kind: collection
+description: Complete API collection for the Casting Platform with all microservices
+variables:
+  user_id: ""
+  jwt_token: ""

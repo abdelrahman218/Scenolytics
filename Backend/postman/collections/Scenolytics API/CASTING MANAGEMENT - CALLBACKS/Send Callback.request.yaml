@@ -1,0 +1,16 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/callbacks"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: >-
+    {
+      "audition_id": "ee0e8400-e29b-41d4-a716-446655440090",
+      "director_id": "550e8400-e29b-41d4-a716-446655440010",
+      "actor_id": "550e8400-e29b-41d4-a716-446655440000",
+      "script_content": "Scene 1: Dark warehouse. Actor must convey desperation...",
+      "script_url": "https://example.com/script.pdf"
+    }
+order: 1000

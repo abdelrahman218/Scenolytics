@@ -1,0 +1,17 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/notifications/users/:user_id/preferences"
+method: PATCH
+headers:
+  Content-Type: application/json
+pathVariables:
+  user_id: 550e8400-e29b-41d4-a716-446655440000
+body:
+  type: text
+  content: |-
+    {
+      "email_notifications": false,
+      "callback_notifications": true,
+      "submission_notifications": true,
+      "evaluation_notifications": true
+    }
+order: 2000
