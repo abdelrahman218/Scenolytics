@@ -2,7 +2,7 @@
   "version": 1,
   "flows": {
     "4cb15d1b-de7d-4be2-b4bd-35e0660814bb": {
-      "path": "C:/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/flows/Scenolytics API Testing.json",
+      "path": "C:/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/flows/Scenolytics API Testing.flow",
       "dependencies": [
         {
           "local": {
