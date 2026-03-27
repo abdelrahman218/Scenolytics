@@ -1,0 +1,129 @@
+import { Audition } from "../models/audition";
+import { AuditionInvitation } from "../models/audition_invitation";
+import { AuditionSubmission } from "../models/audition_submission";
+import { Sentence } from "../models/sentence"
+
+export const getDirectorAudition = async (req, res, next) => {
+    try {
+        let audition = await Audition.findById(req.params.audition_id);
+        return res.status(200).json(audition);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const createAudition = async (req, res, next) => {
+    try {
+        let audition = await Audition.create(req.body);
+        const sentences = [];
+        for (const senctence of req.body.sentences) {
+            let savedSentence = await Sentence.create(senctence);
+            sentences.push(savedSentence);
+        }
+        audition = { ...audition, sentences };
+        return res.status(201).json(audition);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getAllDirectorAuditions = async (req, res, next) => {
+    try {
+        const auditions = await Audition.findByDirectorId(req.user.user_id);
+        return res.status(200).json(auditions);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const updateAudition = async (req, res, next) => {
+    try {
+        const audition = await Audition.update(req.params.audition_id, req.body);
+        return res.status(200).json(audition);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const deleteAudition = async (req, res, next) => {
+    try {
+        const audition = await Audition.delete(req.params.audition_id);
+        return res.status(200).json(audition);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const inviteActorsToAudition = async (req, res, next) => {
+    try {
+        const invitations = [];
+        for (const actor_id of req.body.actor_ids) {
+            let invitation = await AuditionInvitation.create({
+                audition_id: req.params.audition_id,
+                actor_id: actor_id,
+                invitation_status: 'pending'
+            });
+
+            invitations.push(invitation);
+        }
+        return res.status(201).json(invitations);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const deleteAuditionInvitation = async (req, res, next) => {
+    try {
+        const invitation = await AuditionInvitation.delete(req.params.invitation_id);
+        return res.status(200).json(invitation);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getDirectorPendingInvitations = async (req, res, next) => {
+    try {
+        const invitations = await AuditionInvitation.findByDirectorIdAndStatus(req.user.user_id, 'pending');
+        return res.status(200).json(invitations);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getAuditionPendingInvitations = async (req, res, next) => {
+    try {
+        const invitations = await AuditionInvitation.findByAuditionIdAndStatus(req.params.audition_id, 'pending');
+        return res.status(200).json(invitations);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getActorsForAudition = async (req, res, next) => {
+    try {
+        const data = await AuditionInvitation.findByAuditionIdAndStatus(req.params.audition_id, 'accepted');
+        data.push(...await AuditionSubmission.findByAuditionId(req.params.audition_id));
+        const actor_ids = data.map((actor) => actor.actor_id);
+        return res.status(200).json(actor_ids);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getAuditionSubmissions = async (req, res, next) => {
+    try {
+        const submissions = await AuditionSubmission.findByAuditionId(req.params.audition_id);
+        return res.status(200).json(submissions);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const reviewSubmission = async (req, res, next) => {
+    try {
+        const submission = await AuditionSubmission.updateStatus(req.params.submission_id, req.body.status, req.body.director_notes);
+        return res.status(200).json(submission);
+    } catch (error) {
+        next(error);
+    }
+};

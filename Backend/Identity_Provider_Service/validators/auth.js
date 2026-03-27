@@ -40,7 +40,7 @@ export const validateJWTToken = (req, res, next) => {
             message: "Authorization header missing or malformed",
         });
     }
-    const token = authHeader.split(" ")[1].replace(" ", "%20");
+    const token = authHeader.split(" ")[1];
     try {
         jwt.verify(token, JWT_SECRET);
         next();
