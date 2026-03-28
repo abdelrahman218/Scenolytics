@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import trainingRoutes from './routes/training.js';
+import { connectRabbitMQ, closeRabbitMQ } from './utils/rabbitmq.js';
 
 dotenv.config({filepath: `./.env`});
 
@@ -25,6 +26,22 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+const server = app.listen(PORT, async () => {
   console.log(`Audition Training Service running on port: ${PORT}`);
+  
+  // Connect to RabbitMQ
+  try {
+    await connectRabbitMQ();
+  } catch (error) {
+    console.error('Failed to connect to RabbitMQ:', error);
+  }
+});
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM received, shutting down gracefully');
+  server.close(async () => {
+    await closeRabbitMQ();
+    process.exit(0);
+  });
 });

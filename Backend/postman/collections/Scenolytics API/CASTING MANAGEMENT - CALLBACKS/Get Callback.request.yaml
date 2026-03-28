@@ -1,0 +1,6 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/callbacks/:callback_id"
+method: GET
+pathVariables:
+  callback_id: ff0e8400-e29b-41d4-a716-446655440100
+order: 2000

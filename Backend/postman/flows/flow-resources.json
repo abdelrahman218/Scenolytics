@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "flows": {
+    "4cb15d1b-de7d-4be2-b4bd-35e0660814bb": {
+      "path": "C:/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/flows/Scenolytics API Testing.flow",
+      "dependencies": [
+        {
+          "local": {
+            "collectionId": "02D22729bb1Ef13dA5A14996",
+            "requestId": "30fAE97A7BFe33444D389fFA",
+            "filePath": ""
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "02D22729bb1Ef13dA5A14996",
+            "requestId": "2aAe402DCDDcf31EA599FE6c",
+            "filePath": ""
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "02D22729bb1Ef13dA5A14996",
+            "requestId": "DCF0f0C6a0b7ab2D8f5A0ce5",
+            "filePath": ""
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "02D22729bb1Ef13dA5A14996",
+            "requestId": "447e2b8FFdFc5A1D7A58FE3f",
+            "filePath": ""
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,17 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/evaluations/:evaluation_id/scores"
+method: PATCH
+headers:
+  Content-Type: application/json
+pathVariables:
+  evaluation_id: dd0e8400-e29b-41d4-a716-446655440080
+body:
+  type: text
+  content: |-
+    {
+      "emotional_expression_score": 8.5,
+      "vocal_tone_score": 8.0,
+      "script_alignment_score": 9.0,
+      "overall_performance_score": 8.5
+    }
+order: 3000

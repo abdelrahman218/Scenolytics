@@ -1,0 +1,16 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/notifications"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "user_id": "550e8400-e29b-41d4-a716-446655440000",
+      "notification_type": "callback",
+      "title": "New Callback!",
+      "message": "You received a new callback for 'Film: The Journey'",
+      "related_id": "ff0e8400-e29b-41d4-a716-446655440100"
+    }
+order: 1000

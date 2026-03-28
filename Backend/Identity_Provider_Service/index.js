@@ -1,7 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { connectRabbitMQ } from './utils/rabbitmq.js';
 import authRoutes from './routes/auth.js';
+import { assertExchange, assertQueue, bindQueue, EXCHANGES, QUEUES, ROUTING_KEYS } from './utils/rabbitmq.js';
 
 dotenv.config({filepath: `./.env`});
 
@@ -14,7 +16,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Routes
-app.use('/', authRoutes);
+app.use('/auth', authRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -25,6 +27,28 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`Server running on port: ${PORT}`);
+
+  // Connect to RabbitMQ
+  try {
+    await connectRabbitMQ();
+    await assertExchange(EXCHANGES.USERS);
+    await assertQueue(QUEUES.USER_EVENTS);
+    Object.entries(ROUTING_KEYS).forEach(async ([event, routing_key]) => {
+      await bindQueue(QUEUES.USER_EVENTS, EXCHANGES.USERS, routing_key);
+    });
+    console.log("Connected to RabbitMQ Successfully");
+  } catch (error) {
+    console.error('Failed to connect to RabbitMQ:', error);
+  }
+});
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM received, shutting down gracefully');
+  server.close(async () => {
+    await closeRabbitMQ();
+    process.exit(0);
+  });
 });

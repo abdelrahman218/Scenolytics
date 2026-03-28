@@ -1,0 +1,15 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/submissions/:submission_id/review"
+method: PATCH
+headers:
+  Content-Type: application/json
+pathVariables:
+  submission_id: 11e8400-e29b-41d4-a716-446655440110
+body:
+  type: text
+  content: >-
+    {
+      "status": "accepted",
+      "director_notes": "Great performance! Moving forward with contract negotiation."
+    }
+order: 3000

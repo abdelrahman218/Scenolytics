@@ -43,8 +43,8 @@ router.get('/media/:media_id', async (req, res, next) => {
   }
 });
 
-// Get user's media
-router.get('/user/:user_id/media', async (req, res, next) => {
+// Get user's media: GET /api/v1/user/:user_id/media
+router.get('/media/user/:user_id', async (req, res, next) => {
   try {
     const media = await mediaService.getUserMedia(req.params.user_id);
     res.status(200).json(media);
@@ -92,7 +92,7 @@ router.get('/jobs/:job_id', async (req, res, next) => {
 });
 
 // Get media jobs
-router.get('/media/:media_id/jobs', async (req, res, next) => {
+router.get('/jobs/:media_id/jobs', async (req, res, next) => {
   try {
     const jobs = await processingJobService.getMediaJobs(req.params.media_id);
     res.status(200).json(jobs);

@@ -26,7 +26,7 @@ router.post('/notifications', async (req, res, next) => {
 });
 
 // Get user notifications
-router.get('/users/:user_id/notifications', async (req, res, next) => {
+router.get('/notifications/:user_id/notifications', async (req, res, next) => {
   try {
     const notifications = await notificationService.getUserNotifications(req.params.user_id);
     res.status(200).json(notifications);
@@ -36,7 +36,7 @@ router.get('/users/:user_id/notifications', async (req, res, next) => {
 });
 
 // Get unread count
-router.get('/users/:user_id/notifications/unread/count', async (req, res, next) => {
+router.get('/notifications/:user_id/notifications/unread/count', async (req, res, next) => {
   try {
     const count = await notificationService.getUnreadCount(req.params.user_id);
     res.status(200).json({ unread_count: count });
@@ -66,7 +66,7 @@ router.delete('/notifications/:notification_id', async (req, res, next) => {
 });
 
 // Get notification preferences
-router.get('/users/:user_id/preferences', async (req, res, next) => {
+router.get('/notifications/:user_id/preferences', async (req, res, next) => {
   try {
     const preferences = await notificationService.getNotificationPreferences(req.params.user_id);
     res.status(200).json(preferences);
@@ -76,7 +76,7 @@ router.get('/users/:user_id/preferences', async (req, res, next) => {
 });
 
 // Update notification preferences
-router.patch('/users/:user_id/preferences', async (req, res, next) => {
+router.patch('/notifications/:user_id/preferences', async (req, res, next) => {
   try {
     const preferences = await notificationService.updateNotificationPreferences(req.params.user_id, req.body);
     res.status(200).json(preferences);

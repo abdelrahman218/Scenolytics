@@ -2,7 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import fs from 'fs';
 import Media from '../models/media.js';
-import { identityProviderService, submissionEvaluationService } from '../utils/serviceClient.js';
+import { identityProviderService, aiEvaluationService } from '../utils/serviceClient.js';
 
 export const uploadMedia = async (file, userId) => {
   try {
@@ -42,7 +42,7 @@ export const uploadMedia = async (file, userId) => {
 
     // Create evaluation job for the uploaded media
     try {
-      await submissionEvaluationService.createEvaluation(mediaId);
+      await aiEvaluationService.createEvaluation(mediaId);
     } catch (evalError) {
       console.warn('Failed to create evaluation job:', evalError.message);
     }

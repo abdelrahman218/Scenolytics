@@ -1,0 +1,14 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/sessions/:session_id/end"
+method: PATCH
+headers:
+  Content-Type: application/json
+pathVariables:
+  session_id: 990e8400-e29b-41d4-a716-446655440040
+body:
+  type: text
+  content: |-
+    {
+      "duration": 3600
+    }
+order: 4000

@@ -19,10 +19,18 @@ class Evaluation {
     return rows[0];
   }
 
+  // New score weights: Emotion 40%, Voice 35%, Script 25%
   static async updateScores(id, scores) {
     const [result] = await pool.execute(
-      'UPDATE evaluations SET emotional_expression_score = ?, vocal_tone_score = ?, body_language_score = ?, overall_performance_score = ?, evaluation_status = ? WHERE id = ?',
-      [scores.emotional_expression_score, scores.vocal_tone_score, scores.body_language_score, scores.overall_performance_score, 'completed', id]
+      'UPDATE evaluations SET emotional_expression_score = ?, vocal_tone_score = ?, script_alignment_score = ?, overall_performance_score = ?, evaluation_status = ? WHERE id = ?',
+      [
+        scores.emotional_expression_score,    // 40%
+        scores.vocal_tone_score,              // 35%
+        scores.script_alignment_score,        // 25% 
+        scores.overall_performance_score,
+        'completed',
+        id
+      ]
     );
     return result;
   }

@@ -33,4 +33,9 @@ export default class User {
     const user = await mysql("Users").where({ user_id }).first();
     return user || null;
   }
+
+  static async Delete(user_id) {
+    const isDeleted = await mysql("Users").where({ user_id }).del() == 1;
+    return isDeleted;
+  }
 }

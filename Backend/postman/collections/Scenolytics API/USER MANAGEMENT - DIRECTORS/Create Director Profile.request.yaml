@@ -1,0 +1,17 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/directors/profile"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "user_id": "550e8400-e29b-41d4-a716-446655440010",
+      "company_name": "Creative Productions",
+      "company_bio": "Award-winning production company",
+      "website": "https://creativeproductions.com",
+      "phone": "+1234567890",
+      "location": "Los Angeles, CA"
+    }
+order: 1000

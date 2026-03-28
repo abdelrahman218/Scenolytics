@@ -1,7 +1,10 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import callbackRoutes from './routes/callback.js';
+import directorRoutes from './routes/director.js';
+import actorRoutes from './routes/actor.js';
+import { connectRabbitMQ, closeRabbitMQ } from './utils/rabbitmq.js';
+import { validateActorAccess, validateDirectorAccess } from './validators/auth.js';
 
 dotenv.config({filepath: `./.env`});
 
@@ -14,7 +17,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Routes
-app.use('/', callbackRoutes);
+app.use('/director', validateDirectorAccess, directorRoutes);
+app.use('/actor', validateActorAccess, actorRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -25,6 +29,22 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+const server = app.listen(PORT, async () => {
   console.log(`Casting Management Service running on port: ${PORT}`);
+  
+  // Connect to RabbitMQ
+  try {
+    await connectRabbitMQ();
+  } catch (error) {
+    console.error('Failed to connect to RabbitMQ:', error);
+  }
+});
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM received, shutting down gracefully');
+  server.close(async () => {
+    await closeRabbitMQ();
+    process.exit(0);
+  });
 });
