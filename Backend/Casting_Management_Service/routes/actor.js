@@ -1,7 +1,7 @@
 import express from "express";
 import {
   getActorAudition,
-  getActorInvitations,
+  getActorPendingInvitations,
   getActorSubmissions,
   respondToInvitation,
   submitAuditionSubmission,
@@ -13,8 +13,8 @@ const router = express.Router();
 // Get Audition for Actor
 router.get("/auditions/:audition_id", getActorAudition);
 
-// Get invitations for actor
-router.get("/invitations", getActorInvitations);
+// Get Pending invitations for actor
+router.get("/invitations", getActorPendingInvitations);
 
 // Actor responds to invitation
 router.patch("/invitations/:invitation_id/respond", respondToInvitation);

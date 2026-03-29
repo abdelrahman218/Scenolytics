@@ -2,10 +2,19 @@ import { Audition } from "../models/audition";
 import { AuditionInvitation } from "../models/audition_invitation";
 import { AuditionSubmission } from "../models/audition_submission";
 import { Sentence } from "../models/sentence"
+import { EXCHANGES, publishMessage, ROUTING_KEYS } from "../utils/rabbitmq";
 
 export const getDirectorAudition = async (req, res, next) => {
     try {
-        let audition = await Audition.findById(req.params.audition_id);
+        const audition_id = req.params.audition_id;
+        let audition = await Audition.findById(audition_id);
+
+        if (!audition){
+            return res.status(404).json({message: 'audition not found'});
+        }
+
+        const script = await Sentence.findByAuditionId(audition_id);
+        audition = {...audition, script };
         return res.status(200).json(audition);
     } catch (error) {
         next(error);
@@ -16,12 +25,13 @@ export const createAudition = async (req, res, next) => {
     try {
         let audition = await Audition.create(req.body);
         const sentences = [];
-        for (const senctence of req.body.sentences) {
-            let savedSentence = await Sentence.create(senctence);
+        for (const senctence of req.body.script) {
+            let savedSentence = await Sentence.create({...senctence, audition_id: audition.id});
             sentences.push(savedSentence);
         }
         audition = { ...audition, sentences };
-        return res.status(201).json(audition);
+        publishMessage(EXCHANGES.AUDITIONS, ROUTING_KEYS.AUDITION_CREATED, audition);
+        return res.status(201).json({message: 'Audition created successfully', audition});
     } catch (error) {
         next(error);
     }
@@ -38,8 +48,18 @@ export const getAllDirectorAuditions = async (req, res, next) => {
 
 export const updateAudition = async (req, res, next) => {
     try {
-        const audition = await Audition.update(req.params.audition_id, req.body);
-        return res.status(200).json(audition);
+        const audition_id = req.params.audition_id;
+        let audition = await Audition.update(audition_id, req.body);
+        await Sentence.deleteByAuditionId(audition_id);
+        const sentences = [];
+        for (const senctence of req.body.script) {
+            let savedSentence = await Sentence.create({...senctence, audition_id: audition.id});
+            sentences.push(savedSentence);
+        }
+        audition = { ...audition, sentences };
+
+        publishMessage(EXCHANGES.AUDITIONS, ROUTING_KEYS.AUDITION_UPDATED, audition);
+        return res.status(200).json({message: 'Audition updated successfully', audition});
     } catch (error) {
         next(error);
     }
@@ -48,7 +68,8 @@ export const updateAudition = async (req, res, next) => {
 export const deleteAudition = async (req, res, next) => {
     try {
         const audition = await Audition.delete(req.params.audition_id);
-        return res.status(200).json(audition);
+        publishMessage(EXCHANGES.AUDITIONS, ROUTING_KEYS.AUDITION_DELETED, audition);
+        return res.status(200).json({message: 'Audition deleted successfully'});
     } catch (error) {
         next(error);
     }
@@ -65,8 +86,10 @@ export const inviteActorsToAudition = async (req, res, next) => {
             });
 
             invitations.push(invitation);
+            publishMessage(EXCHANGES.INVITATIONS, ROUTING_KEYS.INVITATION_CREATED, invitation);
         }
-        return res.status(201).json(invitations);
+
+        return res.status(201).json({message: 'Actors invited successfully', invitations});
     } catch (error) {
         next(error);
     }
@@ -75,7 +98,8 @@ export const inviteActorsToAudition = async (req, res, next) => {
 export const deleteAuditionInvitation = async (req, res, next) => {
     try {
         const invitation = await AuditionInvitation.delete(req.params.invitation_id);
-        return res.status(200).json(invitation);
+        publishMessage(EXCHANGES.INVITATIONS, ROUTING_KEYS.INVITATION_DELETED, invitation);
+        return res.status(200).json({message: "Invitation deleted successfully"});
     } catch (error) {
         next(error);
     }
@@ -102,7 +126,7 @@ export const getAuditionPendingInvitations = async (req, res, next) => {
 export const getActorsForAudition = async (req, res, next) => {
     try {
         const data = await AuditionInvitation.findByAuditionIdAndStatus(req.params.audition_id, 'accepted');
-        data.push(...await AuditionSubmission.findByAuditionId(req.params.audition_id));
+        data.push(await AuditionSubmission.findByAuditionId(req.params.audition_id));
         const actor_ids = data.map((actor) => actor.actor_id);
         return res.status(200).json(actor_ids);
     } catch (error) {
@@ -122,6 +146,7 @@ export const getAuditionSubmissions = async (req, res, next) => {
 export const reviewSubmission = async (req, res, next) => {
     try {
         const submission = await AuditionSubmission.updateStatus(req.params.submission_id, req.body.status, req.body.director_notes);
+        publishMessage(EXCHANGES.AUDITIONS, ROUTING_KEYS.AUDITION_REVIEWED, submission);
         return res.status(200).json(submission);
     } catch (error) {
         next(error);

@@ -3,8 +3,9 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import directorRoutes from './routes/director.js';
 import actorRoutes from './routes/actor.js';
-import { connectRabbitMQ, closeRabbitMQ } from './utils/rabbitmq.js';
+import { connectRabbitMQ, closeRabbitMQ, assertExchange, EXCHANGES, QUEUES, assertQueue, bindQueue, ROUTING_KEYS } from './utils/rabbitmq.js';
 import { validateActorAccess, validateDirectorAccess } from './validators/auth.js';
+import { executeAsyncListeners } from './utils/asyncListeners.js';
 
 dotenv.config({filepath: `./.env`});
 
@@ -35,6 +36,21 @@ const server = app.listen(PORT, async () => {
   // Connect to RabbitMQ
   try {
     await connectRabbitMQ();
+    Object.entries(EXCHANGES).forEach(async ([event, exchange]) => {
+      await assertExchange(exchange);
+    });
+    
+    Object.entries(QUEUES).forEach(async ([event, queue]) => {
+      await assertQueue(queue);
+    });
+
+    Object.entries(ROUTING_KEYS).forEach(async ([event, routingKey]) => {
+      const groupName = routingKey.slice(0, routingKey.indexOf('.'));
+
+      await bindQueue(`${groupName}s_exchange`, `${groupName}_events_queue`, routingKey);
+    });
+
+    executeAsyncListeners();
   } catch (error) {
     console.error('Failed to connect to RabbitMQ:', error);
   }

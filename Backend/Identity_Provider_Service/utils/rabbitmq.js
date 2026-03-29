@@ -122,35 +122,6 @@ export const publishMessage = async (exchangeName, routingKey, message) => {
 };
 
 /**
- * Consume messages from queue
- */
-export const consumeMessages = async (queueName, callback) => {
-  try {
-    const ch = await getChannel();
-    await assertQueue(queueName);
-    
-    await ch.consume(queueName, async (msg) => {
-      if (msg) {
-        try {
-          const content = JSON.parse(msg.content.toString());
-          await callback(content);
-          ch.ack(msg);
-        } catch (error) {
-          console.error('Error processing message:', error);
-          // Reject and requeue
-          ch.nack(msg, false, true);
-        }
-      }
-    });
-    
-    console.log(`Started consuming messages from ${queueName}`);
-  } catch (error) {
-    console.error(`Failed to consume messages from ${queueName}:`, error);
-    throw error;
-  }
-};
-
-/**
  * Close RabbitMQ connection
  */
 export const closeRabbitMQ = async () => {

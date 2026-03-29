@@ -32,13 +32,15 @@ CREATE TABLE IF NOT EXISTS auditions (
 CREATE TABLE IF NOT EXISTS audition_submissions (
   id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
   audition_id CHAR(36) NOT NULL,
-  media_id CHAR(36) NOT NULL,
+  actor_id CHAR(36) NOT NULL,
+  media_id CHAR(36) DEFAULT NULL,
   submission_status ENUM('pending', 'under_review', 'accepted', 'rejected') DEFAULT 'pending',
   submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   reviewed_at TIMESTAMP DEFAULT NULL,
-  director_notes TEXT,
+  director_notes TEXT DEFAULT NULL,
   FOREIGN KEY (audition_id) REFERENCES auditions(id) ON DELETE CASCADE,
   INDEX idx_audition_id (audition_id),
+  INDEX idx_actor_id (actor_id),
   INDEX idx_submission_status (submission_status)
 );
 
