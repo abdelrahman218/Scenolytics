@@ -14,10 +14,10 @@ export const EXCHANGES = {
 };
 
 export const QUEUES = {
-  USER_EVENTS: 'user_events_queue',
-  AUDITION_EVENTS: 'audition_events_queue',
-  VIDEO_EVENTS: 'video_events_queue',
-  INVITATION_EVENTS: 'invitation_events_queue'
+  USER_EVENTS: 'casting_management_user_events_queue',
+  AUDITION_EVENTS: 'casting_management_audition_events_queue',
+  VIDEO_EVENTS: 'casting_management_video_events_queue',
+  INVITATION_EVENTS: 'casting_management_invitation_events_queue'
 };
 
 export const ROUTING_KEYS = {
@@ -146,7 +146,7 @@ export const consumeMessages = async (queueName, callback) => {
       if (msg) {
         try {
           const content = JSON.parse(msg.content.toString());
-          await callback(msg.type, content);
+          await callback(content);
           ch.ack(msg);
         } catch (error) {
           console.error('Error processing message:', error);

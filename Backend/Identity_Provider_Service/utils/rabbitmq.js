@@ -11,7 +11,7 @@ export const EXCHANGES = {
 };
 
 export const QUEUES = {
-  USER_EVENTS: 'user_events_queue',
+  USER_EVENTS: 'identity_provider_user_events_queue',
 };
 
 export const ROUTING_KEYS = {
