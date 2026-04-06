@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS sentences (
 CREATE TABLE IF NOT EXISTS auditions (
   id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
   director_id CHAR(36) NOT NULL,
-  title VARCHAR(255) NOT NULL,
+  title VARCHAR(255) NOT NULL,  
   description TEXT,
   type ENUM('Audio', 'Video') NOT NULL,
   candidate_min_height_cm INT,

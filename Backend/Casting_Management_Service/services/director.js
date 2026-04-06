@@ -24,12 +24,12 @@ export const getDirectorAudition = async (req, res, next) => {
 export const createAudition = async (req, res, next) => {
     try {
         let audition = await Audition.create(req.body);
-        const sentences = [];
+        const script = [];
         for (const senctence of req.body.script) {
             let savedSentence = await Sentence.create({...senctence, audition_id: audition.id});
-            sentences.push(savedSentence);
+            script.push(savedSentence);
         }
-        audition = { ...audition, sentences };
+        audition = { ...audition, script };
         publishMessage(EXCHANGES.AUDITIONS, ROUTING_KEYS.AUDITION_CREATED, audition);
         return res.status(201).json({message: 'Audition created successfully', audition});
     } catch (error) {

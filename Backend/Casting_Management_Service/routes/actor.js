@@ -6,6 +6,11 @@ import {
   respondToInvitation,
   submitAuditionSubmission,
 } from "../services/actor.js";
+import { checkInvitationIsPending } from "../validators/general.js";
+import {
+  checkAuditionNotSubmitted,
+  checkValidValuesRespondToInvitation,
+} from "../validators/actor.js";
 
 const router = express.Router();
 
@@ -17,7 +22,15 @@ router.get("/auditions/:audition_id", getActorAudition);
 router.get("/invitations", getActorPendingInvitations);
 
 // Actor responds to invitation
-router.patch("/invitations/:invitation_id/respond", respondToInvitation);
+const respondToInvitationValidators = [
+  checkInvitationIsPending,
+  checkValidValuesRespondToInvitation,
+];
+router.patch(
+  "/invitations/:invitation_id/respond",
+  respondToInvitationValidators,
+  respondToInvitation,
+);
 
 // ==================== SUBMISSION ENDPOINTS ====================
 
@@ -25,6 +38,13 @@ router.patch("/invitations/:invitation_id/respond", respondToInvitation);
 router.get("/auditions/submissions", getActorSubmissions);
 
 // Submit audition submission
-router.post("/auditions/:audition_id/submissions", submitAuditionSubmission);
+const submitAuditionSubmissionValidators = [
+  checkAuditionNotSubmitted,
+];
+router.post(
+  "/auditions/:audition_id/submissions",
+  submitAuditionSubmissionValidators,
+  submitAuditionSubmission,
+);
 
 export default router;
