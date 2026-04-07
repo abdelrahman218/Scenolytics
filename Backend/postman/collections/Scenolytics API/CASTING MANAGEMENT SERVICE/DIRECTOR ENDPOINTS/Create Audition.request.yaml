@@ -1,0 +1,15 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/casting/director/auditions/create_audition"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{director_token}}
+body:
+  type: text
+  content: |-
+    {
+      "title": "Open Casting Call",
+      "description": "Lead role audition",
+      "deadline": "2026-12-31"
+    }
+order: 2000

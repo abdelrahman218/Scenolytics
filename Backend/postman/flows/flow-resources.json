@@ -2,13 +2,13 @@
   "version": 1,
   "flows": {
     "4cb15d1b-de7d-4be2-b4bd-35e0660814bb": {
-      "path": "C:/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/flows/Scenolytics API Testing.flow",
+      "path": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/flows/Identity Service Provider.flow",
       "dependencies": [
         {
           "local": {
-            "collectionId": "02D22729bb1Ef13dA5A14996",
-            "requestId": "30fAE97A7BFe33444D389fFA",
-            "filePath": ""
+            "collectionId": "AE13effdaCE7fbbFBf0351FF",
+            "requestId": "73483fe90e72d0eF904fb82a",
+            "filePath": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/collections/Scenolytics API/AUTH SERVICE/Validate User.request.yaml"
           },
           "cloud": {
             "collectionId": null,
@@ -17,31 +17,9 @@
         },
         {
           "local": {
-            "collectionId": "02D22729bb1Ef13dA5A14996",
-            "requestId": "2aAe402DCDDcf31EA599FE6c",
-            "filePath": ""
-          },
-          "cloud": {
-            "collectionId": null,
-            "requestId": null
-          }
-        },
-        {
-          "local": {
-            "collectionId": "02D22729bb1Ef13dA5A14996",
-            "requestId": "DCF0f0C6a0b7ab2D8f5A0ce5",
-            "filePath": ""
-          },
-          "cloud": {
-            "collectionId": null,
-            "requestId": null
-          }
-        },
-        {
-          "local": {
-            "collectionId": "02D22729bb1Ef13dA5A14996",
-            "requestId": "447e2b8FFdFc5A1D7A58FE3f",
-            "filePath": ""
+            "collectionId": "AE13effdaCE7fbbFBf0351FF",
+            "requestId": "Dd45e3c3767De8f267bD924B",
+            "filePath": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/collections/Scenolytics API/AUTH SERVICE/Delete User Account.request.yaml"
           },
           "cloud": {
             "collectionId": null,
@@ -49,6 +27,37 @@
           }
         }
       ]
+    },
+    "efa53508-1f94-4697-aa74-fabc9a3ac60a": {
+      "path": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/flows/Signup-Login.flow",
+      "dependencies": [
+        {
+          "local": {
+            "collectionId": "AE13effdaCE7fbbFBf0351FF",
+            "requestId": "b27fee6C57A3e1360712B5BA",
+            "filePath": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/collections/Scenolytics API/AUTH SERVICE/Sign Up.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "AE13effdaCE7fbbFBf0351FF",
+            "requestId": "dFeEcbd8AAAdedE7f4deEb1F",
+            "filePath": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/collections/Scenolytics API/AUTH SERVICE/Login.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        }
+      ]
+    },
+    "11f81038-ac59-4a34-9a64-641cefc063d7": {
+      "path": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/flows/End To End.flow",
+      "dependencies": []
     }
   }
 }

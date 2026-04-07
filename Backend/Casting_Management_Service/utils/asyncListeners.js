@@ -1,7 +1,7 @@
-import { Audition } from "../models/audition";
-import { AuditionInvitation } from "../models/audition_invitation";
-import { AuditionSubmission } from "../models/audition_submission";
-import { consumeMessages, QUEUES, ROUTING_KEYS } from "./rabbitmq";
+import { Audition } from "../models/audition.js";
+import { AuditionInvitation } from "../models/audition_invitation.js";
+import { AuditionSubmission } from "../models/audition_submission.js";
+import { consumeMessages, QUEUES } from "./rabbitmq.js";
 
 export const executeAsyncListeners = () => {
   consumeMessages(QUEUES.USER_EVENTS, async (content) => {

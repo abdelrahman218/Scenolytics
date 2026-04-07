@@ -46,8 +46,7 @@ const server = app.listen(PORT, async () => {
 
     Object.entries(ROUTING_KEYS).forEach(async ([event, routingKey]) => {
       const groupName = routingKey.slice(0, routingKey.indexOf('.'));
-
-      await bindQueue(`${groupName}s_exchange`, `casting_management_${groupName}_events_queue`, routingKey);
+      await bindQueue(`casting_management_${groupName}_events_queue`, `${groupName}s_exchange`, routingKey);
     });
 
     executeAsyncListeners();

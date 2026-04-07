@@ -3,3 +3,5 @@ description: Complete API collection for the Casting Platform with all microserv
 variables:
   user_id: ""
   jwt_token: ""
+  director_token: ""
+  actor_token: ""

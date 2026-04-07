@@ -1,8 +1,8 @@
-import { Audition } from "../models/audition";
-import { AuditionInvitation } from "../models/audition_invitation";
-import { AuditionSubmission } from "../models/audition_submission";
-import { Sentence } from "../models/sentence"
-import { EXCHANGES, publishMessage, ROUTING_KEYS } from "../utils/rabbitmq";
+import { Audition } from "../models/audition.js";
+import { AuditionInvitation } from "../models/audition_invitation.js";
+import { AuditionSubmission } from "../models/audition_submission.js";
+import { Sentence } from "../models/sentence.js"
+import { EXCHANGES, publishMessage, ROUTING_KEYS } from "../utils/rabbitmq.js";
 
 export const getDirectorAudition = async (req, res, next) => {
     try {

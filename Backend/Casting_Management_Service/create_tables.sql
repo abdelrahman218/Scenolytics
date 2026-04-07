@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS sentences (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (audition_id) REFERENCES auditions(id) ON DELETE CASCADE,
-  INDEX idx_audition_id (audition_id),
+  INDEX idx_audition_id (audition_id)
 );
 
 CREATE TABLE IF NOT EXISTS auditions (
@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS auditions (
   candidate_body_type ENUM('Slim', 'Athletic', 'Average', 'Heavyset', 'Any') DEFAULT 'Any',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_director_id (director_id),
+  INDEX idx_director_id (director_id)
 );
 
 CREATE TABLE IF NOT EXISTS audition_submissions (

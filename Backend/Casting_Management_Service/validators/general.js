@@ -1,5 +1,5 @@
-import { Audition } from "../models/audition";
-import { AuditionInvitation } from "../models/audition_invitation";
+import { Audition } from "../models/audition.js";
+import { AuditionInvitation } from "../models/audition_invitation.js";
 
 export const checkRequiredFields = (fields) => {
     return (req, res, next) => {

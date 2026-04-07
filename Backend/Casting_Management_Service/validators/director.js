@@ -1,5 +1,5 @@
-import { checkRequiredFields, checkValidValues } from "./general";
-import { AuditionSubmission } from "../models/audition_submission";
+import { checkRequiredFields, checkValidValues } from "./general.js";
+import { AuditionSubmission } from "../models/audition_submission.js";
 
 // Checking Required Fields for each endpoint
 

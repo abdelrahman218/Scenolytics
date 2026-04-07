@@ -1,0 +1,9 @@
+name: Scenolytics Development Enviroment
+values:
+  - key: base_url
+    value: ''
+    enabled: true
+  - key: user_id
+    value: ''
+    enabled: true
+color: 180

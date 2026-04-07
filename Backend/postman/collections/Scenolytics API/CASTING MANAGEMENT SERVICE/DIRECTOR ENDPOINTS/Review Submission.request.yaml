@@ -1,0 +1,16 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/casting/director/submissions/:submission_id/review"
+method: PATCH
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{director_token}}
+pathVariables:
+  submission_id: submission-id-123
+body:
+  type: text
+  content: |-
+    {
+      "status": "accepted",
+      "director_notes": "Strong performance"
+    }
+order: 11000
