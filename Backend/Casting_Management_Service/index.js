@@ -3,8 +3,9 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import directorRoutes from './routes/director.js';
 import actorRoutes from './routes/actor.js';
+import generalRoutes from './routes/general.js';
 import { connectRabbitMQ, closeRabbitMQ, assertExchange, EXCHANGES, QUEUES, assertQueue, bindQueue, ROUTING_KEYS } from './utils/rabbitmq.js';
-import { validateActorAccess, validateDirectorAccess } from './validators/auth.js';
+import { validateAccess, validateActorAccess, validateDirectorAccess } from './validators/auth.js';
 import { executeAsyncListeners } from './utils/asyncListeners.js';
 
 dotenv.config({filepath: `./.env`});
@@ -18,6 +19,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Routes
+app.use('', validateAccess, generalRoutes)
 app.use('/director', validateDirectorAccess, directorRoutes);
 app.use('/actor', validateActorAccess, actorRoutes);
 

@@ -3,7 +3,7 @@ import { AuditionSubmission } from "../models/audition_submission.js";
 
 // Checking Required Fields for each endpoint
 
-export const checkRequiredFieldsCreateAudition = checkRequiredFields(['director_id', 'title', 'type', 'min_age', 'max_age', 'gender']);
+export const checkRequiredFieldsCreateAudition = checkRequiredFields(['title', 'type', 'candidate_min_age', 'candidate_max_age']);
 
 export const checkRequiredFieldsInviteActorsToAudition = checkRequiredFields(['actor_ids']);
 

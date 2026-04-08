@@ -4,7 +4,6 @@ import {
   deleteAudition,
   getActorsForAudition,
   getAuditionSubmissions,
-  getDirectorAudition,
   getAllDirectorAuditions,
   getDirectorPendingInvitations,
   inviteActorsToAudition,
@@ -24,9 +23,6 @@ import { checkAuditionExists } from "../validators/general.js";
 const router = express.Router();
 
 // ==================== AUDITION ENDPOINTS ====================
-// Get Audition for Director
-router.get("/auditions/:audition_id", getDirectorAudition);
-
 // Create audition
 const createAuditionValidators = [
   checkRequiredFieldsCreateAudition,

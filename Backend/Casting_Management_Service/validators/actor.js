@@ -14,7 +14,7 @@ export const checkValidValuesRespondToInvitation = checkValidValues({status: ['a
 // Other Validators
 
 export const checkAuditionNotSubmitted = async(req, res, next) => {
-    const submission = await AuditionSubmission.findByAuditionIdAndActorId(req.params.audition_id, req.user.id);
+    const submission = await AuditionSubmission.findByAuditionIdAndActorId(req.params.audition_id, req.user.user_id);
     if (submission) {
         return res.status(400).json({ message: 'Audition already submitted' });
     }

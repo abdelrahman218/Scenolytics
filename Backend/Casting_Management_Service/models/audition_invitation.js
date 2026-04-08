@@ -2,12 +2,21 @@ import { mysql as knex } from "../config/mysql.js";
 
 export class AuditionInvitation {
   static async create(invitation) {
-    const [result] = await knex("audition_invitations").insert({
+    await knex("audition_invitations").insert({
       audition_id: invitation.audition_id,
       actor_id: invitation.actor_id,
-      invitation_status: invitation.invitation_status || "pending",
+      invitation_status: "pending",
     });
+
+    const result = await knex('audition_invitations').where({audition_id: invitation.audition_id, actor_id: invitation.actor_id}).first();
     return result;
+  }
+
+  static async findById(id){
+    const audition_invitation = await knex('audition_invitations')
+    .where({ id })
+    .first();
+    return audition_invitation;
   }
 
   static async findByAuditionIdAndStatus(audition_id, status) {
@@ -26,9 +35,9 @@ export class AuditionInvitation {
 
   static async findByDirectorIdAndStatus(director_id, status) {
     const invitations = await knex("audition_invitations")
-      .join("audition", "audition_invitation.audition_id", "=", "audition.id")
+      .join("auditions", "audition_invitations.audition_id", "=", "auditions.id")
       .select(
-        "audition_invitation.id",
+        "audition_invitations.id",
         "director_id",
         "audition_id",
         "actor_id",
@@ -46,15 +55,11 @@ export class AuditionInvitation {
       invitation_status: status,
       responded_at: knex.fn.now(),
     };
-    const result = await knex("audition_invitations")
+    await knex("audition_invitations")
       .where({ id })
-      .update(updateData)
-      .first();
-    return result;
-  }
-
-  static async delete(id) {
-    const result = await knex("audition_invitations").where({ id }).del();
+      .update(updateData);
+    
+    const result = await knex("audition_invitations").where({ id }).first();
     return result;
   }
 

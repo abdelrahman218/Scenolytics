@@ -31,7 +31,7 @@
           "y": -32
         },
         "config": {
-          "flowId": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/flows/Identity Service Provider.flow",
+          "flowId": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/flows/Identity Provider Service.flow",
           "versionId": "local",
           "variables": [],
           "globals": [],
@@ -46,6 +46,353 @@
             "blockTitle": "Identity Service Provider"
           }
         }
+      },
+      "IdtzpN-n": {
+        "type": "system/module@1",
+        "pos": {
+          "x": 824,
+          "y": -392
+        },
+        "config": {
+          "flowId": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/flows/Signup-Login.flow",
+          "versionId": "local",
+          "variables": [
+            {
+              "id": "5Dr4I2g3",
+              "type": "TYPE_STRING",
+              "kind": "string",
+              "value": "actor",
+              "key": "role"
+            },
+            {
+              "id": "Vpr8xOjo",
+              "type": "TYPE_STRING",
+              "kind": "string",
+              "value": "actor@gmail.com",
+              "key": "email"
+            },
+            {
+              "id": "jHE-0cPM",
+              "type": "TYPE_STRING",
+              "kind": "string",
+              "value": "actor",
+              "key": "role"
+            }
+          ],
+          "globals": [],
+          "ports": {
+            "input": [
+              {
+                "id": "5Dr4I2g3",
+                "name": "role",
+                "type": null
+              },
+              {
+                "id": "Vpr8xOjo",
+                "name": "email",
+                "type": null
+              },
+              {
+                "id": "jHE-0cPM",
+                "name": "role",
+                "type": null
+              }
+            ],
+            "output": [
+              {
+                "id": "tHieZZAI",
+                "name": "Output 1",
+                "type": null
+              },
+              {
+                "id": "QPDVyu4O",
+                "name": "Output 2",
+                "type": null
+              }
+            ],
+            "global": []
+          }
+        },
+        "ui": {
+          "data": {
+            "blockTitle": "Signup-Login"
+          }
+        }
+      },
+      "zEe3G_Wm": {
+        "type": "system/module@1",
+        "pos": {
+          "x": 808,
+          "y": 192
+        },
+        "config": {
+          "flowId": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/flows/Signup-Login.flow",
+          "versionId": "local",
+          "variables": [
+            {
+              "id": "5Dr4I2g3",
+              "type": "TYPE_STRING",
+              "kind": "string",
+              "value": "director",
+              "key": "role"
+            },
+            {
+              "id": "Vpr8xOjo",
+              "type": "TYPE_STRING",
+              "kind": "string",
+              "value": "director@gmail.com",
+              "key": "email"
+            },
+            {
+              "id": "jHE-0cPM",
+              "type": "TYPE_STRING",
+              "kind": "string",
+              "value": "director",
+              "key": "role"
+            }
+          ],
+          "globals": [],
+          "ports": {
+            "input": [
+              {
+                "id": "5Dr4I2g3",
+                "name": "role",
+                "type": null
+              },
+              {
+                "id": "Vpr8xOjo",
+                "name": "email",
+                "type": null
+              },
+              {
+                "id": "jHE-0cPM",
+                "name": "role",
+                "type": null
+              }
+            ],
+            "output": [
+              {
+                "id": "tHieZZAI",
+                "name": "Output 1",
+                "type": null
+              },
+              {
+                "id": "QPDVyu4O",
+                "name": "Output 2",
+                "type": null
+              }
+            ],
+            "global": []
+          }
+        },
+        "ui": {
+          "data": {
+            "blockTitle": "Signup-Login"
+          }
+        }
+      },
+      "xj9ljSFy": {
+        "type": "system/module@1",
+        "pos": {
+          "x": 1472,
+          "y": -48
+        },
+        "config": {
+          "flowId": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/flows/Casting Management Service.flow",
+          "versionId": "local",
+          "variables": [
+            {
+              "id": "4bzpvIcB",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "-90xS3Ps",
+              "key": "director_token"
+            },
+            {
+              "id": "qR3eKg-y",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "ppDT-Ge2",
+              "key": "actor_token"
+            },
+            {
+              "id": "rVOaHuds",
+              "type": "value/reference@2",
+              "kind": "reference",
+              "value": "user.user_id",
+              "key": "actor_id"
+            }
+          ],
+          "globals": [],
+          "ports": {
+            "input": [
+              {
+                "id": "4bzpvIcB",
+                "name": "director_token",
+                "type": null
+              },
+              {
+                "id": "qR3eKg-y",
+                "name": "actor_token",
+                "type": null
+              },
+              {
+                "id": "rVOaHuds",
+                "name": "actor_id",
+                "type": null
+              }
+            ],
+            "output": [],
+            "global": []
+          }
+        },
+        "ui": {
+          "data": {
+            "blockTitle": "Casting Management Service"
+          }
+        }
+      },
+      "W0hwQbf7": {
+        "type": "value/reference@2",
+        "pos": {
+          "x": 1376,
+          "y": -336
+        },
+        "config": {
+          "value": "token",
+          "type": "string"
+        },
+        "ui": {
+          "data": {}
+        }
+      },
+      "ppDT-Ge2": {
+        "type": "portal/in@1",
+        "pos": {
+          "x": 1696,
+          "y": -336
+        },
+        "config": {
+          "value": "actor_token"
+        },
+        "ui": {
+          "color": "yellow",
+          "data": {}
+        }
+      },
+      "bblPtKD-": {
+        "type": "value/reference@2",
+        "pos": {
+          "x": 1296,
+          "y": 416
+        },
+        "config": {
+          "value": "token",
+          "type": "string"
+        },
+        "ui": {
+          "data": {}
+        }
+      },
+      "-90xS3Ps": {
+        "type": "portal/in@1",
+        "pos": {
+          "x": 1688,
+          "y": 416
+        },
+        "config": {
+          "value": "director_token"
+        },
+        "ui": {
+          "color": "blue",
+          "data": {}
+        }
+      },
+      "EZ-BACFB": {
+        "type": "task/http-request@1",
+        "pos": {
+          "x": 2512,
+          "y": -456
+        },
+        "config": {
+          "element": {
+            "id": "Dd45e3c3767De8f267bD924B",
+            "collection": "AE13effdaCE7fbbFBf0351FF",
+            "inExtensibleCollection": true,
+            "name": "Delete User Account",
+            "method": "DELETE"
+          },
+          "environment": "feb5a8fb-2b91-4de9-adef-b49ec06e0734",
+          "parseBody": "auto",
+          "requestVariables": [
+            {
+              "id": "6xYjBYgB",
+              "type": null,
+              "kind": null,
+              "value": null,
+              "key": "base_url"
+            },
+            {
+              "id": "b2qV8XQr",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "ppDT-Ge2",
+              "key": "jwt_token",
+              "latch": true,
+              "isExtraneous": false
+            }
+          ],
+          "scriptsModifyEnvVars": true,
+          "trackGlobalEnvironment": true,
+          "requestVariables__expanded": true
+        },
+        "ui": {
+          "data": {},
+          "namedInputsExpanded": true
+        }
+      },
+      "68aKUl9p": {
+        "type": "task/http-request@1",
+        "pos": {
+          "x": 2520,
+          "y": 272
+        },
+        "config": {
+          "element": {
+            "id": "Dd45e3c3767De8f267bD924B",
+            "collection": "AE13effdaCE7fbbFBf0351FF",
+            "inExtensibleCollection": true,
+            "name": "Delete User Account",
+            "method": "DELETE"
+          },
+          "environment": "feb5a8fb-2b91-4de9-adef-b49ec06e0734",
+          "parseBody": "auto",
+          "requestVariables": [
+            {
+              "id": "PS_j99Tm",
+              "type": null,
+              "kind": null,
+              "value": null,
+              "key": "base_url"
+            },
+            {
+              "id": "nB8FH3Hm",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "-90xS3Ps",
+              "key": "jwt_token",
+              "latch": true,
+              "isExtraneous": false
+            }
+          ],
+          "scriptsModifyEnvVars": true,
+          "trackGlobalEnvironment": true,
+          "requestVariables__expanded": true
+        },
+        "ui": {
+          "data": {},
+          "namedInputsExpanded": true
+        }
       }
     },
     "connections": {
@@ -54,6 +401,90 @@
         "target": "PqniTRnQ",
         "sourcePort": "data",
         "targetPort": "AI"
+      },
+      "o2TRXFgt": {
+        "source": "PqniTRnQ",
+        "target": "IdtzpN-n",
+        "sourcePort": "AO",
+        "targetPort": "AI"
+      },
+      "MyHgwRYe": {
+        "source": "zEe3G_Wm",
+        "target": "xj9ljSFy",
+        "sourcePort": "AO",
+        "targetPort": "AI"
+      },
+      "UXBarCQG": {
+        "source": "IdtzpN-n",
+        "target": "zEe3G_Wm",
+        "sourcePort": "AO",
+        "targetPort": "AI"
+      },
+      "bJbsXGp7": {
+        "source": "IdtzpN-n",
+        "target": "W0hwQbf7",
+        "sourcePort": "output|tHieZZAI",
+        "targetPort": "in"
+      },
+      "XEBrsAGw": {
+        "source": "W0hwQbf7",
+        "target": "ppDT-Ge2",
+        "sourcePort": "out",
+        "targetPort": "data"
+      },
+      "Hg6XmcxU": {
+        "source": "zEe3G_Wm",
+        "target": "bblPtKD-",
+        "sourcePort": "output|tHieZZAI",
+        "targetPort": "in"
+      },
+      "VqYgs4q3": {
+        "source": "bblPtKD-",
+        "target": "-90xS3Ps",
+        "sourcePort": "out",
+        "targetPort": "data"
+      },
+      "GE1BiVNS": {
+        "source": "xj9ljSFy",
+        "target": "EZ-BACFB",
+        "sourcePort": "AO",
+        "targetPort": "AI"
+      },
+      "NRJ1-Ud2": {
+        "source": "xj9ljSFy",
+        "target": "68aKUl9p",
+        "sourcePort": "AO",
+        "targetPort": "AI"
+      },
+      "rBVZ9nGm": {
+        "source": "-90xS3Ps",
+        "sourcePort": "data",
+        "target": "68aKUl9p",
+        "targetPort": "requestVariables|nB8FH3Hm"
+      },
+      "KYGedb7d": {
+        "source": "ppDT-Ge2",
+        "sourcePort": "data",
+        "target": "EZ-BACFB",
+        "targetPort": "requestVariables|b2qV8XQr"
+      },
+      "u6BRLrq0": {
+        "source": "-90xS3Ps",
+        "sourcePort": "data",
+        "target": "xj9ljSFy",
+        "targetPort": "variables|4bzpvIcB"
+      },
+      "YpcX8N1k": {
+        "source": "ppDT-Ge2",
+        "sourcePort": "data",
+        "target": "xj9ljSFy",
+        "targetPort": "variables|qR3eKg-y"
+      },
+      "zhvI13_R": {
+        "source": "IdtzpN-n",
+        "target": "xj9ljSFy",
+        "sourcePort": "output|tHieZZAI",
+        "targetPort": "variables|rVOaHuds"
       }
     },
     "annotations": {},
@@ -78,6 +509,6 @@
   "info": {
     "_postman_id": "11f81038-ac59-4a34-9a64-641cefc063d7"
   },
-  "_postman_exported_at": "2026-04-07T19:09:07.933Z",
+  "_postman_exported_at": "2026-04-08T01:38:36.249Z",
   "_postman_exported_using": "Postman/Local Mode"
 }

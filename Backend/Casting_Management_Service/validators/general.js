@@ -24,7 +24,7 @@ export const checkValidValues = (fieldsValues) => {
 
 export const checkInvitationIsPending = async(req, res, next) => {
     const invitation = await AuditionInvitation.findById(req.params.invitation_id);
-    if (invitation.status !== 'pending') {
+    if (invitation.invitation_status !== 'pending') {
         return res.status(400).json({ message: 'Invitation is not pending' });
     }
     next();

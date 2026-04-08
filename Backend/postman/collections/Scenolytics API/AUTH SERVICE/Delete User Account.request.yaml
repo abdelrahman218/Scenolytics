@@ -1,5 +1,6 @@
 $kind: http-request
-url: "{{base_url}}/api/v1/auth/delete/{{user_id}}"
+name: Delete User Account
+url: "{{base_url}}/api/v1/auth/delete"
 method: DELETE
 headers:
   Authorization: Bearer {{jwt_token}}

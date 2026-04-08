@@ -1,0 +1,24 @@
+$kind: http-request
+name: Create Audition
+url: "{{base_url}}/api/v1/casting/director/auditions/create_audition"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{director_token}}
+body:
+  type: json
+  content: >-
+    {
+      "title": "Gym Coach",
+      "description": "Lead role audition",
+      "type": "Video",
+      "candidate_min_height_cm": 150,
+      "candidate_max_height_cm": 180,
+      "candidate_min_age": 17,
+      "candidate_max_age": 22,
+      "candidate_gender": "Male",
+      "candidate_ethnicity": "White",
+      "candidate_body_type": "Slim",
+      "script": [{"emotion": "happy", "content": "I love you"}, {"emotion": "surprised", "content": "What!"}]
+    }
+order: 2000

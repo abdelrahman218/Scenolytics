@@ -1,16 +1,5 @@
 USE callback_management_db;
 
-CREATE TABLE IF NOT EXISTS sentences (
-  id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
-  audition_id CHAR(36) NOT NULL,
-  emotion ENUM('neutral', 'calm', 'happy', 'sad', 'angry', 'fearful', 'disgust', 'surprised') NOT NULL,
-  content TEXT NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY (audition_id) REFERENCES auditions(id) ON DELETE CASCADE,
-  INDEX idx_audition_id (audition_id)
-);
-
 CREATE TABLE IF NOT EXISTS auditions (
   id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
   director_id CHAR(36) NOT NULL,
@@ -28,6 +17,18 @@ CREATE TABLE IF NOT EXISTS auditions (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_director_id (director_id)
 );
+
+CREATE TABLE IF NOT EXISTS sentences (
+  id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+  audition_id CHAR(36) NOT NULL,
+  emotion ENUM('neutral', 'calm', 'happy', 'sad', 'angry', 'fearful', 'disgust', 'surprised') NOT NULL,
+  content TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (audition_id) REFERENCES auditions(id) ON DELETE CASCADE,
+  INDEX idx_audition_id (audition_id)
+);
+
 
 CREATE TABLE IF NOT EXISTS audition_submissions (
   id CHAR(36) PRIMARY KEY DEFAULT (UUID()),

@@ -1,10 +1,10 @@
 import { mysql as knex } from '../config/mysql.js';
 
 export class Audition {
-  static async create(audition) {
-    const [result] = await knex('auditions')
+  static async create(audition, director_id) {
+    await knex('auditions')
       .insert({
-        director_id: audition.director_id,
+        director_id,
         title: audition.title,
         description: audition.description,
         type: audition.type,
@@ -16,6 +16,8 @@ export class Audition {
         candidate_ethnicity: audition.candidate_ethnicity || 'Any',
         candidate_body_type: audition.candidate_body_type || 'Any'
       });
+    
+    const result = await knex('auditions').where({director_id, title: audition.title}).first();
     return result;
   }
 
@@ -33,10 +35,10 @@ export class Audition {
     return auditions;
   }
 
-  static async update(id, data) {
+  static async update(id, data, director_id) {
     const result = await knex('auditions')
       .where({ id })
-      .update(data);
+      .update({...data, director_id});
     return result;
   }
 

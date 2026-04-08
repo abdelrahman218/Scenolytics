@@ -1,25 +1,6 @@
-import { Audition } from "../models/audition.js";
 import { AuditionInvitation } from "../models/audition_invitation.js";
 import { AuditionSubmission } from "../models/audition_submission.js";
-import { Sentence } from "../models/sentence.js"
 import { EXCHANGES, publishMessage, ROUTING_KEYS } from "../utils/rabbitmq.js";
-
-export const getActorAudition = async (req, res, next) => {
-    try {
-        const audition_id = req.params.audition_id;
-        let audition = await Audition.findById(audition_id);
-
-        if (!audition){
-            return res.status(404).json({message: 'audition not found'});
-        }
-
-        const script = await Sentence.findByAuditionId(audition_id);
-        audition = {...audition, script };
-        return res.status(200).json({audition});
-    } catch (error) {
-        next(error);
-    }
-};
 
 export const respondToInvitation = async (req, res, next) => {
     try {
@@ -59,6 +40,7 @@ export const submitAuditionSubmission = async (req, res, next) => {
     try {
         const submission = await AuditionSubmission.create({
             audition_id: req.params.audition_id,
+            actor_id: req.user.user_id,
             media_id: req.body.media_id,
         });
 

@@ -89,8 +89,7 @@ export const validateUserExists = async (req, res, next) => {
 
 export const deleteUser = async (req, res, next) => {
   try {
-    const { user_id } = req.params;
-
+    const user_id = req.user.user_id;
     const isDeleted = await User.Delete(user_id);
 
     if (!isDeleted) {

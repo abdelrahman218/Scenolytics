@@ -1,8 +1,0 @@
-$kind: http-request
-url: "{{base_url}}/api/v1/casting/director/auditions/:audition_id/invitations/pending"
-method: GET
-headers:
-  Authorization: Bearer {{director_token}}
-pathVariables:
-  audition_id: audition-id-123
-order: 7000

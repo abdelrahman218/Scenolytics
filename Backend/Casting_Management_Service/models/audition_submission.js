@@ -2,12 +2,23 @@ import { mysql as knex } from '../config/mysql.js';
 
 export class AuditionSubmission {
   static async create(submission) {
-    const [result] = await knex('audition_submissions')
+    await knex('audition_submissions')
       .insert({
         audition_id: submission.audition_id,
         actor_id: submission.actor_id
       });
+
+    const result = await knex('audition_submissions')
+    .where({audition_id: submission.audition_id, actor_id: submission.actor_id})
+    .first();
     return result;
+  }
+
+  static async findById(id){
+    const audition_submission = await knex('audition_submissions')
+    .where({ id })
+    .first();
+    return audition_submission;
   }
 
   static async findByAuditionId(audition_id) {

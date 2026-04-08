@@ -1,0 +1,14 @@
+$kind: http-request
+name: Invite Actors To Audition
+url: "{{base_url}}/api/v1/casting/director/auditions/{{audition_id}}/invite_actors"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{director_token}}
+body:
+  type: json
+  content: |-
+    {
+      "actor_ids": ["{{actor_id}}"]
+    }
+order: 6000

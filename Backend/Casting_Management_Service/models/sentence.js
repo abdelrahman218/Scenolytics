@@ -2,12 +2,14 @@ import { mysql as knex } from '../config/mysql.js';
 
 export class Sentence {
   static async create(sentence) {
-    const [result] = await knex('sentences')
+    await knex('sentences')
       .insert({
         audition_id: sentence.audition_id,
         emotion: sentence.emotion,
         content: sentence.content
       });
+
+    const result = await knex('sentences').where({audition_id: sentence.audition_id}).first();
     return result;
   }
 

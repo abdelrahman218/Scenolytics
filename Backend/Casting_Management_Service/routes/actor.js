@@ -1,6 +1,5 @@
 import express from "express";
 import {
-  getActorAudition,
   getActorPendingInvitations,
   getActorSubmissions,
   respondToInvitation,
@@ -15,12 +14,6 @@ import {
 const router = express.Router();
 
 // ==================== INVITATION ENDPOINTS ====================
-// Get Audition for Actor
-router.get("/auditions/:audition_id", getActorAudition);
-
-// Get Pending invitations for actor
-router.get("/invitations", getActorPendingInvitations);
-
 // Actor responds to invitation
 const respondToInvitationValidators = [
   checkInvitationIsPending,
@@ -31,6 +24,10 @@ router.patch(
   respondToInvitationValidators,
   respondToInvitation,
 );
+
+// Get Pending invitations for actor
+router.get("/invitations", getActorPendingInvitations);
+
 
 // ==================== SUBMISSION ENDPOINTS ====================
 

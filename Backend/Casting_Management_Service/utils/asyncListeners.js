@@ -10,7 +10,7 @@ export const executeAsyncListeners = () => {
       await AuditionSubmission.deleteByActorId(content.user_id);
       await AuditionInvitation.deleteByActorId(content.user_id);
     } catch (error) {
-      console.error("Coulding delete user data. /n " + content.toString());
+      console.error("Coulding delete user data. /n " + content);
     }
   });
 
@@ -21,7 +21,7 @@ export const executeAsyncListeners = () => {
         content.media_id,
       );
     } catch (error) {
-      console.error("Coulding update media id. /n " + content.toString());
+      console.error("Coulding update media id. /n " + content);
     }
   });
 };
