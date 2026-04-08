@@ -11,7 +11,7 @@ export const EXCHANGES = {
 };
 
 export const QUEUES = {
-  USER_EVENTS: 'user_events_queue',
+  USER_EVENTS: 'identity_provider_user_events_queue',
 };
 
 export const ROUTING_KEYS = {
@@ -117,35 +117,6 @@ export const publishMessage = async (exchangeName, routingKey, message) => {
     console.log(`Message published to ${exchangeName} with routing key ${routingKey}`);
   } catch (error) {
     console.error('Failed to publish message:', error);
-    throw error;
-  }
-};
-
-/**
- * Consume messages from queue
- */
-export const consumeMessages = async (queueName, callback) => {
-  try {
-    const ch = await getChannel();
-    await assertQueue(queueName);
-    
-    await ch.consume(queueName, async (msg) => {
-      if (msg) {
-        try {
-          const content = JSON.parse(msg.content.toString());
-          await callback(content);
-          ch.ack(msg);
-        } catch (error) {
-          console.error('Error processing message:', error);
-          // Reject and requeue
-          ch.nack(msg, false, true);
-        }
-      }
-    });
-    
-    console.log(`Started consuming messages from ${queueName}`);
-  } catch (error) {
-    console.error(`Failed to consume messages from ${queueName}:`, error);
     throw error;
   }
 };

@@ -1,0 +1,14 @@
+$kind: http-request
+name: Submit Audition Submission
+url: "{{base_url}}/api/v1/casting/actor/auditions/{{audition_id}}/submissions"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{actor_token}}
+body:
+  type: json
+  content: |-
+    {
+      "media_id": "media_123"
+    }
+order: 5000

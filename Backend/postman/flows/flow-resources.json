@@ -2,13 +2,13 @@
   "version": 1,
   "flows": {
     "4cb15d1b-de7d-4be2-b4bd-35e0660814bb": {
-      "path": "C:/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/flows/Scenolytics API Testing.flow",
+      "path": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/flows/Identity Provider Service.flow",
       "dependencies": [
         {
           "local": {
-            "collectionId": "02D22729bb1Ef13dA5A14996",
-            "requestId": "30fAE97A7BFe33444D389fFA",
-            "filePath": ""
+            "collectionId": "AE13effdaCE7fbbFBf0351FF",
+            "requestId": "73483fe90e72d0eF904fb82a",
+            "filePath": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/collections/Scenolytics API/AUTH SERVICE/Validate User.request.yaml"
           },
           "cloud": {
             "collectionId": null,
@@ -17,9 +17,25 @@
         },
         {
           "local": {
-            "collectionId": "02D22729bb1Ef13dA5A14996",
-            "requestId": "2aAe402DCDDcf31EA599FE6c",
-            "filePath": ""
+            "collectionId": "AE13effdaCE7fbbFBf0351FF",
+            "requestId": "Dd45e3c3767De8f267bD924B",
+            "filePath": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/collections/Scenolytics API/AUTH SERVICE/Delete User Account.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        }
+      ]
+    },
+    "efa53508-1f94-4697-aa74-fabc9a3ac60a": {
+      "path": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/flows/Signup-Login.flow",
+      "dependencies": [
+        {
+          "local": {
+            "collectionId": "AE13effdaCE7fbbFBf0351FF",
+            "requestId": "b27fee6C57A3e1360712B5BA",
+            "filePath": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/collections/Scenolytics API/AUTH SERVICE/Sign Up.request.yaml"
           },
           "cloud": {
             "collectionId": null,
@@ -28,9 +44,41 @@
         },
         {
           "local": {
-            "collectionId": "02D22729bb1Ef13dA5A14996",
-            "requestId": "DCF0f0C6a0b7ab2D8f5A0ce5",
-            "filePath": ""
+            "collectionId": "AE13effdaCE7fbbFBf0351FF",
+            "requestId": "dFeEcbd8AAAdedE7f4deEb1F",
+            "filePath": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/collections/Scenolytics API/AUTH SERVICE/Login.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        }
+      ]
+    },
+    "11f81038-ac59-4a34-9a64-641cefc063d7": {
+      "path": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/flows/End To End.flow",
+      "dependencies": [
+        {
+          "local": {
+            "collectionId": "AE13effdaCE7fbbFBf0351FF",
+            "requestId": "Dd45e3c3767De8f267bD924B",
+            "filePath": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/collections/Scenolytics API/AUTH SERVICE/Delete User Account.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        }
+      ]
+    },
+    "61ee2713-5ef1-457f-99e2-37c74aa63bf8": {
+      "path": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/flows/Casting Management Service.flow",
+      "dependencies": [
+        {
+          "local": {
+            "collectionId": "AE13effdaCE7fbbFBf0351FF",
+            "requestId": "a78aEE1c557cabEfFAD36aDF",
+            "filePath": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/DIRECTOR/Create Audition.request.yaml"
           },
           "cloud": {
             "collectionId": null,
@@ -39,9 +87,141 @@
         },
         {
           "local": {
-            "collectionId": "02D22729bb1Ef13dA5A14996",
-            "requestId": "447e2b8FFdFc5A1D7A58FE3f",
-            "filePath": ""
+            "collectionId": "AE13effdaCE7fbbFBf0351FF",
+            "requestId": "b95FA4a9A2Cab21e08BAa1eb",
+            "filePath": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/DIRECTOR/Invite Actors To Audition.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "AE13effdaCE7fbbFBf0351FF",
+            "requestId": "7DdaC2deAF0DEBaE76fB10F2",
+            "filePath": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/ACTOR/Get Actor Invitations.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "AE13effdaCE7fbbFBf0351FF",
+            "requestId": "F8bF9Ee30D3E56EC8BD9b6fc",
+            "filePath": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/ACTOR/Respond To Invitation.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "AE13effdaCE7fbbFBf0351FF",
+            "requestId": "f2DCF4D384aCeD4029bbBc80",
+            "filePath": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/DIRECTOR/Get Director Auditions.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "AE13effdaCE7fbbFBf0351FF",
+            "requestId": "7dDffC3c553DC7FACF5F5f1f",
+            "filePath": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/DIRECTOR/Get Pending Invitations For Audition.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "AE13effdaCE7fbbFBf0351FF",
+            "requestId": "F51eccdA8aE608cE7ddC00c3",
+            "filePath": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/DIRECTOR/Get Director Pending Invitations.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "AE13effdaCE7fbbFBf0351FF",
+            "requestId": "f23D736EBB2E7eCAF80e36C6",
+            "filePath": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/ACTOR/Submit Audition Submission.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "AE13effdaCE7fbbFBf0351FF",
+            "requestId": "72dcae68Bf556C7EDFC911b2",
+            "filePath": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/ACTOR/Get Actor Submissions.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "AE13effdaCE7fbbFBf0351FF",
+            "requestId": "5D6Ffa49eEB0bb59e4Ede038",
+            "filePath": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/DIRECTOR/Get Actors For Audition.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "AE13effdaCE7fbbFBf0351FF",
+            "requestId": "eeDC50CfbbEfDaE59Cb47d2d",
+            "filePath": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/General/Get Audition.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "AE13effdaCE7fbbFBf0351FF",
+            "requestId": "43AFefEAb51cC05Cd30a0bD5",
+            "filePath": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/DIRECTOR/Review Submission.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "AE13effdaCE7fbbFBf0351FF",
+            "requestId": "Db094271136ea11CbB16708f",
+            "filePath": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/DIRECTOR/Update Audition.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "AE13effdaCE7fbbFBf0351FF",
+            "requestId": "6c578DD7C2be8ff8C97735dd",
+            "filePath": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/DIRECTOR/Delete Audition.request.yaml"
           },
           "cloud": {
             "collectionId": null,

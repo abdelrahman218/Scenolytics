@@ -3,6 +3,7 @@ workspace:
   id: ""
 
 # Each entry here maps a local resource to one or more corresponding objects in Postman Cloud
+
 cloudResources:
   collections:
     ..\postman\collections\Scenolytics API: 44238264-172009cb-adeb-4021-8bab-d95d565d5637

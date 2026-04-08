@@ -10,33 +10,27 @@ export const EXCHANGES = {
   USERS: 'users_exchange',
   AUDITIONS: 'auditions_exchange',
   VIDEOS: 'videos_exchange',
-  EVALUATIONS: 'evaluations_exchange',
-  CALLBACKS: 'callbacks_exchange',
-  NOTIFICATIONS: 'notifications_exchange'
+  INVITATIONS: 'invitations_exchange'
 };
 
 export const QUEUES = {
-  USER_EVENTS: 'user_events_queue',
-  AUDITION_EVENTS: 'audition_events_queue',
-  VIDEO_EVENTS: 'video_events_queue',
-  EVALUATION_EVENTS: 'evaluation_events_queue',
-  CALLBACK_EVENTS: 'callback_events_queue',
-  NOTIFICATION_QUEUE: 'notification_queue'
+  USER_EVENTS: 'casting_management_user_events_queue',
+  AUDITION_EVENTS: 'casting_management_audition_events_queue',
+  VIDEO_EVENTS: 'casting_management_video_events_queue',
+  INVITATION_EVENTS: 'casting_management_invitation_events_queue'
 };
 
 export const ROUTING_KEYS = {
-  USER_CREATED: 'user.created',
-  USER_UPDATED: 'user.updated',
   USER_DELETED: 'user.deleted',
-  AUDITION_STARTED: 'audition.started',
-  AUDITION_COMPLETED: 'audition.completed',
+  AUDITION_CREATED: 'audition.created',
+  AUDITION_UPDATED: 'audition.updated',
+  AUDITION_DELETED: 'audition.deleted',
+  AUDITION_SUBMITTED: 'audition.submitted',
+  AUDITION_REVIEWED: 'audition.reviewed',
   VIDEO_UPLOADED: 'video.uploaded',
-  VIDEO_PROCESSING_STARTED: 'video.processing.started',
-  VIDEO_PROCESSING_COMPLETED: 'video.processing.completed',
-  EVALUATION_CREATED: 'evaluation.created',
-  EVALUATION_COMPLETED: 'evaluation.completed',
-  CALLBACK_CREATED: 'callback.created',
-  CALLBACK_UPDATED: 'callback.updated'
+  INVITATION_CREATED: 'invitation.created',
+  INVITATION_UPDATED: 'invitation.updated',
+  INVITATION_DELETED: 'invitation.deleted'
 };
 
 /**
