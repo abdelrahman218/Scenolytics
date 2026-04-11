@@ -1,8 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import userRoutes from './routes/user.js';
+import routes from './routes/index.js';
 import { connectRabbitMQ, closeRabbitMQ } from './utils/rabbitmq.js';
+import { initializeEventListeners } from './utils/eventListener.js';
 
 dotenv.config({filepath: `./.env`});
 
@@ -15,7 +16,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Routes
-app.use('/', userRoutes);
+app.use('/', routes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -32,6 +33,9 @@ const server = app.listen(PORT, async () => {
   // Connect to RabbitMQ
   try {
     await connectRabbitMQ();
+    
+    // Initialize event listeners
+    await initializeEventListeners();
   } catch (error) {
     console.error('Failed to connect to RabbitMQ:', error);
   }
