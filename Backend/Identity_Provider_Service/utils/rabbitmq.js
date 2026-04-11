@@ -10,10 +10,6 @@ export const EXCHANGES = {
   USERS: 'users_exchange',
 };
 
-export const QUEUES = {
-  USER_EVENTS: 'identity_provider_user_events_queue',
-};
-
 export const ROUTING_KEYS = {
   USER_CREATED: 'user.created',
   USER_UPDATED: 'user.updated',

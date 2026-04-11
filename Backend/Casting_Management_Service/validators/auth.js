@@ -13,7 +13,7 @@ function extractTokenFromHeader(req, res) {
     return token;
 };
 
-export const validateAccess = (req, res, next) => {
+export const validateJWTToken = (req, res, next) => {
     const token = extractTokenFromHeader(req, res);
     try {
         const decoded = jwt.verify(token, JWT_SECRET);

@@ -1,23 +1,41 @@
-export const validateNotification = (notification) => {
-  const errors = [];
-
-  if (!notification.user_id) errors.push('user_id is required');
-  if (!notification.notification_type) errors.push('notification_type is required');
-  if (!notification.title) errors.push('title is required');
-
-  return {
-    isValid: errors.length === 0,
-    errors
+const checkRequiredFields = (fields) => {
+  return (req, res, next) => {
+    const missingFields = fields.filter((field) => !req.body[field]);
+    if (missingFields.length > 0) {
+      return res
+        .status(400)
+        .json({
+          message: `Missing required fields: ${missingFields.join(", ")}`,
+        });
+    }
+    next();
   };
 };
 
-export const validatePreferences = (preferences) => {
-  const errors = [];
+export const validateUpdateNotificationPreferenceRequiredData =
+  checkRequiredFields([
+    "in_app_submission_notifications",
+    "in_app_invitation_notifications",
+    "email_submission_notifications",
+    "email_invitation_notifications",
+  ]);
 
-  if (!preferences.user_id) errors.push('user_id is required');
-
-  return {
-    isValid: errors.length === 0,
-    errors
+const checkValidValues = (fieldsValues) => {
+  return (req, res, next) => {
+    Object.entries(fieldsValues).forEach(([field, values]) => {
+      if (!values.includes(req.body[field]) && req.body[field]) {
+        return res
+          .status(400)
+          .json({ message: `Invalid value for ${field}: ${req.body[field]}` });
+      }
+    });
+    next();
   };
 };
+
+export const validateUpdateNotificationDataValues = checkValidValues({
+  email_notifications: ["true", "false", "0", "1"],
+  in_app_notifications: ["true", "false", "0", "1"],
+  submission_notifications: ["true", "false", "0", "1"],
+  invitation_notifications: ["true", "false", "0", "1"],
+});

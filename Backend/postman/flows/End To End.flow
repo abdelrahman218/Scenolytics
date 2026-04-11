@@ -68,7 +68,7 @@
               "id": "Vpr8xOjo",
               "type": "TYPE_STRING",
               "kind": "string",
-              "value": "actor@gmail.com",
+              "value": "abdelrahman.alkot2182004@gmail.com",
               "key": "email"
             },
             {
@@ -140,7 +140,7 @@
               "id": "Vpr8xOjo",
               "type": "TYPE_STRING",
               "kind": "string",
-              "value": "director@gmail.com",
+              "value": "abdelrahman2203005@miuegypt.edu.eg",
               "key": "email"
             },
             {
@@ -283,8 +283,8 @@
       "bblPtKD-": {
         "type": "value/reference@2",
         "pos": {
-          "x": 1296,
-          "y": 416
+          "x": 1304,
+          "y": 376
         },
         "config": {
           "value": "token",
@@ -297,8 +297,8 @@
       "-90xS3Ps": {
         "type": "portal/in@1",
         "pos": {
-          "x": 1688,
-          "y": 416
+          "x": 1680,
+          "y": 376
         },
         "config": {
           "value": "director_token"
@@ -312,7 +312,7 @@
         "type": "task/http-request@1",
         "pos": {
           "x": 2512,
-          "y": -456
+          "y": -432
         },
         "config": {
           "element": {
@@ -393,6 +393,80 @@
           "data": {},
           "namedInputsExpanded": true
         }
+      },
+      "MGyz53pW": {
+        "type": "system/module@1",
+        "pos": {
+          "x": 2056,
+          "y": 320
+        },
+        "config": {
+          "flowId": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/flows/Notification Service.flow",
+          "versionId": "local",
+          "variables": [
+            {
+              "id": "5mx8qz3N",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "-90xS3Ps",
+              "key": "token"
+            }
+          ],
+          "globals": [],
+          "ports": {
+            "input": [
+              {
+                "id": "5mx8qz3N",
+                "name": "token",
+                "type": null
+              }
+            ],
+            "output": [],
+            "global": []
+          }
+        },
+        "ui": {
+          "data": {
+            "blockTitle": "Notification Service"
+          }
+        }
+      },
+      "iducbMGb": {
+        "type": "system/module@1",
+        "pos": {
+          "x": 2048,
+          "y": -384
+        },
+        "config": {
+          "flowId": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/flows/Notification Service.flow",
+          "versionId": "local",
+          "variables": [
+            {
+              "id": "5mx8qz3N",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "ppDT-Ge2",
+              "key": "token"
+            }
+          ],
+          "globals": [],
+          "ports": {
+            "input": [
+              {
+                "id": "5mx8qz3N",
+                "name": "token",
+                "type": null
+              }
+            ],
+            "output": [],
+            "global": []
+          }
+        },
+        "ui": {
+          "data": {
+            "blockTitle": "Notification Service"
+          }
+        }
       }
     },
     "connections": {
@@ -444,18 +518,6 @@
         "sourcePort": "out",
         "targetPort": "data"
       },
-      "GE1BiVNS": {
-        "source": "xj9ljSFy",
-        "target": "EZ-BACFB",
-        "sourcePort": "AO",
-        "targetPort": "AI"
-      },
-      "NRJ1-Ud2": {
-        "source": "xj9ljSFy",
-        "target": "68aKUl9p",
-        "sourcePort": "AO",
-        "targetPort": "AI"
-      },
       "rBVZ9nGm": {
         "source": "-90xS3Ps",
         "sourcePort": "data",
@@ -485,6 +547,42 @@
         "target": "xj9ljSFy",
         "sourcePort": "output|tHieZZAI",
         "targetPort": "variables|rVOaHuds"
+      },
+      "ETVkOemn": {
+        "source": "ppDT-Ge2",
+        "sourcePort": "data",
+        "target": "iducbMGb",
+        "targetPort": "variables|5mx8qz3N"
+      },
+      "dhJ_eBcd": {
+        "source": "-90xS3Ps",
+        "sourcePort": "data",
+        "target": "MGyz53pW",
+        "targetPort": "variables|5mx8qz3N"
+      },
+      "8ZnVS5ND": {
+        "source": "iducbMGb",
+        "target": "EZ-BACFB",
+        "sourcePort": "AO",
+        "targetPort": "AI"
+      },
+      "UUo-gF1o": {
+        "source": "xj9ljSFy",
+        "target": "iducbMGb",
+        "sourcePort": "AO",
+        "targetPort": "AI"
+      },
+      "2YuAYB2Z": {
+        "source": "MGyz53pW",
+        "target": "68aKUl9p",
+        "sourcePort": "AO",
+        "targetPort": "AI"
+      },
+      "1dnaT-3q": {
+        "source": "xj9ljSFy",
+        "target": "MGyz53pW",
+        "sourcePort": "AO",
+        "targetPort": "AI"
       }
     },
     "annotations": {},
@@ -509,6 +607,6 @@
   "info": {
     "_postman_id": "11f81038-ac59-4a34-9a64-641cefc063d7"
   },
-  "_postman_exported_at": "2026-04-08T01:38:36.249Z",
+  "_postman_exported_at": "2026-04-11T20:22:09.479Z",
   "_postman_exported_using": "Postman/Local Mode"
 }

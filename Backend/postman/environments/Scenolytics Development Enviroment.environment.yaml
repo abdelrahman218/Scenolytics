@@ -3,6 +3,9 @@ values:
   - key: base_url
     value: ''
     enabled: true
+  - key: notification_socket_url
+    value: 'ws://localhost:5005'
+    enabled: true
   - key: user_id
     value: ''
     enabled: true
@@ -22,6 +25,9 @@ values:
     value: ''
     enabled: true
   - key: invitation_id
+    value: ''
+    enabled: true
+  - key: notification_id
     value: ''
     enabled: true
 color: 180
