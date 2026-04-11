@@ -356,6 +356,8 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${ROOT_PASSWORD}
       MYSQL_DATABASE: ${NOTIFICATION_SERVICE_DATABASE_NAME}
+      MYSQL_USER: ${DATABASE_USER}
+      MYSQL_PASSWORD: ${DATABASE_PASSWORD}      
     ports:
       - "${NOTIFICATION_SERVICE_DATABASE_PORT}:3306"
     volumes:
@@ -387,10 +389,11 @@ services:
       SMTP_PORT: ${SMTP_PORT}
       SMTP_USER: ${SMTP_USER}
       SMTP_PASSWORD: ${SMTP_PASSWORD}
-    deploy:
-      replicas: 3
+      SCENOLYTICS_MAIL: ${SCENOLYTICS_MAIL}
+      JWT_SECRET: ${JWT_SECRET}
     ports:
-      - "${NOTIFICATION_SERVICE_PORT}-${NOTIFICATION_SERVICE_END_PORT}:${NOTIFICATION_SERVICE_PORT}"
+      - "${NOTIFICATION_SERVICE_PORT}:${NOTIFICATION_SERVICE_PORT}"
+      - "${WEB_SOCKET_PORT}:${WEB_SOCKET_PORT}"
     depends_on:
       notification-mysql:
         condition: service_healthy

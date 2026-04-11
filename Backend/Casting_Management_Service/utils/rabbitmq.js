@@ -10,6 +10,7 @@ export const EXCHANGES = {
   USERS: 'users_exchange',
   AUDITIONS: 'auditions_exchange',
   VIDEOS: 'videos_exchange',
+  EVALUATIONS: 'evaluations_exchange',
   INVITATIONS: 'invitations_exchange'
 };
 
@@ -17,6 +18,7 @@ export const QUEUES = {
   USER_EVENTS: 'casting_management_user_events_queue',
   AUDITION_EVENTS: 'casting_management_audition_events_queue',
   VIDEO_EVENTS: 'casting_management_video_events_queue',
+  EVALUATION_EVENTS: 'casting_management_evaluation_events_queue',
   INVITATION_EVENTS: 'casting_management_invitation_events_queue'
 };
 
@@ -30,7 +32,8 @@ export const ROUTING_KEYS = {
   VIDEO_UPLOADED: 'video.uploaded',
   INVITATION_CREATED: 'invitation.created',
   INVITATION_UPDATED: 'invitation.updated',
-  INVITATION_DELETED: 'invitation.deleted'
+  INVITATION_DELETED: 'invitation.deleted',
+  EVALUATION_COMPLETED: 'evaluation.completed',
 };
 
 /**
@@ -146,7 +149,7 @@ export const consumeMessages = async (queueName, callback) => {
       if (msg) {
         try {
           const content = JSON.parse(msg.content.toString());
-          await callback(content);
+          await callback(msg.fields.routingKey, content);
           ch.ack(msg);
         } catch (error) {
           console.error('Error processing message:', error);

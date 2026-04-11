@@ -3,7 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { connectRabbitMQ } from './utils/rabbitmq.js';
 import authRoutes from './routes/auth.js';
-import { assertExchange, assertQueue, bindQueue, EXCHANGES, QUEUES, ROUTING_KEYS } from './utils/rabbitmq.js';
+import { assertExchange, EXCHANGES } from './utils/rabbitmq.js';
 
 dotenv.config({filepath: `./.env`});
 
@@ -34,10 +34,6 @@ app.listen(PORT, async () => {
   try {
     await connectRabbitMQ();
     await assertExchange(EXCHANGES.USERS);
-    await assertQueue(QUEUES.USER_EVENTS);
-    Object.entries(ROUTING_KEYS).forEach(async ([event, routing_key]) => {
-      await bindQueue(QUEUES.USER_EVENTS, EXCHANGES.USERS, routing_key);
-    });
     console.log("Connected to RabbitMQ Successfully");
   } catch (error) {
     console.error('Failed to connect to RabbitMQ:', error);

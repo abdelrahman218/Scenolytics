@@ -1,3 +1,4 @@
+import { Audition } from "../models/audition.js";
 import { AuditionInvitation } from "../models/audition_invitation.js";
 import { AuditionSubmission } from "../models/audition_submission.js";
 import { EXCHANGES, publishMessage, ROUTING_KEYS } from "../utils/rabbitmq.js";
@@ -10,8 +11,9 @@ export const respondToInvitation = async (req, res, next) => {
             return res.status(404).json({message: 'invitation not found'});
         }
     
-        publishMessage(EXCHANGES.INVITATIONS, ROUTING_KEYS.INVITATION_UPDATED, invitation);
+        const director_id = (await Audition.findById(invitation.audition_id)).director_id;
         
+        publishMessage(EXCHANGES.INVITATIONS, ROUTING_KEYS.INVITATION_UPDATED, { ...invitation, director_id });
         return res.status(200).json({message: `Invitation ${req.body.status}ed successfully`});
     } catch (error) {
         next(error);
