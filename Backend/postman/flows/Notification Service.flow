@@ -42,13 +42,13 @@
         },
         "config": {
           "element": {
-            "id": "fea69AE07C84D0EE26d91c56",
-            "collection": "AE13effdaCE7fbbFBf0351FF",
+            "id": "bC706CEbEBBF7e8f38eaDE15",
+            "collection": "5eF9bEABFC58121681c5cA43",
             "inExtensibleCollection": true,
             "name": "Get Notification Preferences",
             "method": "GET"
           },
-          "environment": "feb5a8fb-2b91-4de9-adef-b49ec06e0734",
+          "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
           "parseBody": "auto",
           "requestVariables": [
             {
@@ -64,7 +64,7 @@
               "kind": "portal/out",
               "value": "L5mmhTsu",
               "key": "jwt_token",
-              "latch": true,
+              "latch": false,
               "isExtraneous": false
             }
           ],
@@ -85,13 +85,13 @@
         },
         "config": {
           "element": {
-            "id": "099d816BfF49cEDA6dd9ecB1",
-            "collection": "AE13effdaCE7fbbFBf0351FF",
+            "id": "dB6EfA9bf3F8dbAeabCedd28",
+            "collection": "5eF9bEABFC58121681c5cA43",
             "inExtensibleCollection": true,
             "name": "Get User Notifications",
             "method": "GET"
           },
-          "environment": "feb5a8fb-2b91-4de9-adef-b49ec06e0734",
+          "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
           "parseBody": "auto",
           "requestVariables": [
             {
@@ -107,7 +107,7 @@
               "kind": "portal/out",
               "value": "L5mmhTsu",
               "key": "jwt_token",
-              "latch": true,
+              "latch": false,
               "isExtraneous": false
             }
           ],
@@ -128,13 +128,13 @@
         },
         "config": {
           "element": {
-            "id": "df5ADDce85602cd19c70d11A",
-            "collection": "AE13effdaCE7fbbFBf0351FF",
+            "id": "7F8dde161CABFD3c3a11C081",
+            "collection": "5eF9bEABFC58121681c5cA43",
             "inExtensibleCollection": true,
             "name": "Update Notification Preferences",
             "method": "PATCH"
           },
-          "environment": "feb5a8fb-2b91-4de9-adef-b49ec06e0734",
+          "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
           "parseBody": "auto",
           "requestVariables": [
             {
@@ -150,7 +150,7 @@
               "kind": "portal/out",
               "value": "L5mmhTsu",
               "key": "jwt_token",
-              "latch": true,
+              "latch": false,
               "isExtraneous": false
             }
           ],
@@ -171,13 +171,13 @@
         },
         "config": {
           "element": {
-            "id": "1d39f8142c4dF6a37827DCbC",
-            "collection": "AE13effdaCE7fbbFBf0351FF",
+            "id": "719bA9e742Ae04F29Ad6D8d7",
+            "collection": "5eF9bEABFC58121681c5cA43",
             "inExtensibleCollection": true,
             "name": "Mark Notification as Read",
             "method": "PATCH"
           },
-          "environment": "feb5a8fb-2b91-4de9-adef-b49ec06e0734",
+          "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
           "parseBody": "auto",
           "requestVariables": [
             {
@@ -202,7 +202,7 @@
               "kind": "portal/out",
               "value": "L5mmhTsu",
               "key": "jwt_token",
-              "latch": true,
+              "latch": false,
               "isExtraneous": false
             }
           ],
@@ -223,13 +223,13 @@
         },
         "config": {
           "element": {
-            "id": "10529AdBB0cdEEE7b1be4a6d",
-            "collection": "AE13effdaCE7fbbFBf0351FF",
+            "id": "692F5F1eBedDBc6AcDf467Ad",
+            "collection": "5eF9bEABFC58121681c5cA43",
             "inExtensibleCollection": true,
             "name": "Delete Notification",
             "method": "DELETE"
           },
-          "environment": "feb5a8fb-2b91-4de9-adef-b49ec06e0734",
+          "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
           "parseBody": "auto",
           "requestVariables": [
             {
@@ -254,7 +254,7 @@
               "kind": "portal/out",
               "value": "L5mmhTsu",
               "key": "jwt_token",
-              "latch": true,
+              "latch": false,
               "isExtraneous": false
             }
           ],
@@ -415,6 +415,6 @@
   "info": {
     "_postman_id": "6a894b29-8bc7-4ff6-9038-e00e572b57a5"
   },
-  "_postman_exported_at": "2026-04-11T19:38:29.911Z",
+  "_postman_exported_at": "2026-04-12T23:49:17.646Z",
   "_postman_exported_using": "Postman/Local Mode"
 }

@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS audition_submissions (
   id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
   audition_id CHAR(36) NOT NULL,
   actor_id CHAR(36) NOT NULL,
-  media_id CHAR(36) DEFAULT NULL,
+  media_id CHAR(36) DEFAULT (UUID()),
   submission_status ENUM('pending', 'under_review', 'accepted', 'rejected') DEFAULT 'pending',
   submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   reviewed_at TIMESTAMP DEFAULT NULL,

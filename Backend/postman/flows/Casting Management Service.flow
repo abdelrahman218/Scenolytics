@@ -93,13 +93,13 @@
         },
         "config": {
           "element": {
-            "id": "a78aEE1c557cabEfFAD36aDF",
-            "collection": "AE13effdaCE7fbbFBf0351FF",
+            "id": "ce6d9353FfeBeFDEeeAdBBa3",
+            "collection": "5eF9bEABFC58121681c5cA43",
             "inExtensibleCollection": true,
             "name": "Create Audition",
             "method": "POST"
           },
-          "environment": "feb5a8fb-2b91-4de9-adef-b49ec06e0734",
+          "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
           "parseBody": "auto",
           "requestVariables": [
             {
@@ -115,8 +115,9 @@
               "kind": "portal/out",
               "value": "2XZtJrxG",
               "key": "director_token",
-              "latch": true,
-              "isExtraneous": false
+              "latch": false,
+              "isExtraneous": false,
+              "__noIn": true
             }
           ],
           "scriptsModifyEnvVars": true,
@@ -133,17 +134,17 @@
         "type": "task/http-request@1",
         "pos": {
           "x": 584,
-          "y": 32
+          "y": 24
         },
         "config": {
           "element": {
-            "id": "b95FA4a9A2Cab21e08BAa1eb",
-            "collection": "AE13effdaCE7fbbFBf0351FF",
+            "id": "312B2C3842Ba19dF6cCccD5c",
+            "collection": "5eF9bEABFC58121681c5cA43",
             "inExtensibleCollection": true,
             "name": "Invite Actors To Audition",
             "method": "POST"
           },
-          "environment": "feb5a8fb-2b91-4de9-adef-b49ec06e0734",
+          "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
           "parseBody": "auto",
           "requestVariables": [
             {
@@ -168,7 +169,7 @@
               "kind": "portal/out",
               "value": "2XZtJrxG",
               "key": "director_token",
-              "latch": true,
+              "latch": false,
               "isExtraneous": false
             },
             {
@@ -194,18 +195,18 @@
       "5WSnC5X4": {
         "type": "task/http-request@1",
         "pos": {
-          "x": 560,
-          "y": 48
+          "x": 600,
+          "y": 152
         },
         "config": {
           "element": {
-            "id": "7DdaC2deAF0DEBaE76fB10F2",
-            "collection": "AE13effdaCE7fbbFBf0351FF",
+            "id": "af0daD8ea1dF42cBAe6F2582",
+            "collection": "5eF9bEABFC58121681c5cA43",
             "inExtensibleCollection": true,
             "name": "Get Actor Invitations",
             "method": "GET"
           },
-          "environment": "feb5a8fb-2b91-4de9-adef-b49ec06e0734",
+          "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
           "parseBody": "auto",
           "requestVariables": [
             {
@@ -222,7 +223,7 @@
               "value": "4q1LkJ2U",
               "key": "actor_token",
               "__noIn": true,
-              "latch": true,
+              "latch": false,
               "isExtraneous": false
             }
           ],
@@ -240,28 +241,28 @@
         "type": "task/http-request@1",
         "pos": {
           "x": 1152,
-          "y": 120
+          "y": 408
         },
         "config": {
           "element": {
-            "id": "F8bF9Ee30D3E56EC8BD9b6fc",
-            "collection": "AE13effdaCE7fbbFBf0351FF",
+            "id": "F0ddEBE824D10acbf2CD0CD9",
+            "collection": "5eF9bEABFC58121681c5cA43",
             "inExtensibleCollection": true,
             "name": "Respond To Invitation",
             "method": "PATCH"
           },
-          "environment": "feb5a8fb-2b91-4de9-adef-b49ec06e0734",
+          "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
           "parseBody": "auto",
           "requestVariables": [
             {
-              "id": "7YIfvMUk",
+              "id": "AgX0Y0da",
               "type": null,
               "kind": null,
               "value": null,
               "key": "base_url"
             },
             {
-              "id": "4J95URXC",
+              "id": "Ge9Pqdp0",
               "type": "value/reference@2",
               "kind": "reference",
               "value": "body.invitations.0.id",
@@ -270,12 +271,12 @@
               "isExtraneous": false
             },
             {
-              "id": "viKYoWJt",
+              "id": "YtfZQnbK",
               "type": "portal/out@2",
               "kind": "portal/out",
               "value": "4q1LkJ2U",
               "key": "actor_token",
-              "latch": true,
+              "latch": false,
               "isExtraneous": false
             }
           ],
@@ -293,43 +294,42 @@
         "type": "task/http-request@1",
         "pos": {
           "x": 1576,
-          "y": 120
+          "y": 408
         },
         "config": {
           "element": {
-            "id": "f23D736EBB2E7eCAF80e36C6",
-            "collection": "AE13effdaCE7fbbFBf0351FF",
+            "id": "DFf8FB99Cb22364527Af9ecc",
+            "collection": "5eF9bEABFC58121681c5cA43",
             "inExtensibleCollection": true,
             "name": "Submit Audition Submission",
             "method": "POST"
           },
-          "environment": "feb5a8fb-2b91-4de9-adef-b49ec06e0734",
+          "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
           "parseBody": "auto",
           "requestVariables": [
             {
-              "id": "q-m0hEh_",
+              "id": "AoALyXAE",
               "type": null,
               "kind": null,
               "value": null,
               "key": "base_url"
             },
             {
-              "id": "4kd8370-",
+              "id": "5vxT-VhC",
               "type": "portal/out@2",
               "kind": "portal/out",
               "value": "L4pEW5k2",
               "key": "audition_id",
-              "__noIn": true,
-              "latch": true,
+              "latch": false,
               "isExtraneous": false
             },
             {
-              "id": "F3qVh3HQ",
+              "id": "hzEIvU88",
               "type": "portal/out@2",
               "kind": "portal/out",
               "value": "4q1LkJ2U",
               "key": "actor_token",
-              "latch": true,
+              "latch": false,
               "isExtraneous": false
             }
           ],
@@ -351,30 +351,37 @@
         },
         "config": {
           "element": {
-            "id": "f2DCF4D384aCeD4029bbBc80",
-            "collection": "AE13effdaCE7fbbFBf0351FF",
+            "id": "11eC30bc542Fbf051Da09cfE",
+            "collection": "5eF9bEABFC58121681c5cA43",
             "inExtensibleCollection": true,
-            "name": "Get Director Auditions",
-            "method": "GET"
+            "name": "Update Audition",
+            "method": "PATCH"
           },
-          "environment": "feb5a8fb-2b91-4de9-adef-b49ec06e0734",
+          "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
           "parseBody": "auto",
           "requestVariables": [
             {
-              "id": "lb-b9MrA",
+              "id": "Hi1renEk",
               "type": null,
               "kind": null,
               "value": null,
               "key": "base_url"
             },
             {
-              "id": "0OtEhE6s",
+              "id": "a74Kepkm",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "L4pEW5k2",
+              "key": "audition_id",
+              "latch": false
+            },
+            {
+              "id": "ei1tb1NT",
               "type": "portal/out@2",
               "kind": "portal/out",
               "value": "2XZtJrxG",
               "key": "director_token",
-              "latch": true,
-              "isExtraneous": false
+              "latch": false
             }
           ],
           "scriptsModifyEnvVars": true,
@@ -395,40 +402,29 @@
         },
         "config": {
           "element": {
-            "id": "7dDffC3c553DC7FACF5F5f1f",
-            "collection": "AE13effdaCE7fbbFBf0351FF",
+            "id": "6DF2bD4Bb90fB42eB3BE5CC5",
+            "collection": "5eF9bEABFC58121681c5cA43",
             "inExtensibleCollection": true,
-            "name": "Get Pending Invitations For Audition",
+            "name": "Get Director Pending Invitations",
             "method": "GET"
           },
-          "environment": "feb5a8fb-2b91-4de9-adef-b49ec06e0734",
+          "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
           "parseBody": "auto",
           "requestVariables": [
             {
-              "id": "y-ANNfjH",
+              "id": "DztXZfcs",
               "type": null,
               "kind": null,
               "value": null,
               "key": "base_url"
             },
             {
-              "id": "rmAZ7d-v",
-              "type": "portal/out@2",
-              "kind": "portal/out",
-              "value": "L4pEW5k2",
-              "key": "audition_id",
-              "__noIn": true,
-              "latch": true,
-              "isExtraneous": false
-            },
-            {
-              "id": "Wg8aEzLu",
+              "id": "owSaOqTL",
               "type": "portal/out@2",
               "kind": "portal/out",
               "value": "2XZtJrxG",
               "key": "director_token",
-              "latch": true,
-              "isExtraneous": false
+              "latch": false
             }
           ],
           "scriptsModifyEnvVars": true,
@@ -449,30 +445,37 @@
         },
         "config": {
           "element": {
-            "id": "F51eccdA8aE608cE7ddC00c3",
-            "collection": "AE13effdaCE7fbbFBf0351FF",
+            "id": "7BeB6F00a7eE7d2Cd4DCdC8f",
+            "collection": "5eF9bEABFC58121681c5cA43",
             "inExtensibleCollection": true,
-            "name": "Get Director Pending Invitations",
+            "name": "Get Actors For Audition",
             "method": "GET"
           },
-          "environment": "feb5a8fb-2b91-4de9-adef-b49ec06e0734",
+          "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
           "parseBody": "auto",
           "requestVariables": [
             {
-              "id": "cSu82Isa",
+              "id": "s3vDywyJ",
               "type": null,
               "kind": null,
               "value": null,
               "key": "base_url"
             },
             {
-              "id": "rPGbE9cN",
+              "id": "AQzaiDpz",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "L4pEW5k2",
+              "key": "audition_id",
+              "latch": false
+            },
+            {
+              "id": "QECVz3i8",
               "type": "portal/out@2",
               "kind": "portal/out",
               "value": "2XZtJrxG",
               "key": "director_token",
-              "latch": true,
-              "isExtraneous": false
+              "latch": false
             }
           ],
           "scriptsModifyEnvVars": true,
@@ -489,33 +492,33 @@
         "type": "task/http-request@1",
         "pos": {
           "x": 2120,
-          "y": 120
+          "y": 408
         },
         "config": {
           "element": {
-            "id": "72dcae68Bf556C7EDFC911b2",
-            "collection": "AE13effdaCE7fbbFBf0351FF",
+            "id": "81fAe0f6C005a4E6a4cEDdB1",
+            "collection": "5eF9bEABFC58121681c5cA43",
             "inExtensibleCollection": true,
             "name": "Get Actor Submissions",
             "method": "GET"
           },
-          "environment": "feb5a8fb-2b91-4de9-adef-b49ec06e0734",
+          "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
           "parseBody": "auto",
           "requestVariables": [
             {
-              "id": "OgeVVQD1",
+              "id": "cpabYYoP",
               "type": null,
               "kind": null,
               "value": null,
               "key": "base_url"
             },
             {
-              "id": "wbYlIzLz",
+              "id": "nuOB9JU5",
               "type": "portal/out@2",
               "kind": "portal/out",
               "value": "4q1LkJ2U",
               "key": "actor_token",
-              "latch": true,
+              "latch": false,
               "isExtraneous": false
             }
           ],
@@ -537,40 +540,37 @@
         },
         "config": {
           "element": {
-            "id": "5D6Ffa49eEB0bb59e4Ede038",
-            "collection": "AE13effdaCE7fbbFBf0351FF",
+            "id": "D1cF926CDA75BdcB4230A1ea",
+            "collection": "5eF9bEABFC58121681c5cA43",
             "inExtensibleCollection": true,
-            "name": "Get Actors For Audition",
+            "name": "Get Pending Invitations For Audition",
             "method": "GET"
           },
-          "environment": "feb5a8fb-2b91-4de9-adef-b49ec06e0734",
+          "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
           "parseBody": "auto",
           "requestVariables": [
             {
-              "id": "4LUKW7to",
+              "id": "Ijsmq3PX",
               "type": null,
               "kind": null,
               "value": null,
               "key": "base_url"
             },
             {
-              "id": "1if22YK9",
+              "id": "wMFpsvkN",
               "type": "portal/out@2",
               "kind": "portal/out",
               "value": "L4pEW5k2",
               "key": "audition_id",
-              "__noIn": true,
-              "latch": true,
-              "isExtraneous": false
+              "latch": false
             },
             {
-              "id": "i3jJYiup",
+              "id": "cD-TR0GT",
               "type": "portal/out@2",
               "kind": "portal/out",
               "value": "2XZtJrxG",
               "key": "director_token",
-              "latch": true,
-              "isExtraneous": false
+              "latch": false
             }
           ],
           "scriptsModifyEnvVars": true,
@@ -591,40 +591,37 @@
         },
         "config": {
           "element": {
-            "id": "eeDC50CfbbEfDaE59Cb47d2d",
-            "collection": "AE13effdaCE7fbbFBf0351FF",
+            "id": "b64250ECBEa4dcD75382d71c",
+            "collection": "5eF9bEABFC58121681c5cA43",
             "inExtensibleCollection": true,
             "name": "Get Audition",
             "method": "GET"
           },
-          "environment": "feb5a8fb-2b91-4de9-adef-b49ec06e0734",
+          "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
           "parseBody": "auto",
           "requestVariables": [
             {
-              "id": "6a9JFZq8",
+              "id": "Z0wZZF6L",
               "type": null,
               "kind": null,
               "value": null,
               "key": "base_url"
             },
             {
-              "id": "aK6sio64",
+              "id": "JTigENHH",
               "type": "portal/out@2",
               "kind": "portal/out",
               "value": "L4pEW5k2",
               "key": "audition_id",
-              "__noIn": true,
-              "latch": true,
-              "isExtraneous": false
+              "latch": false
             },
             {
-              "id": "bnBQU6Lk",
+              "id": "7OaDtbgv",
               "type": "portal/out@2",
               "kind": "portal/out",
               "value": "2XZtJrxG",
               "key": "token",
-              "latch": true,
-              "isExtraneous": false
+              "latch": false
             }
           ],
           "scriptsModifyEnvVars": true,
@@ -641,43 +638,43 @@
         "type": "task/http-request@1",
         "pos": {
           "x": 56,
-          "y": 72
+          "y": 360
         },
         "config": {
           "element": {
-            "id": "eeDC50CfbbEfDaE59Cb47d2d",
-            "collection": "AE13effdaCE7fbbFBf0351FF",
+            "id": "b64250ECBEa4dcD75382d71c",
+            "collection": "5eF9bEABFC58121681c5cA43",
             "inExtensibleCollection": true,
             "name": "Get Audition",
             "method": "GET"
           },
-          "environment": "feb5a8fb-2b91-4de9-adef-b49ec06e0734",
+          "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
           "parseBody": "auto",
           "requestVariables": [
             {
-              "id": "6a9JFZq8",
+              "id": "tHGvRGVK",
               "type": null,
               "kind": null,
               "value": null,
               "key": "base_url"
             },
             {
-              "id": "aK6sio64",
+              "id": "O_JhZzmS",
               "type": "portal/out@2",
               "kind": "portal/out",
               "value": "L4pEW5k2",
               "key": "audition_id",
               "__noIn": true,
-              "latch": true,
+              "latch": false,
               "isExtraneous": false
             },
             {
-              "id": "bnBQU6Lk",
+              "id": "uAPEObK2",
               "type": "portal/out@2",
               "kind": "portal/out",
               "value": "4q1LkJ2U",
               "key": "token",
-              "latch": true,
+              "latch": false,
               "isExtraneous": false
             }
           ],
@@ -699,39 +696,38 @@
         },
         "config": {
           "element": {
-            "id": "43AFefEAb51cC05Cd30a0bD5",
-            "collection": "AE13effdaCE7fbbFBf0351FF",
+            "id": "EA7efB7b866D64e05dAB035c",
+            "collection": "5eF9bEABFC58121681c5cA43",
             "inExtensibleCollection": true,
             "name": "Review Submission",
             "method": "PATCH"
           },
-          "environment": "feb5a8fb-2b91-4de9-adef-b49ec06e0734",
+          "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
           "parseBody": "auto",
           "requestVariables": [
             {
-              "id": "bJkarZos",
+              "id": "nTLfsN2n",
               "type": null,
               "kind": null,
               "value": null,
               "key": "base_url"
             },
             {
-              "id": "j6-DKoGL",
-              "type": "value/reference@2",
-              "kind": "reference",
-              "value": "body.0.id",
-              "key": "submission_id",
-              "__noIn": true,
-              "isExtraneous": false
-            },
-            {
-              "id": "wQEDu93I",
+              "id": "hmzftR2d",
               "type": "portal/out@2",
               "kind": "portal/out",
               "value": "2XZtJrxG",
               "key": "director_token",
-              "latch": true,
+              "latch": false,
               "isExtraneous": false
+            },
+            {
+              "id": "WC5D86xh",
+              "type": "value/reference@2",
+              "kind": "reference",
+              "value": "body.0.id",
+              "key": "submission_id",
+              "__noIn": true
             }
           ],
           "scriptsModifyEnvVars": true,
@@ -752,40 +748,29 @@
         },
         "config": {
           "element": {
-            "id": "Db094271136ea11CbB16708f",
-            "collection": "AE13effdaCE7fbbFBf0351FF",
+            "id": "89C8ad4e352CfCD3E21ECADf",
+            "collection": "5eF9bEABFC58121681c5cA43",
             "inExtensibleCollection": true,
-            "name": "Update Audition",
-            "method": "PATCH"
+            "name": "Get Director Auditions",
+            "method": "GET"
           },
-          "environment": "feb5a8fb-2b91-4de9-adef-b49ec06e0734",
+          "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
           "parseBody": "auto",
           "requestVariables": [
             {
-              "id": "dLHrussO",
+              "id": "ybi_j3AV",
               "type": null,
               "kind": null,
               "value": null,
               "key": "base_url"
             },
             {
-              "id": "z5BI1vQH",
-              "type": "portal/out@2",
-              "kind": "portal/out",
-              "value": "L4pEW5k2",
-              "key": "audition_id",
-              "__noIn": true,
-              "latch": true,
-              "isExtraneous": false
-            },
-            {
-              "id": "2Rj9Dz2m",
+              "id": "cC2EQbDM",
               "type": "portal/out@2",
               "kind": "portal/out",
               "value": "2XZtJrxG",
               "key": "director_token",
-              "latch": true,
-              "isExtraneous": false
+              "latch": false
             }
           ],
           "scriptsModifyEnvVars": true,
@@ -806,40 +791,38 @@
         },
         "config": {
           "element": {
-            "id": "6c578DD7C2be8ff8C97735dd",
-            "collection": "AE13effdaCE7fbbFBf0351FF",
+            "id": "2aa8a97AF9A6C96EeC12B19a",
+            "collection": "5eF9bEABFC58121681c5cA43",
             "inExtensibleCollection": true,
             "name": "Delete Audition",
             "method": "DELETE"
           },
-          "environment": "feb5a8fb-2b91-4de9-adef-b49ec06e0734",
+          "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
           "parseBody": "auto",
           "requestVariables": [
             {
-              "id": "MV3uPr2A",
+              "id": "8-CkOx71",
               "type": null,
               "kind": null,
               "value": null,
               "key": "base_url"
             },
             {
-              "id": "CfNGeTus",
-              "type": "portal/out@2",
-              "kind": "portal/out",
-              "value": "L4pEW5k2",
-              "key": "audition_id",
-              "latch": true,
-              "isExtraneous": false
-            },
-            {
-              "id": "21gAMhG7",
+              "id": "abwF9Yz9",
               "type": "portal/out@2",
               "kind": "portal/out",
               "value": "2XZtJrxG",
               "key": "director_token",
-              "__noIn": true,
-              "latch": true,
-              "isExtraneous": false
+              "isExtraneous": false,
+              "latch": false
+            },
+            {
+              "id": "aEgHu0LT",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "L4pEW5k2",
+              "key": "audition_id",
+              "latch": false
             }
           ],
           "scriptsModifyEnvVars": true,
@@ -856,7 +839,7 @@
         "type": "value/reference@2",
         "pos": {
           "x": 1040,
-          "y": -880
+          "y": -1104
         },
         "config": {
           "value": "body.audition.id",
@@ -864,13 +847,14 @@
         },
         "ui": {
           "data": {}
-        }
+        },
+        "group": null
       },
       "L4pEW5k2": {
         "type": "portal/in@1",
         "pos": {
-          "x": 1328,
-          "y": -880
+          "x": 1352,
+          "y": -1104
         },
         "config": {
           "value": "audition_id"
@@ -878,7 +862,96 @@
         "ui": {
           "color": "purple",
           "data": {}
-        }
+        },
+        "group": null
+      },
+      "3oDWFDbf": {
+        "type": "task/http-request@1",
+        "pos": {
+          "x": 2120,
+          "y": 56
+        },
+        "config": {
+          "element": {
+            "id": "0d19CA993DED8e126c40ade7",
+            "collection": "5eF9bEABFC58121681c5cA43",
+            "inExtensibleCollection": true,
+            "name": "Upload Audition Video",
+            "method": "PUT"
+          },
+          "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
+          "parseBody": "auto",
+          "requestVariables": [
+            {
+              "id": "FXr0u_ta",
+              "type": "value/reference@2",
+              "kind": "reference",
+              "value": "body.uploadURL",
+              "key": "upload_url",
+              "__noIn": true,
+              "isExtraneous": false
+            }
+          ],
+          "scriptsModifyEnvVars": true,
+          "trackGlobalEnvironment": true,
+          "requestVariables__expanded": true
+        },
+        "ui": {
+          "data": {},
+          "namedInputsExpanded": true
+        },
+        "group": "rCLDoy8V"
+      },
+      "AOmtOvOr": {
+        "type": "task/http-request@1",
+        "pos": {
+          "x": 3104,
+          "y": 664
+        },
+        "config": {
+          "element": {
+            "id": "5ca74cCa6EdB9b0bbb364eee",
+            "collection": "5eF9bEABFC58121681c5cA43",
+            "inExtensibleCollection": true,
+            "name": "Get Audition Submissions",
+            "method": "GET"
+          },
+          "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
+          "parseBody": "auto",
+          "requestVariables": [
+            {
+              "id": "zkZ2IVPO",
+              "type": null,
+              "kind": null,
+              "value": null,
+              "key": "base_url"
+            },
+            {
+              "id": "7bfYehCr",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "L4pEW5k2",
+              "key": "audition_id",
+              "latch": false
+            },
+            {
+              "id": "6VnbjXnu",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "2XZtJrxG",
+              "key": "director_token",
+              "latch": false
+            }
+          ],
+          "scriptsModifyEnvVars": true,
+          "trackGlobalEnvironment": true,
+          "requestVariables__expanded": true
+        },
+        "ui": {
+          "data": {},
+          "namedInputsExpanded": true
+        },
+        "group": "x6r7bmFn"
       }
     },
     "connections": {
@@ -894,23 +967,11 @@
         "sourcePort": "output|JSqzA-_I",
         "targetPort": "AI"
       },
-      "uDfU2TqK": {
-        "source": "2XZtJrxG",
-        "sourcePort": "data",
-        "target": "8BJXk4A2",
-        "targetPort": "requestVariables|X2hOAxMK"
-      },
       "OFSjUM5_": {
         "source": "8BJXk4A2",
         "target": "DRHV2cfn",
         "sourcePort": "success",
         "targetPort": "AI"
-      },
-      "rJ7JxWT9": {
-        "source": "2XZtJrxG",
-        "sourcePort": "data",
-        "target": "DRHV2cfn",
-        "targetPort": "requestVariables|7TyBGJGw"
       },
       "YFwXhZX_": {
         "source": "8BJXk4A2",
@@ -924,29 +985,11 @@
         "sourcePort": "success",
         "targetPort": "AI"
       },
-      "7pBUXBm7": {
-        "source": "4q1LkJ2U",
-        "sourcePort": "data",
-        "target": "5WSnC5X4",
-        "targetPort": "requestVariables|vyZ3Y2LP"
-      },
       "ysHWW95a": {
         "source": "DRHV2cfn",
         "target": "GiiXj5SM",
         "sourcePort": "success",
         "targetPort": "AI"
-      },
-      "887hCB1D": {
-        "source": "4q1LkJ2U",
-        "sourcePort": "data",
-        "target": "GiiXj5SM",
-        "targetPort": "requestVariables|viKYoWJt"
-      },
-      "cViWzJ9r": {
-        "source": "DRHV2cfn",
-        "target": "GiiXj5SM",
-        "sourcePort": "success",
-        "targetPort": "requestVariables|4J95URXC"
       },
       "9ehM8rHt": {
         "source": "GiiXj5SM",
@@ -960,12 +1003,6 @@
         "sourcePort": "success",
         "targetPort": "AI"
       },
-      "WKKir7KA": {
-        "source": "2XZtJrxG",
-        "sourcePort": "data",
-        "target": "9GoGUCeV",
-        "targetPort": "requestVariables|0OtEhE6s"
-      },
       "6ebrjImB": {
         "source": "DRHV2cfn",
         "target": "WXV2EZOj",
@@ -978,35 +1015,11 @@
         "sourcePort": "success",
         "targetPort": "AI"
       },
-      "nB5sCKp7": {
-        "source": "2XZtJrxG",
-        "sourcePort": "data",
-        "target": "xiqLyuxM",
-        "targetPort": "requestVariables|rPGbE9cN"
-      },
-      "K-CMVWwC": {
-        "source": "2XZtJrxG",
-        "sourcePort": "data",
-        "target": "WXV2EZOj",
-        "targetPort": "requestVariables|Wg8aEzLu"
-      },
-      "xqdxzeMP": {
-        "source": "4q1LkJ2U",
-        "sourcePort": "data",
-        "target": "7ejgbssO",
-        "targetPort": "requestVariables|F3qVh3HQ"
-      },
       "GZi4pTci": {
         "source": "7ejgbssO",
         "target": "tv3sZYDP",
         "sourcePort": "success",
         "targetPort": "AI"
-      },
-      "x35UEaig": {
-        "source": "4q1LkJ2U",
-        "sourcePort": "data",
-        "target": "tv3sZYDP",
-        "targetPort": "requestVariables|wbYlIzLz"
       },
       "cUUIxV90": {
         "source": "DRHV2cfn",
@@ -1020,29 +1033,11 @@
         "sourcePort": "success",
         "targetPort": "AI"
       },
-      "74kZ8D5R": {
-        "source": "2XZtJrxG",
-        "sourcePort": "data",
-        "target": "612fyUrB",
-        "targetPort": "requestVariables|bnBQU6Lk"
-      },
-      "IIOSZStv": {
-        "source": "4q1LkJ2U",
-        "sourcePort": "data",
-        "target": "p4LIVcXH",
-        "targetPort": "requestVariables|bnBQU6Lk"
-      },
       "o9Q_DR-O": {
         "source": "tv3sZYDP",
         "target": "HPyReBkh",
         "sourcePort": "success",
         "targetPort": "AI"
-      },
-      "Ql02GvNE": {
-        "source": "2XZtJrxG",
-        "sourcePort": "data",
-        "target": "HPyReBkh",
-        "targetPort": "requestVariables|wQEDu93I"
       },
       "0KDflO4j": {
         "source": "8BJXk4A2",
@@ -1050,29 +1045,11 @@
         "sourcePort": "success",
         "targetPort": "AI"
       },
-      "-Xb3uqhU": {
-        "source": "2XZtJrxG",
-        "sourcePort": "data",
-        "target": "LSoPKTCg",
-        "targetPort": "requestVariables|2Rj9Dz2m"
-      },
-      "u1rGDaw6": {
-        "source": "tv3sZYDP",
-        "target": "HPyReBkh",
-        "sourcePort": "success",
-        "targetPort": "requestVariables|j6-DKoGL"
-      },
       "cyS3mB3c": {
         "source": "HPyReBkh",
         "target": "8N_WwPwy",
         "sourcePort": "success",
         "targetPort": "AI"
-      },
-      "RzO6F6MB": {
-        "source": "2XZtJrxG",
-        "sourcePort": "data",
-        "target": "8N_WwPwy",
-        "targetPort": "requestVariables|21gAMhG7"
       },
       "faGJBm5s": {
         "source": "8BJXk4A2",
@@ -1085,42 +1062,6 @@
         "target": "L4pEW5k2",
         "sourcePort": "out",
         "targetPort": "data"
-      },
-      "3AgPPnwa": {
-        "source": "L4pEW5k2",
-        "sourcePort": "data",
-        "target": "LSoPKTCg",
-        "targetPort": "requestVariables|z5BI1vQH"
-      },
-      "pcHP1hDX": {
-        "source": "L4pEW5k2",
-        "sourcePort": "data",
-        "target": "612fyUrB",
-        "targetPort": "requestVariables|aK6sio64"
-      },
-      "ATCiiEF4": {
-        "source": "L4pEW5k2",
-        "sourcePort": "data",
-        "target": "WXV2EZOj",
-        "targetPort": "requestVariables|rmAZ7d-v"
-      },
-      "AHb9gdmL": {
-        "source": "L4pEW5k2",
-        "sourcePort": "data",
-        "target": "hJRkklSt",
-        "targetPort": "requestVariables|1if22YK9"
-      },
-      "jsJQmCJh": {
-        "source": "L4pEW5k2",
-        "sourcePort": "data",
-        "target": "7ejgbssO",
-        "targetPort": "requestVariables|4kd8370-"
-      },
-      "KJEfc0iD": {
-        "source": "L4pEW5k2",
-        "sourcePort": "data",
-        "target": "8N_WwPwy",
-        "targetPort": "requestVariables|CfNGeTus"
       },
       "q3vLIkg1": {
         "source": "qR3eKg-y",
@@ -1152,23 +1093,185 @@
         "sourcePort": "output|JSqzA-_I",
         "targetPort": "data"
       },
-      "K678bgxh": {
-        "source": "2XZtJrxG",
-        "sourcePort": "data",
-        "target": "hJRkklSt",
-        "targetPort": "requestVariables|i3jJYiup"
-      },
-      "KGIH8Gvv": {
-        "source": "L4pEW5k2",
-        "sourcePort": "data",
-        "target": "p4LIVcXH",
-        "targetPort": "requestVariables|aK6sio64"
-      },
       "PWdRinF1": {
         "source": "8BJXk4A2",
         "target": "p4LIVcXH",
         "sourcePort": "success",
         "targetPort": "AI"
+      },
+      "wzirvFe0": {
+        "source": "7ejgbssO",
+        "target": "3oDWFDbf",
+        "sourcePort": "success",
+        "targetPort": "AI"
+      },
+      "W70nEE7T": {
+        "source": "L4pEW5k2",
+        "sourcePort": "data",
+        "target": "p4LIVcXH",
+        "targetPort": "requestVariables|O_JhZzmS"
+      },
+      "RzQChCrK": {
+        "source": "4q1LkJ2U",
+        "sourcePort": "data",
+        "target": "p4LIVcXH",
+        "targetPort": "requestVariables|uAPEObK2"
+      },
+      "nZ0SHnMJ": {
+        "source": "DRHV2cfn",
+        "target": "GiiXj5SM",
+        "sourcePort": "success",
+        "targetPort": "requestVariables|Ge9Pqdp0"
+      },
+      "cPO3dFfc": {
+        "source": "4q1LkJ2U",
+        "sourcePort": "data",
+        "target": "GiiXj5SM",
+        "targetPort": "requestVariables|YtfZQnbK"
+      },
+      "X7vm1Aon": {
+        "source": "L4pEW5k2",
+        "sourcePort": "data",
+        "target": "7ejgbssO",
+        "targetPort": "requestVariables|5vxT-VhC"
+      },
+      "kErGScC2": {
+        "source": "4q1LkJ2U",
+        "sourcePort": "data",
+        "target": "7ejgbssO",
+        "targetPort": "requestVariables|hzEIvU88"
+      },
+      "Qxck2x6R": {
+        "source": "4q1LkJ2U",
+        "sourcePort": "data",
+        "target": "tv3sZYDP",
+        "targetPort": "requestVariables|nuOB9JU5"
+      },
+      "vZieWS9j": {
+        "source": "7ejgbssO",
+        "target": "3oDWFDbf",
+        "sourcePort": "success",
+        "targetPort": "requestVariables|FXr0u_ta"
+      },
+      "UnAREXPK": {
+        "source": "2XZtJrxG",
+        "sourcePort": "data",
+        "target": "HPyReBkh",
+        "targetPort": "requestVariables|hmzftR2d"
+      },
+      "ysAK79zO": {
+        "source": "2XZtJrxG",
+        "sourcePort": "data",
+        "target": "8N_WwPwy",
+        "targetPort": "requestVariables|abwF9Yz9"
+      },
+      "trmo1wUt": {
+        "source": "tv3sZYDP",
+        "target": "HPyReBkh",
+        "sourcePort": "success",
+        "targetPort": "requestVariables|WC5D86xh"
+      },
+      "ucKrPiao": {
+        "source": "L4pEW5k2",
+        "sourcePort": "data",
+        "target": "8N_WwPwy",
+        "targetPort": "requestVariables|aEgHu0LT"
+      },
+      "guZAiBr_": {
+        "source": "2XZtJrxG",
+        "sourcePort": "data",
+        "target": "LSoPKTCg",
+        "targetPort": "requestVariables|cC2EQbDM"
+      },
+      "T5lExJiX": {
+        "source": "2XZtJrxG",
+        "sourcePort": "data",
+        "target": "9GoGUCeV",
+        "targetPort": "requestVariables|ei1tb1NT"
+      },
+      "AzKoa2mJ": {
+        "source": "L4pEW5k2",
+        "sourcePort": "data",
+        "target": "612fyUrB",
+        "targetPort": "requestVariables|JTigENHH"
+      },
+      "qfdeUDAX": {
+        "source": "2XZtJrxG",
+        "sourcePort": "data",
+        "target": "612fyUrB",
+        "targetPort": "requestVariables|7OaDtbgv"
+      },
+      "Y88bryub": {
+        "source": "L4pEW5k2",
+        "sourcePort": "data",
+        "target": "hJRkklSt",
+        "targetPort": "requestVariables|wMFpsvkN"
+      },
+      "IVY3ucR0": {
+        "source": "2XZtJrxG",
+        "sourcePort": "data",
+        "target": "hJRkklSt",
+        "targetPort": "requestVariables|cD-TR0GT"
+      },
+      "Bjnm2xz2": {
+        "source": "L4pEW5k2",
+        "sourcePort": "data",
+        "target": "xiqLyuxM",
+        "targetPort": "requestVariables|AQzaiDpz"
+      },
+      "wFP-cSqI": {
+        "source": "2XZtJrxG",
+        "sourcePort": "data",
+        "target": "WXV2EZOj",
+        "targetPort": "requestVariables|owSaOqTL"
+      },
+      "dako2Pwh": {
+        "source": "2XZtJrxG",
+        "sourcePort": "data",
+        "target": "xiqLyuxM",
+        "targetPort": "requestVariables|QECVz3i8"
+      },
+      "DPb9bL05": {
+        "source": "tv3sZYDP",
+        "target": "AOmtOvOr",
+        "sourcePort": "success",
+        "targetPort": "AI"
+      },
+      "FKvP-VQF": {
+        "source": "L4pEW5k2",
+        "sourcePort": "data",
+        "target": "AOmtOvOr",
+        "targetPort": "requestVariables|7bfYehCr"
+      },
+      "WiBF0V7X": {
+        "source": "2XZtJrxG",
+        "sourcePort": "data",
+        "target": "AOmtOvOr",
+        "targetPort": "requestVariables|6VnbjXnu"
+      },
+      "wWY5qIHT": {
+        "source": "2XZtJrxG",
+        "sourcePort": "data",
+        "target": "DRHV2cfn",
+        "targetPort": "requestVariables|7TyBGJGw"
+      },
+      "uVBbBKQJ": {
+        "source": "4q1LkJ2U",
+        "sourcePort": "data",
+        "target": "5WSnC5X4",
+        "targetPort": "requestVariables|vyZ3Y2LP"
+      },
+      "uW62ik--": {
+        "source": "2XZtJrxG",
+        "sourcePort": "data",
+        "target": "8BJXk4A2",
+        "targetPort": "requestVariables|X2hOAxMK"
+      },
+      "oU5t0AJp": {
+        "source": "L4pEW5k2",
+        "sourcePort": "data",
+        "target": "9GoGUCeV",
+        "targetPort": "requestVariables|a74Kepkm"
       }
     },
     "annotations": {},
@@ -1180,8 +1283,8 @@
             "y": -120
           },
           "size": {
-            "width": 4160,
-            "height": 1584
+            "width": 4076,
+            "height": 1636
           },
           "color": "yellow"
         },
@@ -1193,11 +1296,11 @@
         "ui": {
           "pos": {
             "x": 992,
-            "y": -728
+            "y": -1016
           },
           "size": {
             "width": 2536,
-            "height": 536
+            "height": 824
           },
           "color": "grey"
         },
@@ -1265,6 +1368,6 @@
   "info": {
     "_postman_id": "61ee2713-5ef1-457f-99e2-37c74aa63bf8"
   },
-  "_postman_exported_at": "2026-04-11T17:14:47.776Z",
+  "_postman_exported_at": "2026-04-12T23:47:09.499Z",
   "_postman_exported_using": "Postman/Local Mode"
 }
