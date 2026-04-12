@@ -27,23 +27,37 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-const server = app.listen(PORT, async () => {
-  console.log(`User Management Service running on port: ${PORT}`);
+const server = app.listen(PORT, () => {
   
-  // Connect to RabbitMQ
-  try {
-    await connectRabbitMQ();
-    
-    // Initialize event listeners
-    await initializeEventListeners();
-  } catch (error) {
-    console.error('Failed to connect to RabbitMQ:', error);
-  }
+  // Connect to RabbitMQ asynchronously with retry logic (non-blocking)
+  const connectWithRetry = async (retries = 10, delay = 3000) => {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        await connectRabbitMQ();
+        
+        await initializeEventListeners();
+        
+        return;
+      } catch (error) {
+        
+        if (attempt < retries) {
+          
+          await new Promise(resolve => setTimeout(resolve, delay));
+        } else {
+          console.error('[STARTUP] Failed to connect to RabbitMQ after all retries.');
+        }
+      }
+    }
+  };
+  
+  // Start retry process in background (non-blocking)
+  connectWithRetry().catch(err => {
+    console.error('[STARTUP] Unexpected error in connectWithRetry:', err);
+  });
 });
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
-  console.log('SIGTERM received, shutting down gracefully');
   server.close(async () => {
     await closeRabbitMQ();
     process.exit(0);

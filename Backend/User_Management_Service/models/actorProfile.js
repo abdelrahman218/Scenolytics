@@ -3,8 +3,8 @@ import pool from '../config/mysql.js';
 class ActorProfile {
   static async create(profile) {
     const [result] = await pool.execute(
-      'INSERT INTO actor_profiles (id, user_id, bio, height_cm, age, gender, ethnicity, body_type, genres, experience_years, portfolio_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [profile.id, profile.user_id, profile.bio, profile.height_cm, profile.age, profile.gender, profile.ethnicity, profile.body_type, profile.genres, profile.experience_years, profile.portfolio_url]
+      'INSERT INTO actor_profiles (id, user_id, bio, height_cm, age, gender, ethnicity, body_type, personality_traits, genres, experience_years, portfolio_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [profile.id, profile.user_id, profile.bio, profile.height_cm, profile.age, profile.gender, profile.ethnicity, profile.body_type, profile.personality_traits ? JSON.stringify(profile.personality_traits) : null, profile.genres, profile.experience_years, profile.portfolio_url]
     );
     return result;
   }
@@ -21,8 +21,8 @@ class ActorProfile {
 
   static async update(id, profile) {
     const [result] = await pool.execute(
-      'UPDATE actor_profiles SET bio = ?, height_cm = ?, age = ?, gender = ?, ethnicity = ?, body_type = ?, genres = ?, experience_years = ? WHERE id = ?',
-      [profile.bio, profile.height_cm, profile.age, profile.gender, profile.ethnicity, profile.body_type, profile.genres, profile.experience_years, id]
+      'UPDATE actor_profiles SET bio = ?, height_cm = ?, age = ?, gender = ?, ethnicity = ?, body_type = ?, personality_traits = ?, genres = ?, experience_years = ? WHERE id = ?',
+      [profile.bio, profile.height_cm, profile.age, profile.gender, profile.ethnicity, profile.body_type, profile.personality_traits ? JSON.stringify(profile.personality_traits) : null, profile.genres, profile.experience_years, id]
     );
     return result;
   }
@@ -51,6 +51,10 @@ class ActorProfile {
     if (filters.body_type) {
       query += ' AND body_type = ?';
       params.push(filters.body_type);
+    }
+    if (filters.personality_traits && filters.personality_traits.length > 0) {
+      query += ' AND JSON_CONTAINS(personality_traits, ?)';
+      params.push(JSON.stringify(filters.personality_traits));
     }
 
     const [rows] = await pool.execute(query, params);

@@ -29,6 +29,26 @@ export const checkValidValues = (fieldsValues) => {
 
 // ==================== ACTOR PROFILE VALIDATORS ====================
 
+// Valid personality trait options
+export const VALID_PERSONALITY_TRAITS = [
+  'Outgoing',
+  'Introverted',
+  'Creative',
+  'Analytical',
+  'Emotional',
+  'Calm',
+  'Energetic',
+  'Spontaneous',
+  'Thoughtful',
+  'Humorous',
+  'Serious',
+  'Passionate',
+  'Reserved',
+  'Charismatic',
+  'Friendly',
+  'Intense'
+];
+
 // Actor required fields
 export const validateActorProfileRequiredFields = checkRequiredFields(['user_id']);
 
@@ -88,6 +108,21 @@ export const validateActorProfile = (profile) => {
   // Bio length validation
   if (profile.bio && profile.bio.length > 1000) {
     errors.push('Bio must be 1000 characters or less');
+  }
+  
+  // Personality traits validation
+  if (profile.personality_traits !== undefined && profile.personality_traits !== null) {
+    if (!Array.isArray(profile.personality_traits)) {
+      errors.push('Personality traits must be an array');
+    } else if (profile.personality_traits.length > 0) {
+      // Validate each trait is a non-empty string and valid enum value
+      const invalidTraits = profile.personality_traits.filter(trait => 
+        typeof trait !== 'string' || trait.trim() === '' || !VALID_PERSONALITY_TRAITS.includes(trait)
+      );
+      if (invalidTraits.length > 0) {
+        errors.push(`Invalid personality traits. Valid options: ${VALID_PERSONALITY_TRAITS.join(', ')}`);
+      }
+    }
   }
 
   return {

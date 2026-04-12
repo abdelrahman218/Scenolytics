@@ -32,9 +32,8 @@ export const initializeEventListeners = async () => {
     // Start consuming USER_DELETED events
     await consumeMessages(QUEUES.USER_EVENTS, handleUserDeletedEvent);
 
-    console.log('Event listeners initialized for User Management Service');
   } catch (error) {
-    console.error('Failed to initialize event listeners:', error);
+    console.error('[EVENT_LISTENER] Failed to initialize event listeners:', error);
     throw error;
   }
 };
@@ -45,20 +44,19 @@ export const initializeEventListeners = async () => {
  */
 const handleUserDeletedEvent = async (message) => {
   try {
-    const { data } = message;
-    const { user_id } = data;
+    const { user_id } = message;
 
-    console.log(`Processing USER_DELETED event for user: ${user_id}`);
+    let deleted = false;
 
     // Delete actor profile if it exists
     try {
       const actorProfile = await ActorProfile.findByUserId(user_id);
       if (actorProfile) {
         await ActorProfile.delete(actorProfile.id);
-        console.log(`Deleted actor profile for user: ${user_id}`);
+        deleted = true;
       }
     } catch (error) {
-      console.warn(`Failed to delete actor profile for user ${user_id}:`, error.message);
+      console.error(`[USER_DELETED] Failed to delete actor profile for user ${user_id}:`, error);
     }
 
     // Delete director profile if it exists
@@ -66,15 +64,12 @@ const handleUserDeletedEvent = async (message) => {
       const directorProfile = await DirectorProfile.findByUserId(user_id);
       if (directorProfile) {
         await DirectorProfile.delete(directorProfile.id);
-        console.log(`Deleted director profile for user: ${user_id}`);
+        deleted = true;
       }
     } catch (error) {
-      console.warn(`Failed to delete director profile for user ${user_id}:`, error.message);
+      console.error(`[USER_DELETED] Failed to delete director profile for user ${user_id}:`, error);
     }
-
-    console.log(`Successfully cleaned up profiles for deleted user: ${user_id}`);
   } catch (error) {
-    console.error('Error handling USER_DELETED event:', error);
-    throw error;
+    console.error('[USER_DELETED] Error processing event:', error);
   }
 };
