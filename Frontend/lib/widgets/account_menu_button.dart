@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../pages/profile_page.dart';
 import '../pages/settings_page.dart';
-import '../theme/scenolytics_colors.dart';
 
 enum _AccountAction { profile, settings, help, logout }
 
@@ -69,13 +68,15 @@ class AccountMenuButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     if (!usePopupMenu) {
       return IconButton.filledTonal(
         onPressed: () => openProfile(context),
         tooltip: 'Profile',
         style: IconButton.styleFrom(
-          backgroundColor: ScenolyticsColors.primaryContainer,
-          foregroundColor: ScenolyticsColors.onPrimaryContainer,
+          backgroundColor: cs.primaryContainer,
+          foregroundColor: cs.onPrimaryContainer,
         ),
         icon: const Icon(Icons.person_rounded),
       );
@@ -85,51 +86,42 @@ class AccountMenuButton extends StatelessWidget {
       tooltip: 'Account',
       offset: const Offset(0, 44),
       position: PopupMenuPosition.under,
-      color: ScenolyticsColors.surfaceCard,
+      color: cs.surface,
       elevation: 8,
-      shadowColor: ScenolyticsColors.primary.withValues(alpha: 0.2),
+      shadowColor: cs.shadow.withValues(alpha: 0.2),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
         side: BorderSide(
-          color: ScenolyticsColors.outlineSoft.withValues(alpha: 0.6),
+          color: cs.outline.withValues(alpha: 0.55),
         ),
       ),
       onSelected: (action) => _handleAction(context, action),
       itemBuilder: (context) => [
-        const PopupMenuItem(
+        PopupMenuItem(
           value: _AccountAction.profile,
           child: ListTile(
             dense: true,
             contentPadding: EdgeInsets.zero,
-            leading: Icon(
-              Icons.person_outline_rounded,
-              color: ScenolyticsColors.primary,
-            ),
-            title: Text('Profile'),
+            leading: Icon(Icons.person_outline_rounded, color: cs.primary),
+            title: const Text('Profile'),
           ),
         ),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: _AccountAction.settings,
           child: ListTile(
             dense: true,
             contentPadding: EdgeInsets.zero,
-            leading: Icon(
-              Icons.settings_outlined,
-              color: ScenolyticsColors.primary,
-            ),
-            title: Text('Settings'),
+            leading: Icon(Icons.settings_outlined, color: cs.primary),
+            title: const Text('Settings'),
           ),
         ),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: _AccountAction.help,
           child: ListTile(
             dense: true,
             contentPadding: EdgeInsets.zero,
-            leading: Icon(
-              Icons.help_outline_rounded,
-              color: ScenolyticsColors.primary,
-            ),
-            title: Text('Help'),
+            leading: Icon(Icons.help_outline_rounded, color: cs.primary),
+            title: const Text('Help'),
           ),
         ),
         const PopupMenuDivider(),
@@ -138,14 +130,11 @@ class AccountMenuButton extends StatelessWidget {
           child: ListTile(
             dense: true,
             contentPadding: EdgeInsets.zero,
-            leading: const Icon(
-              Icons.logout_rounded,
-              color: ScenolyticsColors.error,
-            ),
+            leading: Icon(Icons.logout_rounded, color: cs.error),
             title: Text(
               'Log out',
               style: TextStyle(
-                color: ScenolyticsColors.error,
+                color: cs.error,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -157,7 +146,7 @@ class AccountMenuButton extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: ScenolyticsColors.primaryContainer,
+            color: cs.primaryContainer,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
@@ -165,12 +154,12 @@ class AccountMenuButton extends StatelessWidget {
             children: [
               Icon(
                 Icons.person_rounded,
-                color: ScenolyticsColors.onPrimaryContainer,
+                color: cs.onPrimaryContainer,
                 size: 22,
               ),
               Icon(
                 Icons.arrow_drop_down_rounded,
-                color: ScenolyticsColors.onPrimaryContainer,
+                color: cs.onPrimaryContainer,
                 size: 22,
               ),
             ],

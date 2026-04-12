@@ -12,7 +12,7 @@ class ScenolyticsFooter extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Material(
-      color: ScenolyticsColors.primaryDim,
+      color: ScenolyticsColors.footerBarFor(theme.brightness),
       child: SafeArea(
         top: false,
         child: Padding(
@@ -25,7 +25,13 @@ class ScenolyticsFooter extends StatelessWidget {
                 child: FittedBox(
                   fit: BoxFit.contain,
                   alignment: Alignment.centerLeft,
-                  child: ScenolyticsBranding.of(context).logo,
+                  child: IconTheme(
+                    data: const IconThemeData(color: ScenolyticsColors.onPrimary),
+                    child: DefaultTextStyle(
+                      style: const TextStyle(color: ScenolyticsColors.onPrimary),
+                      child: ScenolyticsBranding.of(context).logo,
+                    ),
+                  ),
                 ),
               );
 

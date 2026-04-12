@@ -32,3 +32,29 @@ Widget buildDefaultAppLogo() {
     ],
   );
 }
+
+/// Icon + wordmark that follow [ThemeData.colorScheme] (light / dark).
+class ScenolyticsThemeAwareLogo extends StatelessWidget {
+  const ScenolyticsThemeAwareLogo({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.movie_filter_rounded, color: cs.primary, size: 32),
+        const SizedBox(width: 10),
+        Text(
+          'Scenolytics',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w800,
+            color: cs.onSurface,
+            letterSpacing: -0.5,
+          ),
+        ),
+      ],
+    );
+  }
+}

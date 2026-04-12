@@ -16,6 +16,12 @@ class AuditionRankingsPage extends StatelessWidget {
     final ranked = mockRankedAuditionSubmissions();
     final theme = Theme.of(context);
     final narrow = MediaQuery.sizeOf(context).width < _wideBreakpoint;
+    final heroBarBg = theme.brightness == Brightness.dark
+        ? ScenolyticsColors.heroGradientStart
+        : theme.colorScheme.primary;
+    final heroBarFg = theme.brightness == Brightness.dark
+        ? ScenolyticsColors.onPrimary
+        : theme.colorScheme.onPrimary;
 
     if (ranked.isEmpty) {
       return const Center(
@@ -27,8 +33,8 @@ class AuditionRankingsPage extends StatelessWidget {
     }
 
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: ScenolyticsColors.pageBackdropGradient,
+      decoration: BoxDecoration(
+        gradient: ScenolyticsColors.pageBackdropGradientFor(theme.brightness),
       ),
       child: CustomScrollView(
         slivers: [
@@ -40,10 +46,10 @@ class AuditionRankingsPage extends StatelessWidget {
               stretch: true,
               expandedHeight: 132,
               automaticallyImplyLeading: false,
-              backgroundColor: ScenolyticsColors.primary,
+              backgroundColor: heroBarBg,
               elevation: 0,
               surfaceTintColor: Colors.transparent,
-              foregroundColor: ScenolyticsColors.onPrimary,
+              foregroundColor: heroBarFg,
               flexibleSpace: FlexibleSpaceBar(
                 centerTitle: false,
                 titlePadding: const EdgeInsetsDirectional.only(
@@ -53,7 +59,7 @@ class AuditionRankingsPage extends StatelessWidget {
                 title: Text(
                   'Audition rankings',
                   style: theme.textTheme.titleLarge?.copyWith(
-                    color: ScenolyticsColors.onPrimary,
+                    color: heroBarFg,
                     fontWeight: FontWeight.w700,
                     shadows: const [
                       Shadow(
@@ -78,7 +84,7 @@ class AuditionRankingsPage extends StatelessWidget {
                       child: Icon(
                         Icons.movie_filter_rounded,
                         size: 140,
-                        color: ScenolyticsColors.onPrimary.withValues(
+                        color: heroBarFg.withValues(
                           alpha: 0.08,
                         ),
                       ),
@@ -95,14 +101,14 @@ class AuditionRankingsPage extends StatelessWidget {
                   Icon(
                     Icons.theater_comedy_outlined,
                     size: 20,
-                    color: ScenolyticsColors.primary,
+                    color: theme.colorScheme.primary,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'The Horizon — Callback round',
                       style: theme.textTheme.titleSmall?.copyWith(
-                        color: ScenolyticsColors.textSecondary,
+                        color: theme.colorScheme.onSurfaceVariant,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -158,6 +164,7 @@ class _RankingHeroBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(0, 0, 0, 4),
@@ -180,7 +187,7 @@ class _RankingHeroBanner extends StatelessWidget {
                 child: Icon(
                   Icons.movie_filter_rounded,
                   size: 140,
-                  color: ScenolyticsColors.onPrimary.withValues(alpha: 0.08),
+                  color: cs.onPrimary.withValues(alpha: 0.08),
                 ),
               ),
               Positioned(
@@ -192,7 +199,7 @@ class _RankingHeroBanner extends StatelessWidget {
                   child: Text(
                     'Audition rankings',
                     style: theme.textTheme.titleLarge?.copyWith(
-                      color: ScenolyticsColors.onPrimary,
+                      color: cs.onPrimary,
                       fontWeight: FontWeight.w700,
                       shadows: const [
                         Shadow(
@@ -222,17 +229,19 @@ class _SummaryStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final b = theme.brightness;
 
     return Container(
       decoration: BoxDecoration(
-        gradient: ScenolyticsColors.cardSheen,
+        gradient: ScenolyticsColors.cardSheenFor(b),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: ScenolyticsColors.accentCyan.withValues(alpha: 0.35),
+          color: ScenolyticsColors.accentCyan.withValues(alpha: b == Brightness.dark ? 0.22 : 0.35),
         ),
         boxShadow: [
           BoxShadow(
-            color: ScenolyticsColors.primary.withValues(alpha: 0.12),
+            color: cs.primary.withValues(alpha: b == Brightness.dark ? 0.2 : 0.12),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -251,22 +260,22 @@ class _SummaryStrip extends StatelessWidget {
                   icon: Icons.groups_2_outlined,
                   label: 'Submissions',
                   value: '$count',
-                  tint: ScenolyticsColors.primaryContainer,
-                  iconColor: ScenolyticsColors.primary,
+                  tint: cs.primaryContainer,
+                  iconColor: cs.primary,
                 ),
                 _SummaryChip(
                   icon: Icons.emoji_events_rounded,
                   label: 'Top score',
                   value: topScore.toStringAsFixed(1),
-                  tint: ScenolyticsColors.accentCyanMuted,
-                  iconColor: ScenolyticsColors.secondary,
+                  tint: cs.secondaryContainer,
+                  iconColor: cs.secondary,
                 ),
                 _SummaryChip(
                   icon: Icons.insights_outlined,
                   label: 'Live sort',
                   value: 'By score',
-                  tint: ScenolyticsColors.tertiaryContainer,
-                  iconColor: ScenolyticsColors.tertiary,
+                  tint: cs.tertiaryContainer,
+                  iconColor: cs.tertiary,
                 ),
               ],
             ),
@@ -283,7 +292,7 @@ class _SummaryStrip extends StatelessWidget {
                   child: Text(
                     'Sorted by score · tied scores share the same rank',
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: ScenolyticsColors.textMuted,
+                      color: cs.onSurfaceVariant,
                     ),
                   ),
                 ),
@@ -314,6 +323,7 @@ class _SummaryChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -334,14 +344,14 @@ class _SummaryChip extends StatelessWidget {
               Text(
                 label,
                 style: theme.textTheme.labelSmall?.copyWith(
-                  color: ScenolyticsColors.textMuted,
+                  color: cs.onSurfaceVariant,
                 ),
               ),
               Text(
                 value,
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w700,
-                  color: ScenolyticsColors.textPrimary,
+                  color: cs.onSurface,
                 ),
               ),
             ],
@@ -360,19 +370,21 @@ class _CompactRankCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final b = theme.brightness;
     final s = entry.submission;
-    final accent = _rankAccent(entry.rank);
+    final accent = _rankAccent(context, entry.rank);
 
     return Container(
       decoration: BoxDecoration(
-        gradient: ScenolyticsColors.cardSheen,
+        gradient: ScenolyticsColors.cardSheenFor(b),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: ScenolyticsColors.outlineSoft.withValues(alpha: 0.55),
+          color: ScenolyticsColors.outlineSoftFor(b).withValues(alpha: 0.55),
         ),
         boxShadow: [
           BoxShadow(
-            color: ScenolyticsColors.primary.withValues(alpha: 0.06),
+            color: cs.primary.withValues(alpha: b == Brightness.dark ? 0.14 : 0.06),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -416,7 +428,7 @@ class _CompactRankCard extends StatelessWidget {
                               s.actorName,
                               style: theme.textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.w700,
-                                color: ScenolyticsColors.textPrimary,
+                                color: cs.onSurface,
                               ),
                             ),
                             const SizedBox(height: 6),
@@ -426,14 +438,13 @@ class _CompactRankCard extends StatelessWidget {
                                 vertical: 4,
                               ),
                               decoration: BoxDecoration(
-                                color: ScenolyticsColors.secondaryContainer,
+                                color: cs.secondaryContainer,
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
                                 s.auditionRole,
                                 style: theme.textTheme.labelMedium?.copyWith(
-                                  color:
-                                      ScenolyticsColors.onSecondaryContainer,
+                                  color: cs.onSecondaryContainer,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -444,13 +455,13 @@ class _CompactRankCard extends StatelessWidget {
                                 Icon(
                                   Icons.schedule_rounded,
                                   size: 16,
-                                  color: ScenolyticsColors.textMuted,
+                                  color: cs.onSurfaceVariant,
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
                                   _formatSubmitted(s.submittedAt),
                                   style: theme.textTheme.labelSmall?.copyWith(
-                                    color: ScenolyticsColors.textMuted,
+                                    color: cs.onSurfaceVariant,
                                   ),
                                 ),
                               ],
@@ -480,7 +491,7 @@ class _CompactRankCard extends StatelessWidget {
                           Text(
                             'score',
                             style: theme.textTheme.labelSmall?.copyWith(
-                              color: ScenolyticsColors.textMuted,
+                              color: cs.onSurfaceVariant,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -498,12 +509,13 @@ class _CompactRankCard extends StatelessWidget {
     );
   }
 
-  static Color _rankAccent(int rank) {
+  static Color _rankAccent(BuildContext context, int rank) {
+    final b = Theme.of(context).brightness;
     return switch (rank) {
       1 => ScenolyticsColors.accentCyan,
       2 => ScenolyticsColors.secondary,
       3 => ScenolyticsColors.tertiary,
-      _ => ScenolyticsColors.outlineStrong,
+      _ => ScenolyticsColors.outlineStrongFor(b),
     };
   }
 }
@@ -516,17 +528,21 @@ class _WideLeaderboardTable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final b = theme.brightness;
 
     return Container(
       decoration: BoxDecoration(
-        gradient: ScenolyticsColors.cardSheen,
+        gradient: ScenolyticsColors.cardSheenFor(b),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: ScenolyticsColors.accentCyan.withValues(alpha: 0.28),
+          color: ScenolyticsColors.accentCyan.withValues(
+            alpha: b == Brightness.dark ? 0.16 : 0.28,
+          ),
         ),
         boxShadow: [
           BoxShadow(
-            color: ScenolyticsColors.primary.withValues(alpha: 0.1),
+            color: cs.primary.withValues(alpha: b == Brightness.dark ? 0.18 : 0.1),
             blurRadius: 22,
             offset: const Offset(0, 10),
           ),
@@ -552,12 +568,9 @@ class _WideLeaderboardTable extends StatelessWidget {
             defaultVerticalAlignment: TableCellVerticalAlignment.middle,
             children: [
               TableRow(
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [
-                      ScenolyticsColors.primary,
-                      ScenolyticsColors.secondary,
-                    ],
+                    colors: [cs.primary, cs.secondary],
                   ),
                 ),
                 children: [
@@ -577,7 +590,7 @@ class _WideLeaderboardTable extends StatelessWidget {
                 TableRow(
                   decoration: BoxDecoration(
                     color: i.isOdd
-                        ? ScenolyticsColors.surfaceTableStripe
+                        ? ScenolyticsColors.surfaceTableStripeFor(b)
                         : Colors.transparent,
                   ),
                   children: [
@@ -608,13 +621,13 @@ class _WideLeaderboardTable extends StatelessWidget {
                             vertical: 5,
                           ),
                           decoration: BoxDecoration(
-                            color: ScenolyticsColors.secondaryContainer,
+                            color: cs.secondaryContainer,
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
                             ranked[i].submission.auditionRole,
                             style: theme.textTheme.labelMedium?.copyWith(
-                              color: ScenolyticsColors.onSecondaryContainer,
+                              color: cs.onSecondaryContainer,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -674,15 +687,14 @@ class _WideLeaderboardTable extends StatelessWidget {
     bool light = false,
   }) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
       child: Text(
         text,
         textAlign: align,
         style: theme.textTheme.labelLarge?.copyWith(
-          color: light
-              ? ScenolyticsColors.onPrimary
-              : ScenolyticsColors.textSecondary,
+          color: light ? cs.onPrimary : cs.onSurfaceVariant,
           fontWeight: FontWeight.w700,
           letterSpacing: 0.3,
         ),
@@ -697,14 +709,13 @@ class _WideLeaderboardTable extends StatelessWidget {
     FontWeight? weight,
   }) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
       child: Text(
         text,
         style: theme.textTheme.bodyMedium?.copyWith(
-          color: muted
-              ? ScenolyticsColors.textMuted
-              : ScenolyticsColors.textPrimary,
+          color: muted ? cs.onSurfaceVariant : cs.onSurface,
           fontWeight: weight,
         ),
       ),
@@ -720,14 +731,12 @@ class _RankBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final (Color bg, Color fg) = switch (rank) {
       1 => (ScenolyticsColors.rankGold, ScenolyticsColors.rankGoldText),
       2 => (ScenolyticsColors.rankSilver, ScenolyticsColors.rankSilverText),
       3 => (ScenolyticsColors.rankBronze, ScenolyticsColors.rankBronzeText),
-      _ => (
-        ScenolyticsColors.primaryContainer,
-        ScenolyticsColors.onPrimaryContainer,
-      ),
+      _ => (cs.primaryContainer, cs.onPrimaryContainer),
     };
 
     final size = dense ? 38.0 : 46.0;

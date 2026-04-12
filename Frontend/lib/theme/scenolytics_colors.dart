@@ -96,4 +96,60 @@ abstract final class ScenolyticsColors {
     end: Alignment.bottomRight,
     colors: [Color(0xFFFFFFFF), Color(0xFFF0FAFD)],
   );
+
+  // —— Dark theme surfaces & text (cool cyan night) ——
+  static const Color darkPageBackground = Color(0xFF061016);
+  static const Color darkSurfaceCard = Color(0xFF0B1E26);
+  static const Color darkSurfaceMuted = Color(0xFF122A35);
+  static const Color darkSurfaceTableStripe = Color(0xFF0F242E);
+  static const Color darkOutlineSoft = Color(0xFF2A5566);
+  static const Color darkOutlineStrong = Color(0xFF4A7A8F);
+  static const Color darkTextPrimary = Color(0xFFE8F4F8);
+  static const Color darkTextSecondary = Color(0xFFB8D0DC);
+  static const Color darkTextMuted = Color(0xFF7A9DAD);
+
+  /// Dark page backdrop (deep teal → base).
+  static const LinearGradient darkPageBackdropGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0xFF0A2430), darkPageBackground],
+  );
+
+  /// Dark card surface sheen.
+  static const LinearGradient darkCardSheen = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF102833), darkSurfaceCard],
+  );
+
+  /// Footer bar: same family as [primaryDim], slightly deeper for dark pages.
+  static const Color darkFooterBar = Color(0xFF031018);
+
+  static LinearGradient pageBackdropGradientFor(Brightness brightness) {
+    return brightness == Brightness.dark
+        ? darkPageBackdropGradient
+        : pageBackdropGradient;
+  }
+
+  static LinearGradient cardSheenFor(Brightness brightness) {
+    return brightness == Brightness.dark ? darkCardSheen : cardSheen;
+  }
+
+  static Color surfaceTableStripeFor(Brightness brightness) {
+    return brightness == Brightness.dark
+        ? darkSurfaceTableStripe
+        : surfaceTableStripe;
+  }
+
+  static Color footerBarFor(Brightness brightness) {
+    return brightness == Brightness.dark ? darkFooterBar : primaryDim;
+  }
+
+  static Color outlineSoftFor(Brightness brightness) {
+    return brightness == Brightness.dark ? darkOutlineSoft : outlineSoft;
+  }
+
+  static Color outlineStrongFor(Brightness brightness) {
+    return brightness == Brightness.dark ? darkOutlineStrong : outlineStrong;
+  }
 }

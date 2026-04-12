@@ -82,3 +82,85 @@ ThemeData buildScenolyticsTheme() {
     ),
   );
 }
+
+/// Dark Material 3 theme — same brand hues, tuned for night surfaces.
+ThemeData buildScenolyticsDarkTheme() {
+  const scheme = ColorScheme(
+    brightness: Brightness.dark,
+    primary: Color(0xFF5DD5F0),
+    onPrimary: Color(0xFF003544),
+    primaryContainer: Color(0xFF004D63),
+    onPrimaryContainer: Color(0xFFB8ECF5),
+    secondary: Color(0xFF7FC9E8),
+    onSecondary: Color(0xFF003547),
+    secondaryContainer: Color(0xFF1A4A5C),
+    onSecondaryContainer: Color(0xFFD0EEF7),
+    tertiary: Color(0xFFB4C0FF),
+    onTertiary: Color(0xFF1A237E),
+    tertiaryContainer: Color(0xFF303F9F),
+    onTertiaryContainer: Color(0xFFE0E4FF),
+    error: Color(0xFFFFB4AB),
+    onError: Color(0xFF690005),
+    errorContainer: Color(0xFF93000A),
+    onErrorContainer: Color(0xFFFFDAD6),
+    surface: ScenolyticsColors.darkSurfaceCard,
+    onSurface: ScenolyticsColors.darkTextPrimary,
+    surfaceContainerHighest: ScenolyticsColors.darkSurfaceMuted,
+    onSurfaceVariant: ScenolyticsColors.darkTextSecondary,
+    outline: ScenolyticsColors.darkOutlineSoft,
+    outlineVariant: Color(0xFF1E3D4A),
+    shadow: Color(0x66000000),
+    scrim: Color(0xCC000000),
+    inverseSurface: Color(0xFFE8F4F8),
+    onInverseSurface: Color(0xFF0A1F2A),
+    inversePrimary: ScenolyticsColors.primary,
+  );
+
+  return ThemeData(
+    useMaterial3: true,
+    brightness: Brightness.dark,
+    colorScheme: scheme,
+    scaffoldBackgroundColor: ScenolyticsColors.darkPageBackground,
+    appBarTheme: const AppBarTheme(
+      elevation: 0,
+      centerTitle: false,
+      scrolledUnderElevation: 0,
+      surfaceTintColor: Colors.transparent,
+    ),
+    cardTheme: CardThemeData(
+      elevation: 0,
+      color: ScenolyticsColors.darkSurfaceCard,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: ScenolyticsColors.darkOutlineSoft.withValues(alpha: 0.55),
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+    ),
+    dividerTheme: DividerThemeData(
+      color: ScenolyticsColors.darkOutlineSoft.withValues(alpha: 0.5),
+      thickness: 1,
+    ),
+    iconTheme: const IconThemeData(color: Color(0xFF5DD5F0)),
+    floatingActionButtonTheme: const FloatingActionButtonThemeData(
+      backgroundColor: Color(0xFF00B4D8),
+      foregroundColor: Color(0xFF00232C),
+    ),
+    chipTheme: ChipThemeData(
+      backgroundColor: Color(0xFF0F3D4D),
+      labelStyle: const TextStyle(
+        color: Color(0xFFC5F1FF),
+        fontWeight: FontWeight.w600,
+      ),
+      side: BorderSide(
+        color: const Color(0xFF00B4D8).withValues(alpha: 0.35),
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    ),
+    listTileTheme: const ListTileThemeData(
+      iconColor: Color(0xFF5DD5F0),
+    ),
+  );
+}

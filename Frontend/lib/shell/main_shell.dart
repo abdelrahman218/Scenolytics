@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../branding/scenolytics_branding.dart';
-import '../theme/scenolytics_colors.dart';
 import '../widgets/account_menu_button.dart';
 import '../widgets/scenolytics_app_drawer.dart';
 import '../widgets/scenolytics_footer.dart';
@@ -34,9 +33,11 @@ class _MainShellState extends State<MainShell> {
     final useDrawer = width < MainShell.drawerBreakpoint;
     final logo = ScenolyticsBranding.of(context).logo;
 
+    final theme = Theme.of(context);
+
     return Scaffold(
       key: _scaffoldKey,
-      backgroundColor: ScenolyticsColors.pageBackground,
+      backgroundColor: theme.colorScheme.surface,
       drawer: useDrawer
           ? ScenolyticsAppDrawer(currentRouteName: widget.currentRouteName)
           : null,
@@ -78,8 +79,8 @@ class _HeaderBar extends StatelessWidget {
 
     return Material(
       elevation: 2,
-      shadowColor: ScenolyticsColors.primary.withValues(alpha: 0.2),
-      color: ScenolyticsColors.surfaceCard,
+      shadowColor: theme.colorScheme.shadow.withValues(alpha: 0.25),
+      color: theme.colorScheme.surface,
       child: SafeArea(
         bottom: false,
         child: Padding(
@@ -91,7 +92,7 @@ class _HeaderBar extends StatelessWidget {
                   onPressed: onMenuPressed,
                   icon: const Icon(Icons.menu_rounded),
                   tooltip: 'Menu',
-                  color: ScenolyticsColors.primary,
+                  color: theme.colorScheme.primary,
                 ),
               SizedBox(
                 height: 40,
@@ -108,7 +109,7 @@ class _HeaderBar extends StatelessWidget {
                     pageTitle!,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.titleSmall?.copyWith(
-                      color: ScenolyticsColors.textMuted,
+                      color: theme.colorScheme.onSurfaceVariant,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -163,11 +164,10 @@ class _NavButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final style = TextButton.styleFrom(
-      foregroundColor: filled
-          ? ScenolyticsColors.onPrimary
-          : ScenolyticsColors.primary,
-      backgroundColor: filled ? ScenolyticsColors.primary : null,
+      foregroundColor: filled ? cs.onPrimary : cs.primary,
+      backgroundColor: filled ? cs.primary : null,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     );

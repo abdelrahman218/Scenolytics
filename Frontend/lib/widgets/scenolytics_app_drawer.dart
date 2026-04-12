@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../branding/scenolytics_branding.dart';
 import '../theme/scenolytics_colors.dart';
+import '../widgets/account_menu_button.dart';
 
 class ScenolyticsAppDrawer extends StatelessWidget {
   const ScenolyticsAppDrawer({super.key, this.currentRouteName});
@@ -14,7 +15,7 @@ class ScenolyticsAppDrawer extends StatelessWidget {
     final logo = ScenolyticsBranding.of(context).logo;
 
     return Drawer(
-      backgroundColor: ScenolyticsColors.surfaceCard,
+      backgroundColor: theme.colorScheme.surface,
       child: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -69,7 +70,10 @@ class ScenolyticsAppDrawer extends StatelessWidget {
               icon: Icons.settings_outlined,
               label: 'Settings',
               selected: false,
-              onTap: () => Navigator.pop(context),
+              onTap: () {
+                Navigator.pop(context);
+                AccountMenuButton.openSettings(context);
+              },
             ),
             const Spacer(),
             Padding(
@@ -78,7 +82,7 @@ class ScenolyticsAppDrawer extends StatelessWidget {
                 'Scenolytics',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.labelSmall?.copyWith(
-                  color: ScenolyticsColors.textMuted,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ),
@@ -104,26 +108,21 @@ class _DrawerTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return ListTile(
       leading: Icon(
         icon,
-        color: selected
-            ? ScenolyticsColors.primary
-            : ScenolyticsColors.textSecondary,
+        color: selected ? cs.primary : cs.onSurfaceVariant,
       ),
       title: Text(
         label,
         style: TextStyle(
           fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-          color: selected
-              ? ScenolyticsColors.primary
-              : ScenolyticsColors.textPrimary,
+          color: selected ? cs.primary : cs.onSurface,
         ),
       ),
       selected: selected,
-      selectedTileColor: ScenolyticsColors.primaryContainer.withValues(
-        alpha: 0.45,
-      ),
+      selectedTileColor: cs.primaryContainer.withValues(alpha: 0.45),
       onTap: onTap,
     );
   }
