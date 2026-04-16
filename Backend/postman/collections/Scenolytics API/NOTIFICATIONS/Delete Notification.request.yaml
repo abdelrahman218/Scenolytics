@@ -1,0 +1,7 @@
+$kind: http-request
+name: Delete Notification
+url: "{{base_url}}/api/v1/notifications/{{notification_id}}"
+method: DELETE
+headers:
+  Authorization: Bearer {{jwt_token}}
+order: 5000

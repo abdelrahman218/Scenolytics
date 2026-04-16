@@ -1,0 +1,15 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/evaluations/:evaluation_id/feedback"
+method: PATCH
+headers:
+  Content-Type: application/json
+pathVariables:
+  evaluation_id: dd0e8400-e29b-41d4-a716-446655440080
+body:
+  type: text
+  content: >-
+    {
+      "ai_feedback": "Excellent performance with natural delivery and strong emotional depth",
+      "detected_emotions": ["joy", "determination", "confidence"]
+    }
+order: 4000

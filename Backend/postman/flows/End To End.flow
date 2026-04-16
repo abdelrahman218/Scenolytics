@@ -1,0 +1,612 @@
+{
+  "version": 1,
+  "name": "End To End",
+  "description": "",
+  "flow": {
+    "description": "",
+    "nodes": {
+      "g9YLAStJ": {
+        "type": "ev/endpoint@3",
+        "pos": {
+          "x": 0,
+          "y": 0
+        },
+        "config": {
+          "inputs": [],
+          "data": "",
+          "language": "json",
+          "allowAnyType": false
+        },
+        "ui": {
+          "data": {
+            "triggerType": "ev/endpoint@3"
+          },
+          "namedInputsExpanded": true
+        }
+      },
+      "PqniTRnQ": {
+        "type": "system/module@1",
+        "pos": {
+          "x": 304,
+          "y": -32
+        },
+        "config": {
+          "flowId": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/flows/Identity Provider Service.flow",
+          "versionId": "local",
+          "variables": [],
+          "globals": [],
+          "ports": {
+            "input": [],
+            "output": [],
+            "global": []
+          }
+        },
+        "ui": {
+          "data": {
+            "blockTitle": "Identity Service Provider"
+          }
+        }
+      },
+      "IdtzpN-n": {
+        "type": "system/module@1",
+        "pos": {
+          "x": 824,
+          "y": -392
+        },
+        "config": {
+          "flowId": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/flows/Signup-Login.flow",
+          "versionId": "local",
+          "variables": [
+            {
+              "id": "5Dr4I2g3",
+              "type": "TYPE_STRING",
+              "kind": "string",
+              "value": "actor",
+              "key": "role"
+            },
+            {
+              "id": "Vpr8xOjo",
+              "type": "TYPE_STRING",
+              "kind": "string",
+              "value": "abdelrahman.alkot2182004@gmail.com",
+              "key": "email"
+            },
+            {
+              "id": "jHE-0cPM",
+              "type": "TYPE_STRING",
+              "kind": "string",
+              "value": "actor",
+              "key": "role"
+            }
+          ],
+          "globals": [],
+          "ports": {
+            "input": [
+              {
+                "id": "5Dr4I2g3",
+                "name": "role",
+                "type": null
+              },
+              {
+                "id": "Vpr8xOjo",
+                "name": "email",
+                "type": null
+              },
+              {
+                "id": "jHE-0cPM",
+                "name": "role",
+                "type": null
+              }
+            ],
+            "output": [
+              {
+                "id": "tHieZZAI",
+                "name": "Output 1",
+                "type": null
+              },
+              {
+                "id": "QPDVyu4O",
+                "name": "Output 2",
+                "type": null
+              }
+            ],
+            "global": []
+          }
+        },
+        "ui": {
+          "data": {
+            "blockTitle": "Signup-Login"
+          }
+        }
+      },
+      "zEe3G_Wm": {
+        "type": "system/module@1",
+        "pos": {
+          "x": 808,
+          "y": 192
+        },
+        "config": {
+          "flowId": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/flows/Signup-Login.flow",
+          "versionId": "local",
+          "variables": [
+            {
+              "id": "5Dr4I2g3",
+              "type": "TYPE_STRING",
+              "kind": "string",
+              "value": "director",
+              "key": "role"
+            },
+            {
+              "id": "Vpr8xOjo",
+              "type": "TYPE_STRING",
+              "kind": "string",
+              "value": "abdelrahman2203005@miuegypt.edu.eg",
+              "key": "email"
+            },
+            {
+              "id": "jHE-0cPM",
+              "type": "TYPE_STRING",
+              "kind": "string",
+              "value": "director",
+              "key": "role"
+            }
+          ],
+          "globals": [],
+          "ports": {
+            "input": [
+              {
+                "id": "5Dr4I2g3",
+                "name": "role",
+                "type": null
+              },
+              {
+                "id": "Vpr8xOjo",
+                "name": "email",
+                "type": null
+              },
+              {
+                "id": "jHE-0cPM",
+                "name": "role",
+                "type": null
+              }
+            ],
+            "output": [
+              {
+                "id": "tHieZZAI",
+                "name": "Output 1",
+                "type": null
+              },
+              {
+                "id": "QPDVyu4O",
+                "name": "Output 2",
+                "type": null
+              }
+            ],
+            "global": []
+          }
+        },
+        "ui": {
+          "data": {
+            "blockTitle": "Signup-Login"
+          }
+        }
+      },
+      "xj9ljSFy": {
+        "type": "system/module@1",
+        "pos": {
+          "x": 1472,
+          "y": -48
+        },
+        "config": {
+          "flowId": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/flows/Casting Management Service.flow",
+          "versionId": "local",
+          "variables": [
+            {
+              "id": "4bzpvIcB",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "-90xS3Ps",
+              "key": "director_token"
+            },
+            {
+              "id": "qR3eKg-y",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "ppDT-Ge2",
+              "key": "actor_token"
+            },
+            {
+              "id": "rVOaHuds",
+              "type": "value/reference@2",
+              "kind": "reference",
+              "value": "user.user_id",
+              "key": "actor_id"
+            }
+          ],
+          "globals": [],
+          "ports": {
+            "input": [
+              {
+                "id": "4bzpvIcB",
+                "name": "director_token",
+                "type": null
+              },
+              {
+                "id": "qR3eKg-y",
+                "name": "actor_token",
+                "type": null
+              },
+              {
+                "id": "rVOaHuds",
+                "name": "actor_id",
+                "type": null
+              }
+            ],
+            "output": [],
+            "global": []
+          }
+        },
+        "ui": {
+          "data": {
+            "blockTitle": "Casting Management Service"
+          }
+        }
+      },
+      "W0hwQbf7": {
+        "type": "value/reference@2",
+        "pos": {
+          "x": 1376,
+          "y": -336
+        },
+        "config": {
+          "value": "token",
+          "type": "string"
+        },
+        "ui": {
+          "data": {}
+        }
+      },
+      "ppDT-Ge2": {
+        "type": "portal/in@1",
+        "pos": {
+          "x": 1696,
+          "y": -336
+        },
+        "config": {
+          "value": "actor_token"
+        },
+        "ui": {
+          "color": "yellow",
+          "data": {}
+        }
+      },
+      "bblPtKD-": {
+        "type": "value/reference@2",
+        "pos": {
+          "x": 1304,
+          "y": 376
+        },
+        "config": {
+          "value": "token",
+          "type": "string"
+        },
+        "ui": {
+          "data": {}
+        }
+      },
+      "-90xS3Ps": {
+        "type": "portal/in@1",
+        "pos": {
+          "x": 1680,
+          "y": 376
+        },
+        "config": {
+          "value": "director_token"
+        },
+        "ui": {
+          "color": "blue",
+          "data": {}
+        }
+      },
+      "EZ-BACFB": {
+        "type": "task/http-request@1",
+        "pos": {
+          "x": 2512,
+          "y": -432
+        },
+        "config": {
+          "element": {
+            "id": "CaA14dC9dfd6C8aAAC12c6Ae",
+            "collection": "5eF9bEABFC58121681c5cA43",
+            "inExtensibleCollection": true,
+            "name": "Delete User Account",
+            "method": "DELETE"
+          },
+          "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
+          "parseBody": "auto",
+          "requestVariables": [
+            {
+              "id": "RlKGWa6P",
+              "type": null,
+              "kind": null,
+              "value": null,
+              "key": "base_url"
+            },
+            {
+              "id": "8Oz8Mm-7",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "ppDT-Ge2",
+              "key": "jwt_token",
+              "latch": false,
+              "isExtraneous": false
+            }
+          ],
+          "scriptsModifyEnvVars": true,
+          "trackGlobalEnvironment": true,
+          "requestVariables__expanded": true
+        },
+        "ui": {
+          "data": {},
+          "namedInputsExpanded": true
+        }
+      },
+      "68aKUl9p": {
+        "type": "task/http-request@1",
+        "pos": {
+          "x": 2520,
+          "y": 272
+        },
+        "config": {
+          "element": {
+            "id": "CaA14dC9dfd6C8aAAC12c6Ae",
+            "collection": "5eF9bEABFC58121681c5cA43",
+            "inExtensibleCollection": true,
+            "name": "Delete User Account",
+            "method": "DELETE"
+          },
+          "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
+          "parseBody": "auto",
+          "requestVariables": [
+            {
+              "id": "QOpkMHFy",
+              "type": null,
+              "kind": null,
+              "value": null,
+              "key": "base_url"
+            },
+            {
+              "id": "wpNceZtf",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "-90xS3Ps",
+              "key": "jwt_token",
+              "latch": false,
+              "isExtraneous": false
+            }
+          ],
+          "scriptsModifyEnvVars": true,
+          "trackGlobalEnvironment": true,
+          "requestVariables__expanded": true
+        },
+        "ui": {
+          "data": {},
+          "namedInputsExpanded": true
+        }
+      },
+      "MGyz53pW": {
+        "type": "system/module@1",
+        "pos": {
+          "x": 2056,
+          "y": 320
+        },
+        "config": {
+          "flowId": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/flows/Notification Service.flow",
+          "versionId": "local",
+          "variables": [
+            {
+              "id": "5mx8qz3N",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "-90xS3Ps",
+              "key": "token"
+            }
+          ],
+          "globals": [],
+          "ports": {
+            "input": [
+              {
+                "id": "5mx8qz3N",
+                "name": "token",
+                "type": null
+              }
+            ],
+            "output": [],
+            "global": []
+          }
+        },
+        "ui": {
+          "data": {
+            "blockTitle": "Notification Service"
+          }
+        }
+      },
+      "iducbMGb": {
+        "type": "system/module@1",
+        "pos": {
+          "x": 2048,
+          "y": -384
+        },
+        "config": {
+          "flowId": "/home/abdelrahman/Abdelrahman Stuff/College/Year 4/Graduation Project/Code/Scenolytics/Backend/postman/flows/Notification Service.flow",
+          "versionId": "local",
+          "variables": [
+            {
+              "id": "5mx8qz3N",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "ppDT-Ge2",
+              "key": "token"
+            }
+          ],
+          "globals": [],
+          "ports": {
+            "input": [
+              {
+                "id": "5mx8qz3N",
+                "name": "token",
+                "type": null
+              }
+            ],
+            "output": [],
+            "global": []
+          }
+        },
+        "ui": {
+          "data": {
+            "blockTitle": "Notification Service"
+          }
+        }
+      }
+    },
+    "connections": {
+      "Tba0_inD": {
+        "source": "g9YLAStJ",
+        "target": "PqniTRnQ",
+        "sourcePort": "data",
+        "targetPort": "AI"
+      },
+      "o2TRXFgt": {
+        "source": "PqniTRnQ",
+        "target": "IdtzpN-n",
+        "sourcePort": "AO",
+        "targetPort": "AI"
+      },
+      "MyHgwRYe": {
+        "source": "zEe3G_Wm",
+        "target": "xj9ljSFy",
+        "sourcePort": "AO",
+        "targetPort": "AI"
+      },
+      "UXBarCQG": {
+        "source": "IdtzpN-n",
+        "target": "zEe3G_Wm",
+        "sourcePort": "AO",
+        "targetPort": "AI"
+      },
+      "bJbsXGp7": {
+        "source": "IdtzpN-n",
+        "target": "W0hwQbf7",
+        "sourcePort": "output|tHieZZAI",
+        "targetPort": "in"
+      },
+      "XEBrsAGw": {
+        "source": "W0hwQbf7",
+        "target": "ppDT-Ge2",
+        "sourcePort": "out",
+        "targetPort": "data"
+      },
+      "Hg6XmcxU": {
+        "source": "zEe3G_Wm",
+        "target": "bblPtKD-",
+        "sourcePort": "output|tHieZZAI",
+        "targetPort": "in"
+      },
+      "VqYgs4q3": {
+        "source": "bblPtKD-",
+        "target": "-90xS3Ps",
+        "sourcePort": "out",
+        "targetPort": "data"
+      },
+      "u6BRLrq0": {
+        "source": "-90xS3Ps",
+        "sourcePort": "data",
+        "target": "xj9ljSFy",
+        "targetPort": "variables|4bzpvIcB"
+      },
+      "YpcX8N1k": {
+        "source": "ppDT-Ge2",
+        "sourcePort": "data",
+        "target": "xj9ljSFy",
+        "targetPort": "variables|qR3eKg-y"
+      },
+      "zhvI13_R": {
+        "source": "IdtzpN-n",
+        "target": "xj9ljSFy",
+        "sourcePort": "output|tHieZZAI",
+        "targetPort": "variables|rVOaHuds"
+      },
+      "ETVkOemn": {
+        "source": "ppDT-Ge2",
+        "sourcePort": "data",
+        "target": "iducbMGb",
+        "targetPort": "variables|5mx8qz3N"
+      },
+      "dhJ_eBcd": {
+        "source": "-90xS3Ps",
+        "sourcePort": "data",
+        "target": "MGyz53pW",
+        "targetPort": "variables|5mx8qz3N"
+      },
+      "8ZnVS5ND": {
+        "source": "iducbMGb",
+        "target": "EZ-BACFB",
+        "sourcePort": "AO",
+        "targetPort": "AI"
+      },
+      "UUo-gF1o": {
+        "source": "xj9ljSFy",
+        "target": "iducbMGb",
+        "sourcePort": "AO",
+        "targetPort": "AI"
+      },
+      "2YuAYB2Z": {
+        "source": "MGyz53pW",
+        "target": "68aKUl9p",
+        "sourcePort": "AO",
+        "targetPort": "AI"
+      },
+      "1dnaT-3q": {
+        "source": "xj9ljSFy",
+        "target": "MGyz53pW",
+        "sourcePort": "AO",
+        "targetPort": "AI"
+      },
+      "Xxa0mn6L": {
+        "source": "-90xS3Ps",
+        "sourcePort": "data",
+        "target": "68aKUl9p",
+        "targetPort": "requestVariables|wpNceZtf"
+      },
+      "WleTLYPG": {
+        "source": "ppDT-Ge2",
+        "sourcePort": "data",
+        "target": "EZ-BACFB",
+        "targetPort": "requestVariables|8Oz8Mm-7"
+      }
+    },
+    "annotations": {},
+    "groups": {},
+    "webhook": {
+      "payloadContent": "body-only",
+      "responseType": "default"
+    },
+    "forms": {},
+    "modules": {},
+    "io": {},
+    "ports": {},
+    "meta": {},
+    "scenes": {},
+    "scenarios": {},
+    "config": {
+      "definitions": {},
+      "constants": {}
+    }
+  },
+  "lockbox": {},
+  "info": {
+    "_postman_id": "11f81038-ac59-4a34-9a64-641cefc063d7"
+  },
+  "_postman_exported_at": "2026-04-12T23:49:18.670Z",
+  "_postman_exported_using": "Postman/Local Mode"
+}

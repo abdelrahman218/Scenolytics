@@ -1,0 +1,6 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/media/:media_id"
+method: DELETE
+pathVariables:
+  media_id: 770e8400-e29b-41d4-a716-446655440020
+order: 4000
