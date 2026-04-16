@@ -1,0 +1,16 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/actors/profile/:profile_id"
+method: PATCH
+headers:
+  Content-Type: application/json
+pathVariables:
+  profile_id: 660e8400-e29b-41d4-a716-446655440001
+body:
+  type: text
+  content: |-
+    {
+      "bio": "Updated bio",
+      "experience_years": 6,
+      "genres": ["drama", "comedy", "thriller"]
+    }
+order: 3000

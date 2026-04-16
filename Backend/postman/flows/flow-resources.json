@@ -1,0 +1,316 @@
+{
+  "version": 1,
+  "flows": {
+    "4cb15d1b-de7d-4be2-b4bd-35e0660814bb": {
+      "path": "postman/flows/Identity Provider Service.flow",
+      "dependencies": [
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "0Ad273C92B8F77CF02495D9d",
+            "filePath": "postman/collections/Scenolytics API/AUTH SERVICE/Validate User.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "CaA14dC9dfd6C8aAAC12c6Ae",
+            "filePath": "postman/collections/Scenolytics API/AUTH SERVICE/Delete User Account.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        }
+      ]
+    },
+    "efa53508-1f94-4697-aa74-fabc9a3ac60a": {
+      "path": "postman/flows/Signup-Login.flow",
+      "dependencies": [
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "275e7fD7536cb0f260F2cbBC",
+            "filePath": "postman/collections/Scenolytics API/AUTH SERVICE/Sign Up.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "17763bae5D911B8AedbAd581",
+            "filePath": "postman/collections/Scenolytics API/AUTH SERVICE/Login.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        }
+      ]
+    },
+    "11f81038-ac59-4a34-9a64-641cefc063d7": {
+      "path": "postman/flows/End To End.flow",
+      "dependencies": [
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "CaA14dC9dfd6C8aAAC12c6Ae",
+            "filePath": "postman/collections/Scenolytics API/AUTH SERVICE/Delete User Account.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        }
+      ]
+    },
+    "61ee2713-5ef1-457f-99e2-37c74aa63bf8": {
+      "path": "postman/flows/Casting Management Service.flow",
+      "dependencies": [
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "ce6d9353FfeBeFDEeeAdBBa3",
+            "filePath": "postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/DIRECTOR/Create Audition.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "b64250ECBEa4dcD75382d71c",
+            "filePath": "postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/General/Get Audition.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "312B2C3842Ba19dF6cCccD5c",
+            "filePath": "postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/DIRECTOR/Invite Actors To Audition.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "af0daD8ea1dF42cBAe6F2582",
+            "filePath": "postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/ACTOR/Get Actor Invitations.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "F0ddEBE824D10acbf2CD0CD9",
+            "filePath": "postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/ACTOR/Respond To Invitation.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "DFf8FB99Cb22364527Af9ecc",
+            "filePath": "postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/ACTOR/Submit Audition Submission.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "81fAe0f6C005a4E6a4cEDdB1",
+            "filePath": "postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/ACTOR/Get Actor Submissions.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "0d19CA993DED8e126c40ade7",
+            "filePath": "postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/ACTOR/Upload Audition Video.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "EA7efB7b866D64e05dAB035c",
+            "filePath": "postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/DIRECTOR/Review Submission.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "2aa8a97AF9A6C96EeC12B19a",
+            "filePath": "postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/DIRECTOR/Delete Audition.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "89C8ad4e352CfCD3E21ECADf",
+            "filePath": "postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/DIRECTOR/Get Director Auditions.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "11eC30bc542Fbf051Da09cfE",
+            "filePath": "postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/DIRECTOR/Update Audition.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "D1cF926CDA75BdcB4230A1ea",
+            "filePath": "postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/DIRECTOR/Get Pending Invitations For Audition.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "6DF2bD4Bb90fB42eB3BE5CC5",
+            "filePath": "postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/DIRECTOR/Get Director Pending Invitations.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "7BeB6F00a7eE7d2Cd4DCdC8f",
+            "filePath": "postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/DIRECTOR/Get Actors For Audition.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "5ca74cCa6EdB9b0bbb364eee",
+            "filePath": "postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/DIRECTOR/Get Audition Submissions.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        }
+      ]
+    },
+    "6a894b29-8bc7-4ff6-9038-e00e572b57a5": {
+      "path": "postman/flows/Notification Service.flow",
+      "dependencies": [
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "dB6EfA9bf3F8dbAeabCedd28",
+            "filePath": "postman/collections/Scenolytics API/NOTIFICATIONS/Get User Notifications.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "719bA9e742Ae04F29Ad6D8d7",
+            "filePath": "postman/collections/Scenolytics API/NOTIFICATIONS/Mark as Read.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "692F5F1eBedDBc6AcDf467Ad",
+            "filePath": "postman/collections/Scenolytics API/NOTIFICATIONS/Delete Notification.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "bC706CEbEBBF7e8f38eaDE15",
+            "filePath": "postman/collections/Scenolytics API/NOTIFICATIONS/Get Notification Preferences.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "7F8dde161CABFD3c3a11C081",
+            "filePath": "postman/collections/Scenolytics API/NOTIFICATIONS/Update Notification Preferences.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        }
+      ]
+    }
+  }
+}

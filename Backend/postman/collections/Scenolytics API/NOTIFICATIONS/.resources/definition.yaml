@@ -1,0 +1,6 @@
+$kind: collection
+order: 12000
+description: >-
+  REST calls go through the API Gateway (`/api/v1/notifications/...`) with `Authorization: Bearer {{jwt_token}}`.
+  For Socket.IO (in-app `notification` events), import `Socket.IO/Notification_Service_Socket.IO.postman_collection.json`
+  and use `{{notification_socket_url}}` (direct service port; gateway does not proxy WebSockets for this service).

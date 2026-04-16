@@ -1,0 +1,9 @@
+$kind: socket.io-request
+name: Active Notification
+url: "{{notification_socket_url}}"
+headers:
+  Authorization: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiZmZhZTI1MjEtMzVlNi0xMWYxLTk5OWUtNzYzM2Y4Mjc5OTlkIiwicm9sZSI6ImFjdG9yIiwiaWF0IjoxNzc1OTQwMTY3LCJleHAiOjE3NzY1NDQ5Njd9.4GuGZHtgnN3LidrGwqgGuvrZevfZaVNw9_4qryQ97jo
+events:
+  - name: notification
+    subscribeOnConnect: true
+order: 2233638998689350

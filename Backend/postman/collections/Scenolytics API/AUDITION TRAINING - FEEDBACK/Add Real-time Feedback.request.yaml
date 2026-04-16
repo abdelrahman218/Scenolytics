@@ -1,0 +1,18 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/sessions/:session_id/feedback"
+method: POST
+headers:
+  Content-Type: application/json
+pathVariables:
+  session_id: 990e8400-e29b-41d4-a716-446655440040
+body:
+  type: text
+  content: |-
+    {
+      "feedback_type": "emotion",
+      "feedback_message": "Show more emotion in this scene",
+      "timestamp_seconds": 45,
+      "emotion_detected": "neutral",
+      "emotion_confidence": 0.85
+    }
+order: 1000

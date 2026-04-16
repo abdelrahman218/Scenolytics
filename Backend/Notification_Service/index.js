@@ -1,13 +1,18 @@
 import express from 'express';
+import http from 'node:http';
+import { Server } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import notificationRoutes from './routes/notification.js';
-import { connectRabbitMQ, closeRabbitMQ, EXCHANGES, QUEUES, ROUTING_KEYS, assertExchange, assertQueue, bindQueue, consumeMessages } from './utils/rabbitmq.js';
-import { setupEventSubscribers } from './services/eventSubscriber.js';
+import { connectRabbitMQ, closeRabbitMQ } from './utils/rabbitmq.js';
+import { setupAsyncListeners } from './utils/asyncListeners.js';
+import { setupSocketServer } from './services/webSocketService.js';
+import { validateJWTToken } from './validators/auth.js';
 
 dotenv.config({filepath: `./.env`});
 
 const app = express();
+const socketio = new Server(process.env.WEB_SOCKET_PORT || 6001);
 const PORT = process.env.NOTIFICATION_SERVICE_PORT || 5005;
 
 // Middleware
@@ -16,7 +21,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Routes
-app.use('/', notificationRoutes);
+app.use('/', validateJWTToken, notificationRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -26,16 +31,20 @@ app.use((err, req, res, next) => {
   });
 });
 
+
 // Start server
 const server = app.listen(PORT, async () => {
   console.log(`Notification Service running on port: ${PORT}`);
-  
+
   // Connect to RabbitMQ
   try {
     await connectRabbitMQ();
     
-    // Setup event subscribers
-    await setupEventSubscribers();
+    // Setup Async Listeners
+    await setupAsyncListeners();
+    
+    // Setup Socket Server
+    setupSocketServer(socketio);
   } catch (error) {
     console.error('Failed to setup RabbitMQ subscribers:', error);
   }

@@ -1,0 +1,14 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/evaluations/:evaluation_id/error"
+method: PATCH
+headers:
+  Content-Type: application/json
+pathVariables:
+  evaluation_id: dd0e8400-e29b-41d4-a716-446655440080
+body:
+  type: text
+  content: |-
+    {
+      "error_message": "Failed to process video: codec not supported"
+    }
+order: 6000

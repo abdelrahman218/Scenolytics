@@ -1,0 +1,7 @@
+$kind: http-request
+name: Delete Audition
+url: "{{base_url}}/api/v1/casting/director/auditions/{{audition_id}}"
+method: DELETE
+headers:
+  Authorization: Bearer {{director_token}}
+order: 5000

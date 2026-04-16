@@ -1,0 +1,6 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/directors/profile/:profile_id"
+method: DELETE
+pathVariables:
+  profile_id: 660e8400-e29b-41d4-a716-446655440011
+order: 4000

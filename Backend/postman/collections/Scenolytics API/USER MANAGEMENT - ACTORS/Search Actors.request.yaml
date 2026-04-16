@@ -1,0 +1,18 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/actors/search"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "age_min": 20,
+      "age_max": 40,
+      "gender": "male",
+      "ethnicity": "caucasian",
+      "body_type": "athletic",
+      "genres": ["drama"],
+      "min_experience_years": 3
+    }
+order: 5000
