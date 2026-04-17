@@ -1,0 +1,14 @@
+$kind: http-request
+name: Respond To Invitation
+url: "{{base_url}}/api/v1/casting/actor/invitations/{{invitation_id}}/respond"
+method: PATCH
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{actor_token}}
+body:
+  type: json
+  content: |-
+    {
+      "status": "accepted"
+    }
+order: 3000

@@ -1,0 +1,7 @@
+$kind: http-request
+name: Get Notification Preferences
+url: "{{base_url}}/api/v1/notifications/preferences"
+method: GET
+headers:
+  Authorization: Bearer {{jwt_token}}
+order: 1000

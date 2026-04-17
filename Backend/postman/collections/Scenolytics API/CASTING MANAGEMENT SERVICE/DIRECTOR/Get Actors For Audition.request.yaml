@@ -1,0 +1,7 @@
+$kind: http-request
+name: Get Actors For Audition
+url: "{{base_url}}/api/v1/casting/director/auditions/{{audition_id}}/actors"
+method: GET
+headers:
+  Authorization: Bearer {{director_token}}
+order: 9000

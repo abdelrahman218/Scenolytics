@@ -1,0 +1,18 @@
+$kind: http-request
+name: Update Audition
+url: "{{base_url}}/api/v1/casting/director/auditions/{{audition_id}}"
+method: PATCH
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{director_token}}
+body:
+  type: json
+  content: |-
+    {
+      "title": "Gym Coach 2",
+      "description": "Lead role audition 2",
+      "candidate_gender": "Male",
+      "candidate_ethnicity": "Arab",
+      "candidate_body_type": "Heavyset"
+    }
+order: 4000

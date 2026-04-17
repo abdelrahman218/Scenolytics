@@ -1,0 +1,22 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/actors/profile"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "user_id": "550e8400-e29b-41d4-a716-446655440000",
+      "bio": "Professional actor with 5 years experience",
+      "height_cm": 180,
+      "age": 28,
+      "gender": "male",
+      "ethnicity": "caucasian",
+      "body_type": "athletic",
+      "personality_traits": ["confident", "creative", "professional"],
+      "genres": ["drama", "comedy"],
+      "experience_years": 5,
+      "portfolio_url": "https://example.com/portfolio"
+    }
+order: 1000

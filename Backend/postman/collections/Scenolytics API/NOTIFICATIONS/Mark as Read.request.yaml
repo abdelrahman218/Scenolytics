@@ -1,0 +1,7 @@
+$kind: http-request
+name: Mark Notification as Read
+url: "{{base_url}}/api/v1/notifications/{{notification_id}}/read"
+method: PATCH
+headers:
+  Authorization: Bearer {{jwt_token}}
+order: 4000
