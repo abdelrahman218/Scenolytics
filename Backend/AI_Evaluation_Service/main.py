@@ -1,0 +1,111 @@
+"""
+AI Evaluation Service - FastAPI
+Processes audition videos using integrated ML models for:
+- Video emotion recognition
+- Voice/audio analysis
+- Script alignment
+- Body language analysis
+"""
+
+from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+import os
+from dotenv import load_dotenv
+import logging
+
+from api.routes import evaluation, health
+from core.database import init_db
+from core.rabbitmq_manager import RabbitMQManager
+from core.ml_pipeline import MLPipeline
+
+
+# Configure logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Load environment variables
+load_dotenv()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage service lifecycle - startup and shutdown"""
+
+    # Startup
+    logger.info("Initializing AI Evaluation Service...")
+
+    # Initialize database
+    await init_db()
+    logger.info("Database initialized")
+
+    # Initialize ML Pipeline and store on app.state so any route can access it
+    # via `http_request.app.state.ml_pipeline` without a global variable.
+    app.state.ml_pipeline = MLPipeline()
+    await app.state.ml_pipeline.initialize()
+    logger.info("ML Pipeline initialized")
+
+    # Initialize RabbitMQ with retry logic
+    app.state.rabbitmq_manager = RabbitMQManager()
+    retries = 10
+    for attempt in range(1, retries + 1):
+        try:
+            await app.state.rabbitmq_manager.initialize()
+            logger.info("RabbitMQ connected successfully")
+            break
+        except Exception as e:
+            logger.warning(f"RabbitMQ connection attempt {attempt}/{retries} failed: {str(e)}")
+            if attempt < retries:
+                import asyncio
+                await asyncio.sleep(3)
+            else:
+                logger.error("Failed to connect to RabbitMQ after all retries")
+
+    yield
+
+    # Shutdown
+    logger.info("Shutting down AI Evaluation Service...")
+    if app.state.rabbitmq_manager:
+        await app.state.rabbitmq_manager.close()
+    logger.info("Service shutdown complete")
+
+
+# Create FastAPI app
+app = FastAPI(
+    title="AI Evaluation Service",
+    description="ML-powered audition video evaluation service",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# Setup CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include routes
+app.include_router(health.router, tags=["Health"])
+app.include_router(evaluation.router, tags=["Evaluations"])
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    """Global exception handler for unhandled errors"""
+    logger.error(f"Unhandled exception: {str(exc)}", exc_info=exc)
+    return {
+        "detail": "Internal server error",
+        "error": str(exc) if os.getenv("NODE_ENV") == "development" else None
+    }
+
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("AI_EVALUATION_SERVICE_PORT", 5003))
+    uvicorn.run(app, host="0.0.0.0", port=port)

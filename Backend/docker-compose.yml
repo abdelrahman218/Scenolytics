@@ -1,5 +1,4 @@
 name: Scenolytics
-
 services:
   # ================= API GATEWAY =================
   api-gateway:
@@ -107,6 +106,8 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${ROOT_PASSWORD}
       MYSQL_DATABASE: ${USER_MANAGEMENT_SERVICE_DATABASE_NAME}
+      MYSQL_USER: ${DATABASE_USER}
+      MYSQL_PASSWORD: ${DATABASE_PASSWORD}
     ports:
       - "${USER_MANAGEMENT_SERVICE_DATABASE_PORT}:3306"
     volumes:
@@ -157,6 +158,8 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${ROOT_PASSWORD}
       MYSQL_DATABASE: ${AUDITION_TRAINING_SERVICE_DATABASE_NAME}
+      MYSQL_USER: ${DATABASE_USER}
+      MYSQL_PASSWORD: ${DATABASE_PASSWORD}
     ports:
       - "${AUDITION_TRAINING_SERVICE_DATABASE_PORT}:3306"
     volumes:
@@ -205,6 +208,8 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${ROOT_PASSWORD}
       MYSQL_DATABASE: ${VIDEO_PROCESSING_SERVICE_DATABASE_NAME}
+      MYSQL_USER: ${DATABASE_USER}
+      MYSQL_PASSWORD: ${DATABASE_PASSWORD}
     ports:
       - "${VIDEO_PROCESSING_SERVICE_DATABASE_PORT}:3306"
     volumes:
@@ -258,6 +263,8 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${ROOT_PASSWORD}
       MYSQL_DATABASE: ${AI_EVALUATION_SERVICE_DATABASE_NAME}
+      MYSQL_USER: ${DATABASE_USER}
+      MYSQL_PASSWORD: ${DATABASE_PASSWORD}
     ports:
       - "${AI_EVALUATION_SERVICE_DATABASE_PORT}:3306"
     volumes:
@@ -265,10 +272,11 @@ services:
       - ./AI_Evaluation_Service/create_tables.sql:/docker-entrypoint-initdb.d/02_create_tables.sql
       - ai_evaluation_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      timeout: 20s
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 5s
+      timeout: 5s
       retries: 10
-      interval: 10s
+      start_period: 30s
     networks:
       - scenolytics-network
     restart: unless-stopped
@@ -287,10 +295,15 @@ services:
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
       AI_EVALUATION_SERVICE_DATABASE_NAME: ${AI_EVALUATION_SERVICE_DATABASE_NAME}
       RABBITMQ_URL: ${RABBITMQ_URL}
+      VIDEO_STORAGE_PATH: /app/videos
     deploy:
       replicas: 3
     ports:
       - "${AI_EVALUATION_SERVICE_PORT}-${AI_EVALUATION_SERVICE_END_PORT}:${AI_EVALUATION_SERVICE_PORT}"
+    volumes:
+      - ./AI_Evaluation_Service:/app
+      - ./AI_Evaluation_Service/videos:/app/videos
+      - ./AI_Evaluation_Service/models:/app/models
     depends_on:
       ai-evaluation-mysql:
         condition: service_healthy
@@ -358,7 +371,7 @@ services:
       MYSQL_ROOT_PASSWORD: ${ROOT_PASSWORD}
       MYSQL_DATABASE: ${NOTIFICATION_SERVICE_DATABASE_NAME}
       MYSQL_USER: ${DATABASE_USER}
-      MYSQL_PASSWORD: ${DATABASE_PASSWORD}      
+      MYSQL_PASSWORD: ${DATABASE_PASSWORD}
     ports:
       - "${NOTIFICATION_SERVICE_DATABASE_PORT}:3306"
     volumes:
@@ -419,7 +432,8 @@ volumes:
     driver: local
   notification_data:
     driver: local
-
+  hf_cache:
+    driver: local
 networks:
   scenolytics-network:
     driver: bridge
