@@ -125,6 +125,16 @@ abstract final class ScenolyticsColors {
   /// Footer bar: same family as [primaryDim], slightly deeper for dark pages.
   static const Color darkFooterBar = Color(0xFF031018);
 
+  /// Hairline above the footer (separates from page content).
+  static Color footerTopAccent(Brightness brightness) {
+    return brightness == Brightness.dark
+        ? accentCyan.withValues(alpha: 0.22)
+        : accentCyanSoft.withValues(alpha: 0.4);
+  }
+
+  /// Muted link label on the footer bar (on dark teal / near-black).
+  static const Color footerLink = Color(0xFFB8E8F2);
+
   static LinearGradient pageBackdropGradientFor(Brightness brightness) {
     return brightness == Brightness.dark
         ? darkPageBackdropGradient
@@ -142,7 +152,7 @@ abstract final class ScenolyticsColors {
   }
 
   static Color footerBarFor(Brightness brightness) {
-    return brightness == Brightness.dark ? darkFooterBar : primaryDim;
+    return brightness == Brightness.dark ? darkFooterBar : surfaceMuted;
   }
 
   static Color outlineSoftFor(Brightness brightness) {
@@ -152,4 +162,69 @@ abstract final class ScenolyticsColors {
   static Color outlineStrongFor(Brightness brightness) {
     return brightness == Brightness.dark ? darkOutlineStrong : outlineStrong;
   }
+
+  // —— Rankings view segmented control (sliding pill) ——
+  static const Color rankingsSegmentTrackLight = Color(0xFFD2E6EE);
+  static const Color rankingsSegmentTrackDark = Color(0xFF1A2F3C);
+  static const Color rankingsSegmentPillLight = Color(0xFFFFFFFF);
+  static const Color rankingsSegmentPillDark = Color(0xFFF2F7FA);
+  static const Color rankingsSegmentSelectedLabelLight = Color(0xFF0A1F2A);
+  static const Color rankingsSegmentSelectedLabelDark = Color(0xFF0D1820);
+  static const Color rankingsSegmentUnselectedLabelLight = Color(0xFF5C7884);
+  static const Color rankingsSegmentUnselectedLabelDark = Color(0xFF9BB4C0);
+
+  static Color rankingsSegmentTrack(Brightness brightness) {
+    return brightness == Brightness.dark
+        ? rankingsSegmentTrackDark
+        : rankingsSegmentTrackLight;
+  }
+
+  static Color rankingsSegmentPill(Brightness brightness) {
+    return brightness == Brightness.dark
+        ? rankingsSegmentPillDark
+        : rankingsSegmentPillLight;
+  }
+
+  static Color rankingsSegmentSelectedLabel(Brightness brightness) {
+    return brightness == Brightness.dark
+        ? rankingsSegmentSelectedLabelDark
+        : rankingsSegmentSelectedLabelLight;
+  }
+
+  static Color rankingsSegmentUnselectedLabel(Brightness brightness) {
+    return brightness == Brightness.dark
+        ? rankingsSegmentUnselectedLabelDark
+        : rankingsSegmentUnselectedLabelLight;
+  }
+
+  /// Web-only gradient for the rankings toolbar “Filters” control (indigo → magenta).
+  static const Color webRankingsFilterGradientStart = Color(0xFF6C5CE7);
+  static const Color webRankingsFilterGradientMid = Color(0xFFB24BF3);
+  static const Color webRankingsFilterGradientEnd = Color(0xFFFF2D92);
+  static const LinearGradient webRankingsFilterGradient = LinearGradient(
+    begin: Alignment.centerLeft,
+    end: Alignment.centerRight,
+    colors: [
+      webRankingsFilterGradientStart,
+      webRankingsFilterGradientMid,
+      webRankingsFilterGradientEnd,
+    ],
+  );
+
+  static const Color webRankingsFilterForeground = Color(0xFFFFFFFF);
+
+  // —— Actor ranking cards (compact list) ——
+  static const Color actorCardSurfaceLight = Color(0xFFF8FAFC);
+  static const Color actorCardSurfaceDark = Color(0xFF111A24);
+  static const Color actorCardBorderLight = Color(0xFFE2E8F0);
+  static const Color actorCardBorderDark = Color(0xFF2A3F4D);
+  static const Color actorCardMetricTrackDark = Color(0xFF1E293B);
+  static const Color actorCardMetricTrackLight = Color(0xFFE2E8F0);
+  static const Color metricEmotional = Color(0xFFE879F9);
+  static const Color metricVocalTone = Color(0xFF38BDF8);
+  static const Color metricBodyLanguage = Color(0xFF34D399);
+  static const Color metricScriptMatch = Color(0xFFFBBF24);
+  static const Color overallScoreChip = Color(0xFF22C55E);
+  static const Color overallScoreChipOn = Color(0xFFFFFFFF);
+  static const Color rankMedalBackdrop = Color(0xFF1E293B);
 }

@@ -5,9 +5,18 @@ import '../theme/scenolytics_colors.dart';
 import '../widgets/account_menu_button.dart';
 
 class ScenolyticsAppDrawer extends StatelessWidget {
-  const ScenolyticsAppDrawer({super.key, this.currentRouteName});
+  const ScenolyticsAppDrawer({
+    super.key,
+    this.currentRouteName,
+    this.onSelectHome,
+    this.onSelectRankings,
+    this.onSelectSubmitVideo,
+  });
 
   final String? currentRouteName;
+  final VoidCallback? onSelectHome;
+  final VoidCallback? onSelectRankings;
+  final VoidCallback? onSelectSubmitVideo;
 
   @override
   Widget build(BuildContext context) {
@@ -49,16 +58,22 @@ class ScenolyticsAppDrawer extends StatelessWidget {
               ),
             ),
             _DrawerTile(
-              icon: Icons.home_outlined,
-              label: 'Home',
-              selected: currentRouteName == 'home',
-              onTap: () => Navigator.pop(context),
+              icon: Icons.video_call_outlined,
+              label: 'Actor submission',
+              selected: currentRouteName == 'submit-video',
+              onTap: () {
+                Navigator.pop(context);
+                onSelectHome?.call();
+              },
             ),
             _DrawerTile(
               icon: Icons.leaderboard_outlined,
-              label: 'Audition rankings',
+              label: 'Director rankings',
               selected: currentRouteName == 'rankings',
-              onTap: () => Navigator.pop(context),
+              onTap: () {
+                Navigator.pop(context);
+                onSelectRankings?.call();
+              },
             ),
             _DrawerTile(
               icon: Icons.groups_outlined,

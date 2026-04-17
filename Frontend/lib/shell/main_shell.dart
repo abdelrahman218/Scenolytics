@@ -1,22 +1,29 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../branding/scenolytics_branding.dart';
 import '../widgets/account_menu_button.dart';
 import '../widgets/scenolytics_app_drawer.dart';
-import '../widgets/scenolytics_footer.dart';
 
-/// App chrome: header (logo + nav), drawer on narrow screens, footer.
+/// App chrome: header (logo + nav) + drawer on narrow screens.
 class MainShell extends StatefulWidget {
   const MainShell({
     super.key,
     required this.body,
     this.pageTitle,
     this.currentRouteName = 'rankings',
+    this.onSelectHome,
+    this.onSelectRankings,
+    this.onSelectSubmitVideo,
   });
 
   final Widget body;
   final String? pageTitle;
   final String currentRouteName;
+  final VoidCallback? onSelectHome;
+  final VoidCallback? onSelectRankings;
+  final VoidCallback? onSelectSubmitVideo;
 
   static const double drawerBreakpoint = 760;
 
@@ -35,12 +42,26 @@ class _MainShellState extends State<MainShell> {
 
     final theme = Theme.of(context);
 
+    final edgeDrag = useDrawer
+        ? math.max(
+            56.0,
+            MediaQuery.paddingOf(context).left + 40.0,
+          )
+        : null;
+
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: theme.colorScheme.surface,
       drawer: useDrawer
-          ? ScenolyticsAppDrawer(currentRouteName: widget.currentRouteName)
+          ? ScenolyticsAppDrawer(
+              currentRouteName: widget.currentRouteName,
+              onSelectHome: widget.onSelectHome,
+              onSelectRankings: widget.onSelectRankings,
+              onSelectSubmitVideo: widget.onSelectSubmitVideo,
+            )
           : null,
+      drawerEnableOpenDragGesture: useDrawer,
+      drawerEdgeDragWidth: edgeDrag,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -49,9 +70,12 @@ class _MainShellState extends State<MainShell> {
             onMenuPressed: () => _scaffoldKey.currentState?.openDrawer(),
             pageTitle: widget.pageTitle,
             logo: logo,
+            currentRouteName: widget.currentRouteName,
+            onSelectHome: widget.onSelectHome,
+            onSelectRankings: widget.onSelectRankings,
+            onSelectSubmitVideo: widget.onSelectSubmitVideo,
           ),
           Expanded(child: widget.body),
-          const ScenolyticsFooter(),
         ],
       ),
     );
@@ -63,12 +87,20 @@ class _HeaderBar extends StatelessWidget {
     required this.showMenu,
     required this.onMenuPressed,
     required this.logo,
+    required this.currentRouteName,
+    this.onSelectHome,
+    this.onSelectRankings,
+    this.onSelectSubmitVideo,
     this.pageTitle,
   });
 
   final bool showMenu;
   final VoidCallback onMenuPressed;
   final Widget logo;
+  final String currentRouteName;
+  final VoidCallback? onSelectHome;
+  final VoidCallback? onSelectRankings;
+  final VoidCallback? onSelectSubmitVideo;
   final String? pageTitle;
 
   @override
@@ -118,17 +150,16 @@ class _HeaderBar extends StatelessWidget {
               if (showInlineNav) ...[
                 const SizedBox(width: 16),
                 _NavButton(
-                  icon: Icons.home_outlined,
-                  label: 'Home',
-                  onPressed: () =>
-                      Navigator.of(context).popUntil((r) => r.isFirst),
+                  icon: Icons.video_call_outlined,
+                  label: 'Actor submission',
+                  filled: currentRouteName == 'submit-video',
+                  onPressed: onSelectHome ?? () {},
                 ),
                 _NavButton(
                   icon: Icons.leaderboard_outlined,
-                  label: 'Rankings',
-                  filled: true,
-                  onPressed: () =>
-                      Navigator.of(context).popUntil((r) => r.isFirst),
+                  label: 'Director rankings',
+                  filled: currentRouteName == 'rankings',
+                  onPressed: onSelectRankings ?? () {},
                 ),
                 _NavButton(
                   icon: Icons.groups_outlined,
