@@ -2,8 +2,12 @@ node_modules/
 .env*
 Datasets
 tf-gpu
-preprocessed_data_actors_24_to_47/
-preprocessed_data_first_24_actors/
-ML Models/models/
+models/
 emotion-recognition-final/
+RAF-DB/
+CREMA-D/
+Video/
+ML Models/ML Models/
+preprocessed_data_actors/
+tmp_gui_uploads/
 .vscode/
