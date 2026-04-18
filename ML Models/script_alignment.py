@@ -1,35 +1,9 @@
-"""
-Script Alignment Tool — VSCode / Local Python Version
-======================================================
-Transcribes a video's audio (Egyptian Arabic) using SeamlessM4T v2,
-aligns the transcript with WhisperX, then compares it against an
-original script (.txt / .json / .srt).
-
-HOW TO RUN
-----------
-1. Install dependencies (see INSTALL.md or the comment block below).
-2. Edit the CONFIG section to point at your files.
-3. Run:  python script_alignment.py
-
-REQUIRED FILES
---------------
-- Your video file (mp4, avi, mov, mkv …)
-- Your script file (.txt, .json, or .srt)
-"""
-
-# ─────────────────────────────────────────────────────────────────────────────
-# CONFIG — edit these before running
-# ─────────────────────────────────────────────────────────────────────────────
 VIDEO_FILE  = r"D:\Scenolytics 2\ML Models\test1.mp4"
 SCRIPT_FILE = r"D:\Scenolytics 2\ML Models\testscript.txt"
 MODEL_DIR   = r"D:\Downloads 2\Desktop\seamless-m4t-v2-large" # local folder to cache the ~10 GB model
-                                        # first run downloads it; subsequent runs load locally
-
-# ─────────────────────────────────────────────────────────────────────────────
-# IMPORTS
-# ─────────────────────────────────────────────────────────────────────────────
+                                        # first run downloads it; subsequent runs load loca
 import torch
-import torchaudio          # noqa: F401  (pulled in by SeamlessM4T)
+import torchaudio          
 import numpy as np
 import os
 import gc
@@ -47,7 +21,7 @@ try:
 except ModuleNotFoundError:
     from moviepy import VideoFileClip          # MoviePy 2.x
 
-# ── Patch torch.load for WhisperX / omegaconf compatibility ──────────────────
+
 import torch.serialization
 try:
     from omegaconf.listconfig import ListConfig
@@ -59,7 +33,7 @@ except ImportError:
 _orig_torch_load = torch.load
 torch.load = lambda *a, **kw: _orig_torch_load(*a, **{**kw, "weights_only": False})
 
-# ── Device ────────────────────────────────────────────────────────────────────
+
 device       = "cuda" if torch.cuda.is_available() else "cpu"
 compute_type = "float16" if device == "cuda" else "float32"
 
@@ -70,9 +44,7 @@ else:
     print("⚠️  No GPU detected — transcription will be very slow on CPU.")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 1 — Load SeamlessM4T v2 Model
-# ─────────────────────────────────────────────────────────────────────────────
+
 def load_seamless_model(model_dir: str):
     config_path = os.path.join(model_dir, "config.json")
 
@@ -86,7 +58,7 @@ def load_seamless_model(model_dir: str):
         model_id         = "facebook/seamless-m4t-v2-large"
         local_files_only = False
 
-    # Avoid fast-tokenizer conversion issues (tiktoken path)
+    
     processor = AutoProcessor.from_pretrained(
         model_id,
         local_files_only=local_files_only,
@@ -101,7 +73,7 @@ def load_seamless_model(model_dir: str):
             local_files_only=local_files_only,
         )
     else:
-        # CPU-safe path (no bitsandbytes / 8bit)
+        
         model = SeamlessM4Tv2Model.from_pretrained(
             model_id,
             local_files_only=local_files_only,
@@ -123,9 +95,7 @@ def load_seamless_model(model_dir: str):
     return processor, model
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 2 — Extract Audio from Video
-# ─────────────────────────────────────────────────────────────────────────────
+
 def extract_audio(video_path: str, audio_path: str = "extracted_audio.wav") -> tuple:
     print(f"Extracting audio from {video_path} …")
     video = VideoFileClip(video_path)
@@ -140,9 +110,7 @@ def extract_audio(video_path: str, audio_path: str = "extracted_audio.wav") -> t
     return audio_array, sample_rate, audio_path
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 3 — Transcribe with SeamlessM4T (chunked)
-# ─────────────────────────────────────────────────────────────────────────────
+
 def transcribe_with_chunking(
     audio_array,
     processor,
@@ -180,7 +148,7 @@ def transcribe_with_chunking(
             with torch.no_grad():
                 output_tokens = model.generate(
                     **inputs,
-                    tgt_lang="arz",        # Egyptian Arabic
+                    tgt_lang="arz",        
                     generate_speech=False,
                     max_new_tokens=256,
                 )
@@ -202,9 +170,7 @@ def transcribe_with_chunking(
     return " ".join(transcriptions)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 4 — Word-Level Alignment with WhisperX
-# ─────────────────────────────────────────────────────────────────────────────
+
 def align_with_whisperx(audio_array, transcript_text: str, sample_rate: int = 16000) -> list:
     import whisperx
 
@@ -262,9 +228,7 @@ def align_with_whisperx(audio_array, transcript_text: str, sample_rate: int = 16
     return word_timestamps
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 5 — Arabic Normalisation helpers
-# ─────────────────────────────────────────────────────────────────────────────
+
 _ARABIC_INDIC_DIGITS = str.maketrans(
     "\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669",
     "0123456789",
@@ -357,9 +321,7 @@ def normalize_word_sequence(words: list) -> list:
     return result
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 6 — Script Loader
-# ─────────────────────────────────────────────────────────────────────────────
+
 def srt_to_seconds(ts: str) -> float:
     ts = ts.replace(",", ".")
     h, m, s = ts.split(":")
@@ -397,9 +359,7 @@ def load_script(path: str) -> list:
     return [{"text": content, "start": 0, "end": 0}]
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 7 — Compare Script vs Transcript
-# ─────────────────────────────────────────────────────────────────────────────
+
 def compare(norm_script: str, norm_transcript: str, aligned_segments: list) -> pd.DataFrame:
     sw = normalize_word_sequence(norm_script.split())
     tw = normalize_word_sequence(norm_transcript.split())
@@ -472,17 +432,15 @@ def compare(norm_script: str, norm_transcript: str, aligned_segments: list) -> p
     return pd.DataFrame(rows)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# MAIN
-# ─────────────────────────────────────────────────────────────────────────────
+
 def main():
-    # 1. Load model
+    
     processor, model = load_seamless_model(MODEL_DIR)
 
-    # 2. Extract audio
+
     audio_array, sample_rate, audio_path = extract_audio(VIDEO_FILE)
 
-    # 3. Transcribe
+    
     print("\nStarting transcription…\n")
     transcription = transcribe_with_chunking(audio_array, processor, model)
     print("\n" + "="*60)
@@ -491,7 +449,7 @@ def main():
     print(transcription)
     print("="*60)
 
-    # 4. Align
+    
     print("\nAligning audio…")
     aligned_segments = align_with_whisperx(audio_array, transcription)
     print(f"\n{len(aligned_segments)} words with timestamps")
@@ -501,7 +459,7 @@ def main():
     if len(aligned_segments) > 20:
         print(f"  … and {len(aligned_segments)-20} more")
 
-    # 5. Load script & compare
+    
     script_segments = load_script(SCRIPT_FILE)
     script_text     = " ".join(seg["text"].strip() for seg in script_segments)
     norm_script     = normalize_arabic(script_text)
@@ -512,7 +470,7 @@ def main():
 
     df = compare(norm_script, norm_transcript, aligned_segments)
 
-    # 6. Summary
+    
     total   = len(df)
     matched = (df["Status"] == "✓ Match").sum()
     changed = (df["Status"] == "🟡 Changed").sum()
@@ -530,7 +488,7 @@ def main():
     print(f"Added     : {added}    ({added/total*100:.1f}%)")
     print(f"\nWord Accuracy: {accuracy:.1f}%")
 
-    # 7. Save results to CSV
+    
     out_csv = "alignment_results.csv"
     df.to_csv(out_csv, index=False, encoding="utf-8-sig")
     print(f"\n✅ Full results saved to: {out_csv}")
