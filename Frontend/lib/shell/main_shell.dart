@@ -179,7 +179,7 @@ class _HeaderBar extends StatelessWidget {
                                   ),
                                   _NavButton(
                                     icon: Icons.groups_outlined,
-                                    label: 'Casting',
+                                    label: 'Auditions',
                                     onPressed: () {},
                                   ),
                                 ],

@@ -77,7 +77,7 @@ class ScenolyticsAppDrawer extends StatelessWidget {
             ),
             _DrawerTile(
               icon: Icons.groups_outlined,
-              label: 'Casting',
+              label: 'Auditions',
               selected: false,
               onTap: () => Navigator.pop(context),
             ),
@@ -125,10 +125,7 @@ class _DrawerTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return ListTile(
-      leading: Icon(
-        icon,
-        color: selected ? cs.primary : cs.onSurfaceVariant,
-      ),
+      leading: Icon(icon, color: selected ? cs.primary : cs.onSurfaceVariant),
       title: Text(
         label,
         style: TextStyle(
