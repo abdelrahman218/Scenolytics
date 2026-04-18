@@ -2,8 +2,10 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:video_player/video_player.dart';
 
-import '../data/mock_audition_rankings.dart';
+import '../data/audition_rankings_sort.dart';
 import '../models/actor_audition_submission.dart';
 import '../theme/scenolytics_colors.dart';
 import '../widgets/scenolytics_footer.dart';
@@ -15,9 +17,6 @@ enum RankingsViewMode {
 
   /// Highest-scoring ten rows (same ranks as in [all]).
   topTen,
-
-  /// Only submissions with a callback sent.
-  callbacks,
 }
 
 /// Director-facing leaderboard of actor submissions for an audition, sorted by score.
@@ -26,9 +25,19 @@ class AuditionRankingsPage extends StatefulWidget {
   const AuditionRankingsPage({
     super.key,
     this.submissions,
+    required this.auditionTitle,
+    required this.auditionSubtitle,
+    this.directorDisplayName,
+    this.onRefresh,
   });
 
   final List<ActorAuditionSubmission>? submissions;
+  final String auditionTitle;
+  final String auditionSubtitle;
+
+  /// From `GET /api/v1/directors/:id/profile` when the director JWT resolves.
+  final String? directorDisplayName;
+  final Future<void> Function()? onRefresh;
 
   @override
   State<AuditionRankingsPage> createState() => _AuditionRankingsPageState();
@@ -48,95 +57,131 @@ class _AuditionRankingsPageState extends State<AuditionRankingsPage> {
       case RankingsViewMode.topTen:
         if (ranked.length <= _topCandidateCount) return ranked;
         return ranked.sublist(0, _topCandidateCount);
-      case RankingsViewMode.callbacks:
-        return ranked.where((e) => e.submission.receivedCallback).toList();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final submissions = widget.submissions ?? kMockAuditionSubmissions;
+    final submissions = widget.submissions ?? const <ActorAuditionSubmission>[];
     final ranked = rankAuditionSubmissions(submissions);
     final theme = Theme.of(context);
     final visible = _visibleRanked(ranked);
 
+    final slivers = <Widget>[
+      SliverPadding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+        sliver: SliverToBoxAdapter(
+          child: _RankingsHeaderCard(
+            auditionTitle: widget.auditionTitle,
+            auditionSubtitle: widget.auditionSubtitle,
+            directorDisplayName: widget.directorDisplayName,
+          ),
+        ),
+      ),
+    ];
+
     if (ranked.isEmpty) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text('No submissions yet.'),
+      slivers.add(
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                'No submissions yet.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
         ),
       );
-    }
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: ScenolyticsColors.pageBackdropGradientFor(theme.brightness),
-      ),
-      child: CustomScrollView(
-        primary: false,
-        slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            sliver: const SliverToBoxAdapter(child: _RankingsHeaderCard()),
-          ),
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-            sliver: SliverToBoxAdapter(
-              child: _StatsSection(
-                totalSubmissions: ranked.length,
-                averageScore: ranked
-                        .map((e) => e.submission.score)
-                        .reduce((a, b) => a + b) /
-                    ranked.length,
-                topScore: ranked.first.submission.score,
-                callbacksSent: mockCallbacksSentCount(submissions),
-              ),
+    } else {
+      slivers.addAll([
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+          sliver: SliverToBoxAdapter(
+            child: _StatsSection(
+              totalSubmissions: ranked.length,
+              averageScore:
+                  ranked
+                      .map((e) => e.submission.score)
+                      .reduce((a, b) => a + b) /
+                  ranked.length,
+              topScore: ranked.first.submission.score,
             ),
           ),
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            sliver: SliverToBoxAdapter(
-              child: _RankingsViewToolbar(
-                mode: _viewMode,
-                onModeChanged: (m) => setState(() => _viewMode = m),
-                onFilterPressed: () => _showRankingsFiltersBottomSheet(context),
-              ),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          sliver: SliverToBoxAdapter(
+            child: _RankingsViewToolbar(
+              mode: _viewMode,
+              onModeChanged: (m) => setState(() => _viewMode = m),
+              onFilterPressed: () => _showRankingsFiltersBottomSheet(context),
             ),
           ),
-          if (visible.isEmpty)
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(24, 32, 24, 48),
-              sliver: SliverToBoxAdapter(
-                child: Center(
-                  child: Text(
-                    _viewMode == RankingsViewMode.callbacks
-                        ? 'No callbacks match this view yet.'
-                        : 'Nothing to show for this view.',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
+        ),
+        if (visible.isEmpty)
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
+            sliver: SliverToBoxAdapter(
+              child: Center(
+                child: Text(
+                  'Nothing to show for this view.',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
-              sliver: SliverList.separated(
-                itemCount: visible.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 12),
-                itemBuilder: (context, index) {
-                  return _CompactRankCard(entry: visible[index]);
-                },
+            ),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
+            sliver: SliverList.separated(
+              itemCount: visible.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              itemBuilder: (context, index) {
+                return _CompactRankCard(entry: visible[index]);
+              },
+            ),
+          ),
+      ]);
+    }
+
+    Widget scrollView = CustomScrollView(
+      physics: widget.onRefresh != null
+          ? const AlwaysScrollableScrollPhysics()
+          : null,
+      slivers: slivers,
+    );
+
+    if (widget.onRefresh != null) {
+      scrollView = RefreshIndicator(
+        onRefresh: widget.onRefresh!,
+        child: scrollView,
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: ScenolyticsColors.pageBackdropGradientFor(
+                theme.brightness,
               ),
             ),
-          const SliverToBoxAdapter(
-            child: ScenolyticsFooter(),
+            child: scrollView,
           ),
-        ],
-      ),
+        ),
+        const ScenolyticsFooter(),
+      ],
     );
   }
 }
@@ -214,8 +259,10 @@ class _RankingsFilterButton extends StatelessWidget {
                 borderRadius: BorderRadius.all(Radius.circular(radius)),
               ),
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -228,10 +275,10 @@ class _RankingsFilterButton extends StatelessWidget {
                     Text(
                       'Filters',
                       style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            color: ScenolyticsColors.webRankingsFilterForeground,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.2,
-                          ),
+                        color: ScenolyticsColors.webRankingsFilterForeground,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.2,
+                      ),
                     ),
                   ],
                 ),
@@ -273,10 +320,9 @@ class _SlidingRankingsSegmentedControl extends StatelessWidget {
   static const double _pillInset = 2.5;
 
   int get _selectedIndex => switch (mode) {
-        RankingsViewMode.all => 0,
-        RankingsViewMode.topTen => 1,
-        RankingsViewMode.callbacks => 2,
-      };
+    RankingsViewMode.all => 0,
+    RankingsViewMode.topTen => 1,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -293,7 +339,7 @@ class _SlidingRankingsSegmentedControl extends StatelessWidget {
         final w = constraints.maxWidth;
         if (w <= 0) return const SizedBox(height: _height);
 
-        final segW = w / 3;
+        final segW = w / 2;
         final pillW = segW - 2 * _pillInset;
         final pillLeft = _pillInset + _selectedIndex * segW;
 
@@ -351,15 +397,6 @@ class _SlidingRankingsSegmentedControl extends StatelessWidget {
                       selectedColor: selectedLabel,
                       unselectedColor: unselectedLabel,
                       onTap: () => onModeChanged(RankingsViewMode.topTen),
-                    ),
-                  ),
-                  Expanded(
-                    child: _SegmentTap(
-                      label: 'Callbacks',
-                      selected: mode == RankingsViewMode.callbacks,
-                      selectedColor: selectedLabel,
-                      unselectedColor: unselectedLabel,
-                      onTap: () => onModeChanged(RankingsViewMode.callbacks),
                     ),
                   ),
                 ],
@@ -442,9 +479,7 @@ void _showRankingsFiltersWebDialog(BuildContext context) {
     barrierColor: Colors.black.withValues(alpha: 0.45),
     builder: (ctx) {
       return Dialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         clipBehavior: Clip.antiAlias,
         insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
         child: ConstrainedBox(
@@ -552,7 +587,15 @@ void _showRankingsFiltersMobileSheet(BuildContext context) {
 /// Hero-style card: title, audition name, and round — gradients in light mode,
 /// deeper hero tones in dark mode so it stays readable on the page backdrop.
 class _RankingsHeaderCard extends StatelessWidget {
-  const _RankingsHeaderCard();
+  const _RankingsHeaderCard({
+    required this.auditionTitle,
+    required this.auditionSubtitle,
+    this.directorDisplayName,
+  });
+
+  final String auditionTitle;
+  final String auditionSubtitle;
+  final String? directorDisplayName;
 
   @override
   Widget build(BuildContext context) {
@@ -579,7 +622,9 @@ class _RankingsHeaderCard extends StatelessWidget {
       ),
       boxShadow: [
         BoxShadow(
-          color: cs.shadow.withValues(alpha: b == Brightness.dark ? 0.35 : 0.12),
+          color: cs.shadow.withValues(
+            alpha: b == Brightness.dark ? 0.35 : 0.12,
+          ),
           blurRadius: 18,
           offset: const Offset(0, 6),
         ),
@@ -619,9 +664,21 @@ class _RankingsHeaderCard extends StatelessWidget {
                   ),
                 ],
               ),
+              if (directorDisplayName != null &&
+                  directorDisplayName!.trim().isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  directorDisplayName!.trim(),
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: onHero.withValues(alpha: 0.82),
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ],
               const SizedBox(height: 14),
               Text(
-                kMockAuditionTitle,
+                auditionTitle.trim().isEmpty ? '—' : auditionTitle,
                 style: theme.textTheme.titleMedium?.copyWith(
                   color: onHero.withValues(alpha: 0.96),
                   fontWeight: FontWeight.w700,
@@ -638,7 +695,7 @@ class _RankingsHeaderCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      kMockAuditionRound,
+                      auditionSubtitle.trim().isEmpty ? '—' : auditionSubtitle,
                       style: theme.textTheme.bodyLarge?.copyWith(
                         color: onHero.withValues(alpha: 0.9),
                         fontWeight: FontWeight.w500,
@@ -669,13 +726,11 @@ class _StatsSection extends StatelessWidget {
     required this.totalSubmissions,
     required this.averageScore,
     required this.topScore,
-    required this.callbacksSent,
   });
 
   final int totalSubmissions;
   final double averageScore;
   final double topScore;
-  final int callbacksSent;
 
   @override
   Widget build(BuildContext context) {
@@ -697,26 +752,22 @@ class _StatsSection extends StatelessWidget {
         value: topScore.toStringAsFixed(1),
         icon: Icons.emoji_events_outlined,
       ),
-      _StatCard(
-        label: 'Callbacks sent',
-        value: '$callbacksSent',
-        icon: Icons.mark_email_read_outlined,
-      ),
     ];
 
     if (width >= 900) {
       return Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (var i = 0; i < 4; i++) ...[
+          for (var i = 0; i < 3; i++) ...[
             Expanded(child: cards[i]),
-            if (i < 3) const SizedBox(width: 12),
+            if (i < 2) const SizedBox(width: 12),
           ],
         ],
       );
     }
 
-    // Phone and tablet: two cards per row (2×2).
+    // Phone and tablet: two cards side by side, then full-width top score.
+    // (Avoid [Table] here — on some devices the first row collapsed to zero height.)
     return Column(
       children: [
         Row(
@@ -730,11 +781,7 @@ class _StatsSection extends StatelessWidget {
         const SizedBox(height: 12),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: cards[2]),
-            const SizedBox(width: 12),
-            Expanded(child: cards[3]),
-          ],
+          children: [Expanded(child: cards[2])],
         ),
       ],
     );
@@ -813,6 +860,350 @@ class _StatCard extends StatelessWidget {
   }
 }
 
+void _presentDirectorAuditionVideo(
+  BuildContext context,
+  ActorAuditionSubmission submission,
+) {
+  final url = submission.recordedVideoUrl?.trim();
+  if (url == null || url.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Video is not available for this submission yet.'),
+      ),
+    );
+    return;
+  }
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    backgroundColor: Colors.transparent,
+    builder: (ctx) => _DirectorAuditionVideoSheet(
+      videoUrl: url,
+      actorName: submission.actorName,
+      age: submission.age,
+    ),
+  );
+}
+
+class _DirectorAuditionVideoSheet extends StatefulWidget {
+  const _DirectorAuditionVideoSheet({
+    required this.videoUrl,
+    required this.actorName,
+    required this.age,
+  });
+
+  final String videoUrl;
+  final String actorName;
+  final int age;
+
+  @override
+  State<_DirectorAuditionVideoSheet> createState() =>
+      _DirectorAuditionVideoSheetState();
+}
+
+class _DirectorAuditionVideoSheetState
+    extends State<_DirectorAuditionVideoSheet> {
+  VideoPlayerController? _controller;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _init();
+  }
+
+  Future<void> _init() async {
+    try {
+      final c = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
+      await c.initialize();
+      if (!mounted) {
+        await c.dispose();
+        return;
+      }
+      setState(() => _controller = c);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = kIsWeb
+              ? 'Could not load video in the browser.\n\n'
+                    'Check: (1) SCENO_VIDEO_PUBLIC_BASE — gateway example '
+                    'http://localhost/api/v1/storage/videos, or local MinIO path-style '
+                    'http://localhost:9000/videos (port must match AWS_PORT) — '
+                    '(2) api-gateway proxies storage if you use the gateway URL — '
+                    '(3) object exists at uploads/{media_id}.mp4 in bucket videos '
+                    '(anonymous read or CORS on MinIO if not using gateway).\n\n'
+                    'URL tried:\n${widget.videoUrl}'
+              : 'Could not load video.\n${widget.videoUrl}\n\n$e';
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+    final controller = _controller;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(12, 10, 12, bottomPad + 12),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720),
+          child: Material(
+            color: cs.surfaceContainerHigh,
+            elevation: 14,
+            shadowColor: Colors.black.withValues(alpha: 0.4),
+            borderRadius: BorderRadius.circular(22),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Ink(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        ScenolyticsColors.accentCyan.withValues(alpha: 0.22),
+                        cs.primaryContainer.withValues(alpha: 0.85),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 16, 6, 16),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(11),
+                          decoration: BoxDecoration(
+                            color: cs.surface.withValues(alpha: 0.65),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Icon(
+                            Icons.movie_filter_rounded,
+                            color: cs.primary,
+                            size: 26,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Audition recording',
+                                style: theme.textTheme.labelLarge?.copyWith(
+                                  color: cs.onSurfaceVariant,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.2,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                widget.actorName.trim().isEmpty
+                                    ? '—'
+                                    : widget.actorName,
+                                style: theme.textTheme.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  color: cs.onSurface,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (widget.age > 0)
+                                Text(
+                                  'Age ${widget.age}',
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: cs.onSurfaceVariant,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.close_rounded),
+                          tooltip: 'Close',
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+                  child: _error != null
+                      ? Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                _error!,
+                                textAlign: TextAlign.start,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: cs.error,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Align(
+                                alignment: Alignment.center,
+                                child: TextButton.icon(
+                                  onPressed: () async {
+                                    await Clipboard.setData(
+                                      ClipboardData(text: widget.videoUrl),
+                                    );
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Video link copied.'),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  icon: const Icon(
+                                    Icons.link_rounded,
+                                    size: 18,
+                                  ),
+                                  label: const Text('Copy video link'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : controller == null || !controller.value.isInitialized
+                      ? const AspectRatio(
+                          aspectRatio: 16 / 9,
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            AspectRatio(
+                              aspectRatio: controller.value.aspectRatio == 0
+                                  ? 16 / 9
+                                  : controller.value.aspectRatio,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(14),
+                                child: GestureDetector(
+                                  onTap: () {
+                                    if (controller.value.isPlaying) {
+                                      controller.pause();
+                                    } else {
+                                      controller.play();
+                                    }
+                                    setState(() {});
+                                  },
+                                  child: Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      ColoredBox(
+                                        color: Colors.black,
+                                        child: VideoPlayer(controller),
+                                      ),
+                                      ListenableBuilder(
+                                        listenable: controller,
+                                        builder: (context, _) {
+                                          if (controller.value.isPlaying) {
+                                            return const SizedBox.shrink();
+                                          }
+                                          return DecoratedBox(
+                                            decoration: BoxDecoration(
+                                              color: Colors.black.withValues(
+                                                alpha: 0.35,
+                                              ),
+                                            ),
+                                            child: Center(
+                                              child: Container(
+                                                padding: const EdgeInsets.all(
+                                                  18,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.black
+                                                      .withValues(alpha: 0.55),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: Icon(
+                                                  Icons.play_arrow_rounded,
+                                                  size: 52,
+                                                  color: Colors.white
+                                                      .withValues(alpha: 0.95),
+                                                ),
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            ListenableBuilder(
+                              listenable: controller,
+                              builder: (context, _) {
+                                return Row(
+                                  children: [
+                                    IconButton.filledTonal(
+                                      onPressed: () {
+                                        if (controller.value.isPlaying) {
+                                          controller.pause();
+                                        } else {
+                                          controller.play();
+                                        }
+                                        setState(() {});
+                                      },
+                                      icon: Icon(
+                                        controller.value.isPlaying
+                                            ? Icons.pause_rounded
+                                            : Icons.play_arrow_rounded,
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: VideoProgressIndicator(
+                                        controller,
+                                        allowScrubbing: true,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                        ),
+                                        colors: VideoProgressColors(
+                                          playedColor: cs.primary,
+                                          bufferedColor: cs.primary.withValues(
+                                            alpha: 0.35,
+                                          ),
+                                          backgroundColor: cs.outline
+                                              .withValues(alpha: 0.35),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _CompactRankCard extends StatelessWidget {
   const _CompactRankCard({required this.entry});
 
@@ -842,7 +1233,9 @@ class _CompactRankCard extends StatelessWidget {
         border: Border.all(color: cardBorder),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: b == Brightness.dark ? 0.35 : 0.06),
+            color: Colors.black.withValues(
+              alpha: b == Brightness.dark ? 0.35 : 0.06,
+            ),
             blurRadius: 14,
             offset: const Offset(0, 4),
           ),
@@ -866,184 +1259,173 @@ class _CompactRankCard extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(
-                _accentWidth + 16,
-                16,
-                16,
-                16,
-              ),
+              padding: const EdgeInsets.fromLTRB(_accentWidth + 16, 16, 16, 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _ActorRankMedal(rank: entry.rank),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  s.actorName,
-                                  style: theme.textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w700,
-                                    color: cs.onSurface,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Age: ${s.age}',
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: cs.onSurfaceVariant,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  s.auditionRole,
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    color: cs.onSurfaceVariant
-                                        .withValues(alpha: 0.9),
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          _OverallScoreChip(score: s.score),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      LayoutBuilder(
-                        builder: (context, c) {
-                          final narrow = c.maxWidth < 360;
-                          final metrics = <(String, int, Color)>[
-                            ('Emotional', s.emotionalScore,
-                                ScenolyticsColors.metricEmotional),
-                            ('Vocal tone', s.vocalToneScore,
-                                ScenolyticsColors.metricVocalTone),
-                            ('Body language', s.bodyLanguageScore,
-                                ScenolyticsColors.metricBodyLanguage),
-                            ('Script match', s.scriptMatchScore,
-                                ScenolyticsColors.metricScriptMatch),
-                          ];
-                          final track = b == Brightness.dark
-                              ? ScenolyticsColors.actorCardMetricTrackDark
-                              : ScenolyticsColors.actorCardMetricTrackLight;
-
-                          Widget cell(int i) {
-                            final (label, value, color) = metrics[i];
-                            return _ActorMetricBar(
-                              label: label,
-                              value: value,
-                              barColor: color,
-                              trackColor: track,
-                            );
-                          }
-
-                          if (narrow) {
-                            return Column(
-                              children: [
-                                Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(child: cell(0)),
-                                    const SizedBox(width: 10),
-                                    Expanded(child: cell(1)),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(child: cell(2)),
-                                    const SizedBox(width: 10),
-                                    Expanded(child: cell(3)),
-                                  ],
-                                ),
-                              ],
-                            );
-                          }
-
-                          return Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              for (var i = 0; i < 4; i++) ...[
-                                if (i > 0) const SizedBox(width: 10),
-                                Expanded(child: cell(i)),
-                              ],
-                            ],
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      LayoutBuilder(
-                        builder: (context, fc) {
-                          final stackFooter = fc.maxWidth < 320;
-                          final submitted = Row(
-                            children: [
-                              Icon(
-                                Icons.schedule_outlined,
-                                size: 16,
-                                color: cs.onSurfaceVariant,
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  _formatActorCardSubmitted(s.submittedAt),
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    color: cs.onSurfaceVariant,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          );
-                          final watch = OutlinedButton.icon(
-                            onPressed: () {},
-                            icon:
-                                const Icon(Icons.play_arrow_rounded, size: 18),
-                            label: const Text('Watch'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: cs.onSurface,
-                              side: BorderSide(
-                                color: cs.outline.withValues(alpha: 0.65),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 8,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _ActorRankMedal(rank: entry.rank),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              s.actorName.trim().isEmpty ? '—' : s.actorName,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: cs.onSurface,
                               ),
                             ),
-                          );
-                          if (stackFooter) {
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                submitted,
-                                const SizedBox(height: 10),
-                                Align(
-                                  alignment: Alignment.centerRight,
-                                  child: watch,
+                            if (s.age > 0) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                'Age: ${s.age}',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: cs.onSurfaceVariant,
                                 ),
-                              ],
-                            );
-                          }
-                          return Row(
-                            children: [
-                              Expanded(child: submitted),
-                              watch,
+                              ),
                             ],
-                          );
-                        },
+                          ],
+                        ),
                       ),
+                      _OverallScoreChip(score: s.score),
                     ],
                   ),
-                ),
+                  const SizedBox(height: 16),
+                  LayoutBuilder(
+                    builder: (context, c) {
+                      final narrow = c.maxWidth < 360;
+                      final metrics = <(String, int, Color)>[
+                        (
+                          'Facial Emotions',
+                          s.emotionalScore,
+                          ScenolyticsColors.metricEmotional,
+                        ),
+                        (
+                          'Vocal Emotion',
+                          s.vocalToneScore,
+                          ScenolyticsColors.metricVocalTone,
+                        ),
+                        (
+                          'Script match',
+                          s.scriptMatchScore,
+                          ScenolyticsColors.metricScriptMatch,
+                        ),
+                      ];
+                      final track = b == Brightness.dark
+                          ? ScenolyticsColors.actorCardMetricTrackDark
+                          : ScenolyticsColors.actorCardMetricTrackLight;
+
+                      Widget cell(int i) {
+                        final (label, value, color) = metrics[i];
+                        return _ActorMetricBar(
+                          label: label,
+                          value: value,
+                          barColor: color,
+                          trackColor: track,
+                        );
+                      }
+
+                      if (narrow) {
+                        return Column(
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(child: cell(0)),
+                                const SizedBox(width: 10),
+                                Expanded(child: cell(1)),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [Expanded(child: cell(2))],
+                            ),
+                          ],
+                        );
+                      }
+
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          for (var i = 0; i < 3; i++) ...[
+                            if (i > 0) const SizedBox(width: 10),
+                            Expanded(child: cell(i)),
+                          ],
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  LayoutBuilder(
+                    builder: (context, fc) {
+                      final stackFooter = fc.maxWidth < 320;
+                      final submitted = Row(
+                        children: [
+                          Icon(
+                            Icons.schedule_outlined,
+                            size: 16,
+                            color: cs.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              _formatActorCardSubmitted(s.submittedAt),
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: cs.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                      final watch = OutlinedButton.icon(
+                        onPressed: () =>
+                            _presentDirectorAuditionVideo(context, s),
+                        icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                        label: const Text('Watch'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: cs.onSurface,
+                          side: BorderSide(
+                            color: cs.outline.withValues(alpha: 0.65),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      );
+                      if (stackFooter) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            submitted,
+                            const SizedBox(height: 10),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: watch,
+                            ),
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(child: submitted),
+                          watch,
+                        ],
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -1053,28 +1435,28 @@ class _CompactRankCard extends StatelessWidget {
   static LinearGradient _leftRankAccentGradient(int rank) {
     return switch (rank) {
       1 => const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFFFFD54F), Color(0xFFFF8C42)],
-        ),
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Color(0xFFFFD54F), Color(0xFFFF8C42)],
+      ),
       2 => LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            ScenolyticsColors.rankSilver,
-            ScenolyticsColors.rankSilver.withValues(alpha: 0.55),
-          ],
-        ),
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          ScenolyticsColors.rankSilver,
+          ScenolyticsColors.rankSilver.withValues(alpha: 0.55),
+        ],
+      ),
       3 => const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFFCD7F32), Color(0xFF8B5A2B)],
-        ),
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Color(0xFFCD7F32), Color(0xFF8B5A2B)],
+      ),
       _ => const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [ScenolyticsColors.accentCyan, ScenolyticsColors.secondary],
-        ),
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [ScenolyticsColors.accentCyan, ScenolyticsColors.secondary],
+      ),
     };
   }
 }
@@ -1151,9 +1533,9 @@ class _OverallScoreChip extends StatelessWidget {
       child: Text(
         score.round().toString(),
         style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: ScenolyticsColors.overallScoreChipOn,
-              fontWeight: FontWeight.w800,
-            ),
+          color: ScenolyticsColors.overallScoreChipOn,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }

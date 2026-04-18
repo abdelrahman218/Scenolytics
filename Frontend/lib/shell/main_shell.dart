@@ -6,7 +6,7 @@ import '../branding/scenolytics_branding.dart';
 import '../widgets/account_menu_button.dart';
 import '../widgets/scenolytics_app_drawer.dart';
 
-/// App chrome: header (logo + nav) + drawer on narrow screens.
+/// App chrome: full-width header + drawer on narrow screens; account menu at the trailing edge.
 class MainShell extends StatefulWidget {
   const MainShell({
     super.key,
@@ -115,63 +115,91 @@ class _HeaderBar extends StatelessWidget {
       color: theme.colorScheme.surface,
       child: SafeArea(
         bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: SizedBox(
+          width: double.infinity,
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              if (showMenu)
-                IconButton(
-                  onPressed: onMenuPressed,
-                  icon: const Icon(Icons.menu_rounded),
-                  tooltip: 'Menu',
-                  color: theme.colorScheme.primary,
-                ),
-              SizedBox(
-                height: 40,
-                child: FittedBox(
-                  fit: BoxFit.contain,
-                  alignment: Alignment.centerLeft,
-                  child: logo,
-                ),
-              ),
-              if (pageTitle != null && pageTitle!.isNotEmpty) ...[
-                const SizedBox(width: 12),
-                Flexible(
-                  child: Text(
-                    pageTitle!,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
-                    ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      if (showMenu)
+                        IconButton(
+                          onPressed: onMenuPressed,
+                          icon: const Icon(Icons.menu_rounded),
+                          tooltip: 'Menu',
+                          color: theme.colorScheme.primary,
+                        ),
+                      SizedBox(
+                        height: 40,
+                        child: FittedBox(
+                          fit: BoxFit.contain,
+                          alignment: Alignment.centerLeft,
+                          child: logo,
+                        ),
+                      ),
+                      if (pageTitle != null && pageTitle!.isNotEmpty) ...[
+                        const SizedBox(width: 12),
+                        Flexible(
+                          child: Text(
+                            pageTitle!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                      if (showInlineNav)
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const SizedBox(width: 16),
+                                  _NavButton(
+                                    icon: Icons.video_call_outlined,
+                                    label: 'Actor submission',
+                                    filled: currentRouteName == 'submit-video',
+                                    onPressed: onSelectHome ?? () {},
+                                  ),
+                                  _NavButton(
+                                    icon: Icons.leaderboard_outlined,
+                                    label: 'Director rankings',
+                                    filled: currentRouteName == 'rankings',
+                                    onPressed: onSelectRankings ?? () {},
+                                  ),
+                                  _NavButton(
+                                    icon: Icons.groups_outlined,
+                                    label: 'Casting',
+                                    onPressed: () {},
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        )
+                      else
+                        const Spacer(),
+                    ],
                   ),
                 ),
-              ],
-              if (showInlineNav) ...[
-                const SizedBox(width: 16),
-                _NavButton(
-                  icon: Icons.video_call_outlined,
-                  label: 'Actor submission',
-                  filled: currentRouteName == 'submit-video',
-                  onPressed: onSelectHome ?? () {},
+              ),
+              // Trailing inset so the account control is not flush with the viewport edge.
+              Padding(
+                padding: const EdgeInsets.fromLTRB(0, 10, 8, 10),
+                child: AccountMenuButton(
+                  usePopupMenu: showInlineNav,
                 ),
-                _NavButton(
-                  icon: Icons.leaderboard_outlined,
-                  label: 'Director rankings',
-                  filled: currentRouteName == 'rankings',
-                  onPressed: onSelectRankings ?? () {},
-                ),
-                _NavButton(
-                  icon: Icons.groups_outlined,
-                  label: 'Casting',
-                  onPressed: () {},
-                ),
-                const Spacer(),
-                AccountMenuButton(usePopupMenu: true),
-              ] else ...[
-                const Spacer(),
-                AccountMenuButton(usePopupMenu: false),
-              ],
+              ),
             ],
           ),
         ),

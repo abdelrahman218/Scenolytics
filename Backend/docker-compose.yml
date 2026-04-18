@@ -15,6 +15,7 @@ services:
       - ai-evaluation-service
       - casting-management-service
       - notification-service
+      - minio
     networks:
       - scenolytics-network
     restart: unless-stopped
@@ -107,6 +108,8 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${ROOT_PASSWORD}
       MYSQL_DATABASE: ${USER_MANAGEMENT_SERVICE_DATABASE_NAME}
+      MYSQL_USER: ${DATABASE_USER}
+      MYSQL_PASSWORD: ${DATABASE_PASSWORD}
     ports:
       - "${USER_MANAGEMENT_SERVICE_DATABASE_PORT}:3306"
     volumes:
@@ -340,6 +343,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - scenolytics-network
 
   minio-init:
     image: minio/mc:latest
@@ -352,8 +357,11 @@ services:
       mc admin config set local api cors_allow_origin="*"
       mc mb --ignore-existing local/videos;
       mc mb --ignore-existing local/results;
+      mc anonymous set download local/videos || true;
       exit 0;
       "
+    networks:
+      - scenolytics-network
 
   casting-management-service:
     build: ./Casting_Management_Service
