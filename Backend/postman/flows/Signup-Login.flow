@@ -1,0 +1,330 @@
+{
+  "version": 1,
+  "name": "Signup-Login",
+  "description": "",
+  "flow": {
+    "description": "",
+    "nodes": {
+      "baJhS1Er": {
+        "type": "ev/endpoint@3",
+        "pos": {
+          "x": -72,
+          "y": -112
+        },
+        "config": {
+          "inputs": [
+            {
+              "id": "3UCLUUqU",
+              "type": "value/reference@2",
+              "kind": "reference",
+              "value": "",
+              "key": "email",
+              "__noIn": true,
+              "typeDef": {
+                "type": "string"
+              }
+            },
+            {
+              "id": "cqe9aYsk",
+              "type": "value/reference@2",
+              "kind": "reference",
+              "value": "",
+              "key": "role",
+              "__noIn": true,
+              "typeDef": {
+                "type": "string"
+              }
+            }
+          ],
+          "data": "",
+          "language": "json",
+          "allowAnyType": false,
+          "inputs__expanded": true
+        },
+        "ui": {
+          "data": {
+            "triggerType": "ev/endpoint@3"
+          },
+          "namedInputsExpanded": true
+        }
+      },
+      "L6WjQJBo": {
+        "type": "task/http-request@1",
+        "pos": {
+          "x": 440,
+          "y": -208
+        },
+        "config": {
+          "element": {
+            "id": "275e7fD7536cb0f260F2cbBC",
+            "collection": "5eF9bEABFC58121681c5cA43",
+            "inExtensibleCollection": true,
+            "name": "Sign Up",
+            "method": "POST"
+          },
+          "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
+          "parseBody": "auto",
+          "requestVariables": [
+            {
+              "id": "h1tL_gao",
+              "type": null,
+              "kind": null,
+              "value": null,
+              "key": "base_url"
+            },
+            {
+              "id": "k8Sq42u5",
+              "type": "value/reference@2",
+              "kind": "reference",
+              "value": "",
+              "key": "email",
+              "__noIn": true,
+              "isExtraneous": false
+            },
+            {
+              "id": "oSaHIW7U",
+              "type": "value/reference@2",
+              "kind": "reference",
+              "value": "",
+              "key": "role",
+              "__noIn": true,
+              "isExtraneous": false
+            }
+          ],
+          "scriptsModifyEnvVars": true,
+          "trackGlobalEnvironment": true,
+          "requestVariables__expanded": true
+        },
+        "ui": {
+          "data": {},
+          "namedInputsExpanded": true
+        }
+      },
+      "AXC6jEy-": {
+        "type": "task/http-request@1",
+        "pos": {
+          "x": 1032,
+          "y": -208
+        },
+        "config": {
+          "element": {
+            "id": "17763bae5D911B8AedbAd581",
+            "collection": "5eF9bEABFC58121681c5cA43",
+            "inExtensibleCollection": true,
+            "name": "Login",
+            "method": "POST"
+          },
+          "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
+          "parseBody": "auto",
+          "requestVariables": [
+            {
+              "id": "mRUZor1D",
+              "type": null,
+              "kind": null,
+              "value": null,
+              "key": "base_url"
+            },
+            {
+              "id": "GW9WQSk5",
+              "type": "value/reference@2",
+              "kind": "reference",
+              "value": "body.user.email",
+              "key": "email",
+              "__noIn": true,
+              "isExtraneous": false
+            }
+          ],
+          "scriptsModifyEnvVars": true,
+          "trackGlobalEnvironment": true,
+          "requestVariables__expanded": true
+        },
+        "ui": {
+          "data": {},
+          "namedInputsExpanded": true
+        }
+      },
+      "B7VGdFqb": {
+        "type": "ev/output@2",
+        "pos": {
+          "x": 1504,
+          "y": -168
+        },
+        "config": {
+          "outputs": [
+            {
+              "id": "OdAYXKb5",
+              "type": "value/reference@2",
+              "kind": "reference",
+              "value": "body",
+              "key": "Output 1",
+              "__noIn": true
+            }
+          ],
+          "outputs__expanded": true
+        },
+        "ui": {
+          "data": {
+            "outputType": "ev/output@2"
+          },
+          "namedInputsExpanded": true
+        }
+      }
+    },
+    "connections": {
+      "NFqHgfPH": {
+        "source": "5Dr4I2g3",
+        "sourcePort": "@",
+        "target": "baJhS1Er",
+        "targetPort": "inputs|b9fM49gi"
+      },
+      "jnTnlCDe": {
+        "source": "baJhS1Er",
+        "target": "L6WjQJBo",
+        "sourcePort": "output|6gQGek7q",
+        "targetPort": "AI"
+      },
+      "udhmVbDI": {
+        "source": "Vpr8xOjo",
+        "sourcePort": "@",
+        "target": "baJhS1Er",
+        "targetPort": "inputs|3UCLUUqU"
+      },
+      "ELouOzPO": {
+        "source": "jHE-0cPM",
+        "sourcePort": "@",
+        "target": "baJhS1Er",
+        "targetPort": "inputs|cqe9aYsk"
+      },
+      "x9jaqxFE": {
+        "source": "baJhS1Er",
+        "target": "L6WjQJBo",
+        "sourcePort": "output|3UCLUUqU",
+        "targetPort": "AI"
+      },
+      "u_TfE8z4": {
+        "source": "L6WjQJBo",
+        "target": "AXC6jEy-",
+        "sourcePort": "success",
+        "targetPort": "AI"
+      },
+      "OKDqjPdN": {
+        "source": "AXC6jEy-",
+        "target": "B7VGdFqb",
+        "sourcePort": "success",
+        "targetPort": "outputs|OdAYXKb5"
+      },
+      "VualSbnI": {
+        "source": "B7VGdFqb",
+        "sourcePort": "out|OdAYXKb5",
+        "target": "tHieZZAI",
+        "targetPort": "@"
+      },
+      "-Mo4YpnY": {
+        "source": "B7VGdFqb",
+        "sourcePort": "out|lQbsikCV",
+        "target": "QPDVyu4O",
+        "targetPort": "@"
+      },
+      "KDZoD0NU": {
+        "source": "baJhS1Er",
+        "target": "L6WjQJBo",
+        "sourcePort": "output|3UCLUUqU",
+        "targetPort": "requestVariables|k8Sq42u5"
+      },
+      "GjEb9cmP": {
+        "source": "baJhS1Er",
+        "target": "L6WjQJBo",
+        "sourcePort": "output|cqe9aYsk",
+        "targetPort": "requestVariables|oSaHIW7U"
+      },
+      "iKLAXo7z": {
+        "source": "L6WjQJBo",
+        "target": "AXC6jEy-",
+        "sourcePort": "success",
+        "targetPort": "requestVariables|GW9WQSk5"
+      }
+    },
+    "annotations": {},
+    "groups": {},
+    "webhook": {
+      "payloadContent": "body-only",
+      "responseType": "default"
+    },
+    "forms": {},
+    "modules": {},
+    "io": {
+      "5Dr4I2g3": {
+        "type": "input",
+        "name": "role",
+        "typeDef": {
+          "type": "string"
+        }
+      },
+      "Vpr8xOjo": {
+        "type": "input",
+        "name": "email",
+        "typeDef": {
+          "type": "string"
+        }
+      },
+      "jHE-0cPM": {
+        "type": "input",
+        "name": "role",
+        "typeDef": {
+          "type": "string"
+        }
+      },
+      "tHieZZAI": {
+        "type": "output",
+        "name": "Output 1",
+        "typeDef": {}
+      },
+      "QPDVyu4O": {
+        "type": "output",
+        "name": "Output 2",
+        "typeDef": {}
+      }
+    },
+    "ports": {},
+    "meta": {},
+    "scenes": {},
+    "scenarios": {
+      "NFZSCCmg": {
+        "name": "Start Trigger",
+        "type": "scenario@2",
+        "createdOn": 1775581131981,
+        "updatedOn": 1775587909418,
+        "data": {
+          "osVD8Z8-": {
+            "id": "osVD8Z8-",
+            "key": "Input 1",
+            "value": "",
+            "type": {
+              "type": "string"
+            }
+          },
+          "Vpr8xOjo": {
+            "id": "Vpr8xOjo",
+            "key": "email",
+            "value": "test@gmail.com"
+          },
+          "jHE-0cPM": {
+            "id": "jHE-0cPM",
+            "key": "role",
+            "value": "director"
+          }
+        }
+      }
+    },
+    "config": {
+      "definitions": {},
+      "constants": {}
+    }
+  },
+  "lockbox": {},
+  "info": {
+    "_postman_id": "efa53508-1f94-4697-aa74-fabc9a3ac60a"
+  },
+  "_postman_exported_at": "2026-04-12T23:14:29.275Z",
+  "_postman_exported_using": "Postman/Local Mode"
+}

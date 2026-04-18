@@ -15,6 +15,7 @@ services:
       - ai-evaluation-service
       - casting-management-service
       - notification-service
+      - minio
     networks:
       - scenolytics-network
     restart: unless-stopped
@@ -107,6 +108,8 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${ROOT_PASSWORD}
       MYSQL_DATABASE: ${USER_MANAGEMENT_SERVICE_DATABASE_NAME}
+      MYSQL_USER: ${DATABASE_USER}
+      MYSQL_PASSWORD: ${DATABASE_PASSWORD}
     ports:
       - "${USER_MANAGEMENT_SERVICE_DATABASE_PORT}:3306"
     volumes:
@@ -306,6 +309,8 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${ROOT_PASSWORD}
       MYSQL_DATABASE: ${CASTING_MANAGEMENT_SERVICE_DATABASE_NAME}
+      MYSQL_USER: ${DATABASE_USER}
+      MYSQL_PASSWORD: ${DATABASE_PASSWORD}
     ports:
       - "${CASTING_MANAGEMENT_SERVICE_DATABASE_PORT}:3306"
     volumes:
@@ -321,9 +326,47 @@ services:
       - scenolytics-network
     restart: unless-stopped
 
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    ports:
+      - "${AWS_PORT}:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID}
+      MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY}
+      TZ: Cairo-2
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - scenolytics-network
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local ${AWS_ENDPOINT_URL} ${AWS_ACCESS_KEY_ID} ${AWS_SECRET_ACCESS_KEY};
+      mc admin config set local api cors_allow_origin="*"
+      mc mb --ignore-existing local/videos;
+      mc mb --ignore-existing local/results;
+      mc anonymous set download local/videos || true;
+      exit 0;
+      "
+    networks:
+      - scenolytics-network
+
   casting-management-service:
     build: ./Casting_Management_Service
     environment:
+      TZ: Cairo-2
       NODE_ENV: ${NODE_ENV}
       CASTING_MANAGEMENT_SERVICE_PORT: ${CASTING_MANAGEMENT_SERVICE_PORT}
       CASTING_MANAGEMENT_SERVICE_DATABASE_HOST: ${CASTING_MANAGEMENT_SERVICE_DATABASE_HOST}
@@ -331,8 +374,17 @@ services:
       CASTING_MANAGEMENT_SERVICE_DATABASE_NAME: ${CASTING_MANAGEMENT_SERVICE_DATABASE_NAME}
       DATABASE_USER: ${DATABASE_USER}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
       IDENTITY_PROVIDER_SERVICE_URL: ${IDENTITY_PROVIDER_SERVICE_URL}
       RABBITMQ_URL: ${RABBITMQ_URL}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_PORT: ${AWS_PORT}
+      AWS_ENDPOINT_URL: ${AWS_ENDPOINT_URL}
+      AWS_REGION: ${AWS_REGION}
+      S3_BUCKET_VIDEOS: ${S3_BUCKET_VIDEOS}
+      S3_BUCKET_RESULTS: ${S3_BUCKET_RESULTS}
+      S3_PUBLIC_URL: ${S3_PUBLIC_URL}
     deploy:
       replicas: 3
     ports:
@@ -342,6 +394,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     networks:
       - scenolytics-network
     restart: unless-stopped
@@ -353,6 +407,8 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${ROOT_PASSWORD}
       MYSQL_DATABASE: ${NOTIFICATION_SERVICE_DATABASE_NAME}
+      MYSQL_USER: ${DATABASE_USER}
+      MYSQL_PASSWORD: ${DATABASE_PASSWORD}      
     ports:
       - "${NOTIFICATION_SERVICE_DATABASE_PORT}:3306"
     volumes:
@@ -384,10 +440,11 @@ services:
       SMTP_PORT: ${SMTP_PORT}
       SMTP_USER: ${SMTP_USER}
       SMTP_PASSWORD: ${SMTP_PASSWORD}
-    deploy:
-      replicas: 3
+      SCENOLYTICS_MAIL: ${SCENOLYTICS_MAIL}
+      JWT_SECRET: ${JWT_SECRET}
     ports:
-      - "${NOTIFICATION_SERVICE_PORT}-${NOTIFICATION_SERVICE_END_PORT}:${NOTIFICATION_SERVICE_PORT}"
+      - "${NOTIFICATION_SERVICE_PORT}:${NOTIFICATION_SERVICE_PORT}"
+      - "${WEB_SOCKET_PORT}:${WEB_SOCKET_PORT}"
     depends_on:
       notification-mysql:
         condition: service_healthy
@@ -412,6 +469,7 @@ volumes:
     driver: local
   notification_data:
     driver: local
+  minio_data:
 
 networks:
   scenolytics-network:

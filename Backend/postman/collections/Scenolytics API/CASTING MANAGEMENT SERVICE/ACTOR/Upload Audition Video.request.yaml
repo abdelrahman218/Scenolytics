@@ -1,0 +1,11 @@
+$kind: http-request
+name: Upload Audition Video
+url: "{{upload_url}}"
+method: PUT
+body:
+  type: file
+  content:
+    src: 01112006006.mp4
+settings:
+  disabledSystemHeaders: []
+order: 3904147779748504

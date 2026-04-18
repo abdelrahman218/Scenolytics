@@ -8,6 +8,6 @@ const router = express.Router();
 router.post("/signup", signUpRequiredFieldsValidator, checkUserExistsValidator, signUp);
 router.post("/login", logInRequiredFieldsValidator, logIn);
 router.get("/validate/:user_id", validateUserExists);
-router.delete("/delete/:user_id", validateJWTToken, deleteUser);
+router.delete("/delete", validateJWTToken, deleteUser);
 
 export default router;

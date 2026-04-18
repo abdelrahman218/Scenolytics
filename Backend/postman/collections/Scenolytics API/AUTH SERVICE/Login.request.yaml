@@ -1,13 +1,14 @@
 $kind: http-request
+name: Login
 url: "{{base_url}}/api/v1/auth/login"
 method: POST
 headers:
   Content-Type: application/json
 body:
-  type: text
+  type: json
   content: |-
     {
-      "email": "actor@example.com",
+      "email": "{{email}}",
       "password": "password123"
     }
 order: 2000

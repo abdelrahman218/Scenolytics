@@ -12,31 +12,24 @@ export const EXCHANGES = {
   VIDEOS: 'videos_exchange',
   EVALUATIONS: 'evaluations_exchange',
   CALLBACKS: 'callbacks_exchange',
-  NOTIFICATIONS: 'notifications_exchange'
+  NOTIFICATIONS: 'notifications_exchange',
+  INVITATIONS: 'invitations_exchange'
 };
 
 export const QUEUES = {
-  USER_EVENTS: 'user_events_queue',
-  AUDITION_EVENTS: 'audition_events_queue',
-  VIDEO_EVENTS: 'video_events_queue',
-  EVALUATION_EVENTS: 'evaluation_events_queue',
-  CALLBACK_EVENTS: 'callback_events_queue',
-  NOTIFICATION_QUEUE: 'notification_queue'
+  USER_EVENTS: 'notification_user_events_queue',
+  AUDITION_EVENTS: 'notification_audition_events_queue',
+  EVALUATION_EVENTS: 'notification_evaluation_events_queue',
+  INVITATION_EVENTS: 'notification_invitation_events_queue'
 };
 
 export const ROUTING_KEYS = {
   USER_CREATED: 'user.created',
-  USER_UPDATED: 'user.updated',
   USER_DELETED: 'user.deleted',
-  AUDITION_STARTED: 'audition.started',
-  AUDITION_COMPLETED: 'audition.completed',
-  VIDEO_UPLOADED: 'video.uploaded',
-  VIDEO_PROCESSING_STARTED: 'video.processing.started',
-  VIDEO_PROCESSING_COMPLETED: 'video.processing.completed',
-  EVALUATION_CREATED: 'evaluation.created',
+  AUDITION_REVIEWED: 'audition.reviewed',
   EVALUATION_COMPLETED: 'evaluation.completed',
-  CALLBACK_CREATED: 'callback.created',
-  CALLBACK_UPDATED: 'callback.updated'
+  INVITATION_CREATED: 'invitation.created',
+  INVITATION_UPDATED: 'invitation.updated',
 };
 
 /**
@@ -152,7 +145,7 @@ export const consumeMessages = async (queueName, callback) => {
       if (msg) {
         try {
           const content = JSON.parse(msg.content.toString());
-          await callback(content);
+          await callback(msg.fields.routingKey, content);
           ch.ack(msg);
         } catch (error) {
           console.error('Error processing message:', error);

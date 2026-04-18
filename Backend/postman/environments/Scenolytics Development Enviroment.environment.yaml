@@ -3,3 +3,31 @@ values:
   - key: base_url
     value: ''
     enabled: true
+  - key: notification_socket_url
+    value: 'ws://localhost:5005'
+    enabled: true
+  - key: user_id
+    value: ''
+    enabled: true
+  - key: jwt_token
+    value: ''
+    enabled: true
+  - key: director_token
+    value: ''
+    enabled: true
+  - key: actor_token
+    value: ''
+    enabled: true
+  - key: audition_id
+    value: ''
+    enabled: true
+  - key: submission_id
+    value: ''
+    enabled: true
+  - key: invitation_id
+    value: ''
+    enabled: true
+  - key: notification_id
+    value: ''
+    enabled: true
+color: 180

@@ -10,6 +10,9 @@ export const validateActorProfile = (profile) => {
   if (profile.height_cm && (profile.height_cm < 50 || profile.height_cm > 300)) {
     errors.push('Height must be realistic');
   }
+  if (profile.display_name && String(profile.display_name).length > 255) {
+    errors.push('display_name must be at most 255 characters');
+  }
 
   return {
     isValid: errors.length === 0,
@@ -22,6 +25,9 @@ export const validateDirectorProfile = (profile) => {
 
   if (!profile.user_id) {
     errors.push('user_id is required');
+  }
+  if (profile.display_name && String(profile.display_name).length > 255) {
+    errors.push('display_name must be at most 255 characters');
   }
   if (profile.company_name && profile.company_name.length < 2) {
     errors.push('Company name must be at least 2 characters');
