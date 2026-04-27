@@ -53,8 +53,8 @@ const generatePresignedUploadUrl = async(media_id) => {
     )
   
     // Rewrite internal Docker hostname → public localhost URL for browser access
-    const internal = process.env.AWS_ENDPOINT_URL ?? '';
-    const public_  = process.env.S3_PUBLIC_URL ?? internal;
+    const internal = `${process.env.AWS_ENDPOINT_URL}/${process.env.S3_BUCKET_VIDEOS}/`;
+    const public_  = process.env.S3_PUBLIC_URL;
   
     return url.replace(internal, public_)
 }

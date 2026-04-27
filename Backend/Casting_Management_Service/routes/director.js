@@ -60,7 +60,7 @@ router.delete(
 
 // Invite actors to audition
 const inviteActorsToAuditionValidators = [checkAuditionExists];
-router.post("/auditions/:audition_id/invite_actors", inviteActorsToAudition);
+router.post("/auditions/:audition_id/invite_actors", inviteActorsToAuditionValidators, inviteActorsToAudition);
 
 // Get director's pending invitations for specific audition
 router.get(

@@ -4,7 +4,7 @@ import { S3Client } from '@aws-sdk/client-s3';
 dotenv.config();
 
 export const s3 = new S3Client({
-  endpoint: process.env.S3_PUBLIC_URL,       // undefined in prod → real AWS
+  endpoint: process.env.AWS_ENDPOINT_URL,       // undefined in prod → real AWS
   region: process.env.AWS_REGION,
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
