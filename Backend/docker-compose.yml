@@ -283,9 +283,9 @@ services:
     entrypoint: >
       /bin/sh -c "
       mc alias set local ${AWS_ENDPOINT_URL} ${AWS_ACCESS_KEY_ID} ${AWS_SECRET_ACCESS_KEY};
-      mc admin config set local api cors_allow_origin="*"
-      mc mb --ignore-existing local/videos;
-      mc mb --ignore-existing local/results;
+      mc admin config set local api cors_allow_origin='*';
+      mc mb local/videos || true;
+      mc mb local/results || true;
       mc anonymous set download local/videos || true;
       exit 0;
       "
