@@ -17,3 +17,5 @@ build
 .next
 .eslintcache
 .prettierignore
+.postman
+postman
