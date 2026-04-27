@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import userRoutes from './routes/user.js';
 import { connectRabbitMQ, closeRabbitMQ } from './utils/rabbitmq.js';
+import { setupAsyncListeners } from './utils/asyncListeners.js';
 
 dotenv.config({filepath: `./.env`});
 
@@ -32,6 +33,7 @@ const server = app.listen(PORT, async () => {
   // Connect to RabbitMQ
   try {
     await connectRabbitMQ();
+    await setupAsyncListeners();
   } catch (error) {
     console.error('Failed to connect to RabbitMQ:', error);
   }
