@@ -6,20 +6,6 @@ import * as directorService from '../services/directorService.js';
 const router = express.Router();
 
 // Actor Profile Routes
-router.post('/actors/profile', async (req, res, next) => {
-  try {
-    const validation = validateActorProfile(req.body);
-    if (!validation.isValid) {
-      return res.status(400).json({ errors: validation.errors });
-    }
-
-    const profile = await actorService.createActorProfile(req.body.user_id, req.body);
-    res.status(201).json(profile);
-  } catch (error) {
-    next(error);
-  }
-});
-
 router.get('/actors/:user_id/profile', async (req, res, next) => {
   try {
     const profile = await actorService.getActorProfile(req.params.user_id);
@@ -58,20 +44,6 @@ router.post('/actors/search', async (req, res, next) => {
 });
 
 // Director Profile Routes
-router.post('/directors/profile', async (req, res, next) => {
-  try {
-    const validation = validateDirectorProfile(req.body);
-    if (!validation.isValid) {
-      return res.status(400).json({ errors: validation.errors });
-    }
-
-    const profile = await directorService.createDirectorProfile(req.body.user_id, req.body);
-    res.status(201).json(profile);
-  } catch (error) {
-    next(error);
-  }
-});
-
 router.get('/directors/:user_id/profile', async (req, res, next) => {
   try {
     const profile = await directorService.getDirectorProfile(req.params.user_id);
