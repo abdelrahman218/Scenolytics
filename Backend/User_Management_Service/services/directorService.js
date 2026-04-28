@@ -4,22 +4,27 @@ import { identityProviderService } from '../utils/serviceClient.js';
 
 export const createDirectorProfile = async (user_id, profileData) => {
   try {
-    // Validate user exists in Identity Provider
-    const userExists = await identityProviderService.checkUserExists(user_id);
-    if (!userExists) {
-      throw new Error('User not found in Identity Provider');
-    }
-
     const profileId = uuidv4();
     await DirectorProfile.create({
       id: profileId,
       user_id,
-      ...profileData
+      display_name: profileData.name, 
+      company_name: profileData.company_name || null,
+      company_bio: profileData.company_bio || null,
+      website: profileData.website || null,
+      phone: profileData.phone || null,
+      location: profileData.location || null
     });
+    
     return {
       id: profileId,
       user_id,
-      ...profileData
+      display_name: profileData.name,
+      company_name: profileData.company_name,
+      company_bio: profileData.company_bio,
+      website: profileData.website,
+      phone: profileData.phone,
+      location: profileData.location
     };
   } catch (error) {
     throw new Error(`Failed to create director profile: ${error.message}`);

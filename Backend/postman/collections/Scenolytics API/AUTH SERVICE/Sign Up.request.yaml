@@ -11,6 +11,8 @@ body:
       "email": "{{email}}",
       "password": "password123",
       "name": "John Doe",
+      "gender": "Male",
+      "age": 18,
       "role": "{{role}}"
     }
 order: 1000

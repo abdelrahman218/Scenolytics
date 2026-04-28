@@ -8,7 +8,6 @@ const getServiceUrl = (serviceName) => {
   const serviceUrls = {
     identityProvider: process.env.IDENTITY_PROVIDER_SERVICE_URL || 'http://identity-provider-service-1:5000',
     userManagement: process.env.USER_MANAGEMENT_SERVICE_URL || 'http://user-management-service-1:5009',
-    videoProcessing: process.env.VIDEO_PROCESSING_SERVICE_URL || 'http://video-processing-service-1:5002',
     aiEvaluation: process.env.AI_EVALUATION_SERVICE_URL || 'http://ai-evaluation-service-1:5003',
     castingManagement: process.env.CASTING_MANAGEMENT_SERVICE_URL || 'http://casting-management-service-1:5004',
     notification: process.env.NOTIFICATION_SERVICE_URL || 'http://notification-service-1:5005',

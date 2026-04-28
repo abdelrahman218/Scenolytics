@@ -11,7 +11,6 @@ services:
       - identity-provider-service
       - user-management-service
       - audition-training-service
-      - video-processing-service
       - ai-evaluation-service
       - casting-management-service
       - notification-service
@@ -32,21 +31,6 @@ services:
       - "15672:15672"
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
-      timeout: 20s
-      retries: 10
-      interval: 10s
-    networks:
-      - scenolytics-network
-    restart: unless-stopped
-
-  # ================= REDIS =================
-  redis:
-    image: redis:7-alpine
-    container_name: scenolytics-redis
-    ports:
-      - "${REDIS_PORT}:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
       timeout: 20s
       retries: 10
       interval: 10s
@@ -133,7 +117,6 @@ services:
       USER_MANAGEMENT_SERVICE_DATABASE_HOST: ${USER_MANAGEMENT_SERVICE_DATABASE_HOST}
       USER_MANAGEMENT_SERVICE_URL: ${USER_MANAGEMENT_SERVICE_URL}
       IDENTITY_PROVIDER_SERVICE_URL: ${IDENTITY_PROVIDER_SERVICE_URL}
-      VIDEO_PROCESSING_SERVICE_URL: ${VIDEO_PROCESSING_SERVICE_URL}
       DATABASE_PORT: ${DATABASE_PORT}
       DATABASE_USER: ${DATABASE_USER}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
@@ -200,59 +183,6 @@ services:
       - scenolytics-network
     restart: unless-stopped
 
-  # ================= VIDEO PROCESSING =================
-  video-processing-mysql:
-    image: mysql:8.0
-    container_name: video-processing-mysql
-    environment:
-      MYSQL_ROOT_PASSWORD: ${ROOT_PASSWORD}
-      MYSQL_DATABASE: ${VIDEO_PROCESSING_SERVICE_DATABASE_NAME}
-    ports:
-      - "${VIDEO_PROCESSING_SERVICE_DATABASE_PORT}:3306"
-    volumes:
-      - ./Video_Processing_Service/create_database.sql:/docker-entrypoint-initdb.d/01_create_database.sql
-      - ./Video_Processing_Service/create_tables.sql:/docker-entrypoint-initdb.d/02_create_tables.sql
-      - video_processing_data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      timeout: 20s
-      retries: 10
-      interval: 10s
-    networks:
-      - scenolytics-network
-    restart: unless-stopped
-
-  video-processing-service:
-    build: ./Video_Processing_Service
-    environment:
-      NODE_ENV: ${NODE_ENV}
-      VIDEO_PROCESSING_SERVICE_PORT: ${VIDEO_PROCESSING_SERVICE_PORT}
-      VIDEO_PROCESSING_SERVICE_DATABASE_HOST: ${VIDEO_PROCESSING_SERVICE_DATABASE_HOST}
-      VIDEO_PROCESSING_SERVICE_URL: ${VIDEO_PROCESSING_SERVICE_URL}
-      IDENTITY_PROVIDER_SERVICE_URL: ${IDENTITY_PROVIDER_SERVICE_URL}
-      DATABASE_PORT: ${DATABASE_PORT}
-      DATABASE_USER: ${DATABASE_USER}
-      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
-      VIDEO_PROCESSING_SERVICE_DATABASE_NAME: ${VIDEO_PROCESSING_SERVICE_DATABASE_NAME}
-      REDIS_URL: ${REDIS_URL}
-      RABBITMQ_URL: ${RABBITMQ_URL}
-    deploy:
-      replicas: 3
-    ports:
-      - "${VIDEO_PROCESSING_SERVICE_PORT}-${VIDEO_PROCESSING_SERVICE_END_PORT}:${VIDEO_PROCESSING_SERVICE_PORT}"
-    depends_on:
-      video-processing-mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    networks:
-      - scenolytics-network
-    restart: unless-stopped
-    volumes:
-      - ./Video_Processing_Service/uploads:/app/uploads
-
   # ================= AI EVALUATION =================
   ai-evaluation-mysql:
     image: mysql:8.0
@@ -283,7 +213,6 @@ services:
       AI_EVALUATION_SERVICE_DATABASE_HOST: ${AI_EVALUATION_SERVICE_DATABASE_HOST}
       AI_EVALUATION_SERVICE_URL: ${AI_EVALUATION_SERVICE_URL}
       IDENTITY_PROVIDER_SERVICE_URL: ${IDENTITY_PROVIDER_SERVICE_URL}
-      VIDEO_PROCESSING_SERVICE_URL: ${VIDEO_PROCESSING_SERVICE_URL}
       DATABASE_PORT: ${DATABASE_PORT}
       DATABASE_USER: ${DATABASE_USER}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
@@ -354,9 +283,9 @@ services:
     entrypoint: >
       /bin/sh -c "
       mc alias set local ${AWS_ENDPOINT_URL} ${AWS_ACCESS_KEY_ID} ${AWS_SECRET_ACCESS_KEY};
-      mc admin config set local api cors_allow_origin="*"
-      mc mb --ignore-existing local/videos;
-      mc mb --ignore-existing local/results;
+      mc admin config set local api cors_allow_origin='*';
+      mc mb local/videos || true;
+      mc mb local/results || true;
       mc anonymous set download local/videos || true;
       exit 0;
       "
@@ -460,8 +389,6 @@ volumes:
   user_management_data:
     driver: local
   audition_training_data:
-    driver: local
-  video_processing_data:
     driver: local
   ai_evaluation_data:
     driver: local
