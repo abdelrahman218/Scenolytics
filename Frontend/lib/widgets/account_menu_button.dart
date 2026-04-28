@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../data/api/user_management_api.dart';
+import '../data/models/auth_user.dart';
 import '../pages/profile_page.dart';
 import '../pages/settings_page.dart';
 
@@ -7,14 +9,40 @@ enum _AccountAction { profile, settings, help, logout }
 
 /// Phone: opens [ProfilePage]. Wide / web-style: popup with Profile, Settings, Help, Log out.
 class AccountMenuButton extends StatelessWidget {
-  const AccountMenuButton({super.key, required this.usePopupMenu});
+  const AccountMenuButton({
+    super.key,
+    required this.usePopupMenu,
+    this.userEmail,
+    this.accountRoleLabel,
+    this.authUser,
+    this.userManagementApi,
+    this.onLogOut,
+  });
 
   /// `true` when layout is wide (inline nav) — show a dropdown menu.
   final bool usePopupMenu;
+  final String? userEmail;
+  final String? accountRoleLabel;
+  final AuthUser? authUser;
+  final UserManagementApi? userManagementApi;
+  final Future<void> Function()? onLogOut;
 
-  static void openProfile(BuildContext context) {
+  static void openProfile(
+    BuildContext context, {
+    String? email,
+    String? roleLabel,
+    AuthUser? user,
+    UserManagementApi? userManagementApi,
+  }) {
     Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(builder: (_) => const ProfilePage()),
+      MaterialPageRoute<void>(
+        builder: (_) => ProfilePage(
+          user: user,
+          userManagementApi: userManagementApi,
+          userEmail: email,
+          accountRoleLabel: roleLabel,
+        ),
+      ),
     );
   }
 
@@ -24,7 +52,10 @@ class AccountMenuButton extends StatelessWidget {
     );
   }
 
-  static Future<void> confirmLogOut(BuildContext context) async {
+  static Future<void> confirmLogOut(
+    BuildContext context, {
+    Future<void> Function()? onLogOut,
+  }) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -43,18 +74,27 @@ class AccountMenuButton extends StatelessWidget {
       ),
     );
     if (ok == true && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Log out will connect to your auth service later.'),
-        ),
-      );
+      await onLogOut?.call();
     }
   }
 
-  void _handleAction(BuildContext context, _AccountAction action) {
+  void _handleAction(
+    BuildContext context,
+    _AccountAction action, {
+    String? email,
+    String? roleLabel,
+    AuthUser? user,
+    UserManagementApi? api,
+  }) {
     switch (action) {
       case _AccountAction.profile:
-        openProfile(context);
+        openProfile(
+          context,
+          email: email,
+          roleLabel: roleLabel,
+          user: user,
+          userManagementApi: api,
+        );
       case _AccountAction.settings:
         openSettings(context);
       case _AccountAction.help:
@@ -62,7 +102,7 @@ class AccountMenuButton extends StatelessWidget {
           const SnackBar(content: Text('Help & support — coming soon.')),
         );
       case _AccountAction.logout:
-        confirmLogOut(context);
+        confirmLogOut(context, onLogOut: onLogOut);
     }
   }
 
@@ -72,7 +112,13 @@ class AccountMenuButton extends StatelessWidget {
 
     if (!usePopupMenu) {
       return IconButton.filledTonal(
-        onPressed: () => openProfile(context),
+        onPressed: () => openProfile(
+          context,
+          email: userEmail,
+          roleLabel: accountRoleLabel,
+          user: authUser,
+          userManagementApi: userManagementApi,
+        ),
         tooltip: 'Profile',
         style: IconButton.styleFrom(
           backgroundColor: cs.primaryContainer,
@@ -95,7 +141,14 @@ class AccountMenuButton extends StatelessWidget {
           color: cs.outline.withValues(alpha: 0.55),
         ),
       ),
-      onSelected: (action) => _handleAction(context, action),
+      onSelected: (action) => _handleAction(
+            context,
+            action,
+            email: userEmail,
+            roleLabel: accountRoleLabel,
+            user: authUser,
+            api: userManagementApi,
+          ),
       itemBuilder: (context) => [
         PopupMenuItem(
           value: _AccountAction.profile,

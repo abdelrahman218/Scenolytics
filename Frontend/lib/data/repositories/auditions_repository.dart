@@ -358,11 +358,19 @@ class AuditionsRepository {
     final submittedAt =
         DateTime.tryParse(submittedAtRaw ?? '')?.toUtc() ?? DateTime.now().toUtc();
 
-    final rawActorName = source['actor_name']?.toString().trim();
+    final rawActorName = _actorNameFromSubmissionRow(source);
     final profileName = _displayNameFromActorProfile(profile);
-    final actorName = (rawActorName != null && rawActorName.isNotEmpty)
+    var actorName = (rawActorName != null && rawActorName.isNotEmpty)
         ? rawActorName
         : (profileName ?? fallbackActorName).trim();
+    if (actorName.isEmpty) {
+      final idLabel = _shortActorIdLabel(source);
+      if (idLabel != null && idLabel.isNotEmpty) {
+        actorName = idLabel;
+      } else {
+        actorName = 'Unknown participant';
+      }
+    }
 
     return ActorAuditionSubmission(
       id: id,
@@ -383,11 +391,63 @@ class AuditionsRepository {
     );
   }
 
+  String? _actorNameFromSubmissionRow(Map<String, dynamic> source) {
+    final s = stringFromMap(
+      source,
+      const [
+        'actor_name',
+        'actorName',
+        'ActorName',
+        'display_name',
+        'displayName',
+        'name',
+      ],
+    );
+    if (s != null && s.isNotEmpty) {
+      return s.length > 56 ? '${s.substring(0, 53)}…' : s;
+    }
+    return null;
+  }
+
+  /// Casting rows only guarantee [actor_id]; used when User Management has no row.
+  String? _shortActorIdLabel(Map<String, dynamic> source) {
+    final id = stringFromMap(
+      source,
+      const ['actor_id', 'actorId', 'user_id', 'userId'],
+    );
+    if (id == null || id.isEmpty) return null;
+    if (id.length <= 10) {
+      return 'Actor ($id)';
+    }
+    return 'Actor (${id.substring(0, 8)}…)';
+  }
+
   String? _displayNameFromActorProfile(Map<String, dynamic>? profile) {
     if (profile == null) return null;
-    final dn = profile['display_name']?.toString().trim();
+    final dn = stringFromMap(
+      profile,
+      const [
+        'display_name',
+        'displayName',
+        'full_name',
+        'fullName',
+        'name',
+      ],
+    );
     if (dn != null && dn.isNotEmpty) {
       return dn.length > 56 ? '${dn.substring(0, 53)}…' : dn;
+    }
+    final first = stringFromMap(profile, const ['first_name', 'firstName']);
+    final last = stringFromMap(profile, const ['last_name', 'lastName']);
+    final combined = [first, last]
+        .whereType<String>()
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .join(' ');
+    if (combined.isNotEmpty) {
+      return combined.length > 56
+          ? '${combined.substring(0, 53)}…'
+          : combined;
     }
     final bio = profile['bio']?.toString().trim();
     if (bio == null || bio.isEmpty) return null;
