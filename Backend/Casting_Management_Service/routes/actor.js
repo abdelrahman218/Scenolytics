@@ -2,10 +2,11 @@ import express from "express";
 import {
   getActorPendingInvitations,
   getActorSubmissions,
+  getAuditionPdfScript,
   respondToInvitation,
   submitAuditionSubmission,
 } from "../services/actor.js";
-import { checkInvitationIsPending } from "../validators/general.js";
+import { checkAuditionExists, checkInvitationIsPending } from "../validators/general.js";
 import {
   checkAuditionNotSubmitted,
   checkValidValuesRespondToInvitation,
@@ -28,7 +29,6 @@ router.patch(
 // Get Pending invitations for actor
 router.get("/invitations", getActorPendingInvitations);
 
-
 // ==================== SUBMISSION ENDPOINTS ====================
 
 // Get submissions for actor
@@ -43,5 +43,13 @@ router.post(
   submitAuditionSubmissionValidators,
   submitAuditionSubmission,
 );
+
+// ==================== AUDITION ENDPOINTS ====================
+
+// Get audition script as PDF
+const getAuditionPdfScriptValidators = [
+  checkAuditionExists,
+]
+router.get("/auditions/:audition_id/script", getAuditionPdfScriptValidators, getAuditionPdfScript);
 
 export default router;

@@ -249,6 +249,17 @@
             "collectionId": null,
             "requestId": null
           }
+        },
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "CE12aCb9d4C816aD20C8F3b9",
+            "filePath": "postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/ACTOR/Get Audition Script as a PDF.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
         }
       ]
     },

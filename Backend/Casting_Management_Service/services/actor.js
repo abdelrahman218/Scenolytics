@@ -5,6 +5,8 @@ import { EXCHANGES, publishMessage, ROUTING_KEYS } from "../utils/rabbitmq.js";
 import { PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { s3 } from '../config/s3.js'
+import { createScriptPDF } from "../utils/pdfMaker.js";
+import { Sentence } from "../models/sentence.js";
 
 export const respondToInvitation = async (req, res, next) => {
     try {
@@ -27,6 +29,18 @@ export const getActorPendingInvitations = async (req, res, next) => {
     try {
         const invitations = await AuditionInvitation.findByActorIdAndStatus(req.user.user_id, 'pending');
         return res.status(200).json(invitations);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getAuditionPdfScript = async (req, res, next) => {
+    try {
+        let audition = await Audition.findById(req.params.audition_id);
+        const script = await Sentence.findByAuditionId(req.params.audition_id);
+        audition = {...audition, script };
+        createScriptPDF(res, audition);
+        return;
     } catch (error) {
         next(error);
     }
