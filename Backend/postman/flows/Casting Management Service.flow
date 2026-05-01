@@ -195,8 +195,8 @@
       "5WSnC5X4": {
         "type": "task/http-request@1",
         "pos": {
-          "x": 600,
-          "y": 152
+          "x": 640,
+          "y": 200
         },
         "config": {
           "element": {
@@ -240,8 +240,8 @@
       "GiiXj5SM": {
         "type": "task/http-request@1",
         "pos": {
-          "x": 1152,
-          "y": 408
+          "x": 1192,
+          "y": 456
         },
         "config": {
           "element": {
@@ -293,8 +293,8 @@
       "7ejgbssO": {
         "type": "task/http-request@1",
         "pos": {
-          "x": 1576,
-          "y": 408
+          "x": 1616,
+          "y": 456
         },
         "config": {
           "element": {
@@ -373,7 +373,8 @@
               "kind": "portal/out",
               "value": "L4pEW5k2",
               "key": "audition_id",
-              "latch": false
+              "latch": false,
+              "isExtraneous": false
             },
             {
               "id": "ei1tb1NT",
@@ -381,7 +382,8 @@
               "kind": "portal/out",
               "value": "2XZtJrxG",
               "key": "director_token",
-              "latch": false
+              "latch": false,
+              "isExtraneous": false
             }
           ],
           "scriptsModifyEnvVars": true,
@@ -424,7 +426,8 @@
               "kind": "portal/out",
               "value": "2XZtJrxG",
               "key": "director_token",
-              "latch": false
+              "latch": false,
+              "isExtraneous": false
             }
           ],
           "scriptsModifyEnvVars": true,
@@ -467,7 +470,8 @@
               "kind": "portal/out",
               "value": "L4pEW5k2",
               "key": "audition_id",
-              "latch": false
+              "latch": false,
+              "isExtraneous": false
             },
             {
               "id": "QECVz3i8",
@@ -475,7 +479,8 @@
               "kind": "portal/out",
               "value": "2XZtJrxG",
               "key": "director_token",
-              "latch": false
+              "latch": false,
+              "isExtraneous": false
             }
           ],
           "scriptsModifyEnvVars": true,
@@ -491,8 +496,8 @@
       "tv3sZYDP": {
         "type": "task/http-request@1",
         "pos": {
-          "x": 2120,
-          "y": 408
+          "x": 2160,
+          "y": 456
         },
         "config": {
           "element": {
@@ -562,7 +567,8 @@
               "kind": "portal/out",
               "value": "L4pEW5k2",
               "key": "audition_id",
-              "latch": false
+              "latch": false,
+              "isExtraneous": false
             },
             {
               "id": "cD-TR0GT",
@@ -570,7 +576,8 @@
               "kind": "portal/out",
               "value": "2XZtJrxG",
               "key": "director_token",
-              "latch": false
+              "latch": false,
+              "isExtraneous": false
             }
           ],
           "scriptsModifyEnvVars": true,
@@ -613,7 +620,8 @@
               "kind": "portal/out",
               "value": "L4pEW5k2",
               "key": "audition_id",
-              "latch": false
+              "latch": false,
+              "isExtraneous": false
             },
             {
               "id": "7OaDtbgv",
@@ -621,7 +629,8 @@
               "kind": "portal/out",
               "value": "2XZtJrxG",
               "key": "token",
-              "latch": false
+              "latch": false,
+              "isExtraneous": false
             }
           ],
           "scriptsModifyEnvVars": true,
@@ -637,8 +646,8 @@
       "p4LIVcXH": {
         "type": "task/http-request@1",
         "pos": {
-          "x": 56,
-          "y": 360
+          "x": 96,
+          "y": 512
         },
         "config": {
           "element": {
@@ -727,7 +736,8 @@
               "kind": "reference",
               "value": "body.0.id",
               "key": "submission_id",
-              "__noIn": true
+              "__noIn": true,
+              "isExtraneous": false
             }
           ],
           "scriptsModifyEnvVars": true,
@@ -770,7 +780,8 @@
               "kind": "portal/out",
               "value": "2XZtJrxG",
               "key": "director_token",
-              "latch": false
+              "latch": false,
+              "isExtraneous": false
             }
           ],
           "scriptsModifyEnvVars": true,
@@ -822,7 +833,8 @@
               "kind": "portal/out",
               "value": "L4pEW5k2",
               "key": "audition_id",
-              "latch": false
+              "latch": false,
+              "isExtraneous": false
             }
           ],
           "scriptsModifyEnvVars": true,
@@ -868,8 +880,8 @@
       "3oDWFDbf": {
         "type": "task/http-request@1",
         "pos": {
-          "x": 2120,
-          "y": 56
+          "x": 2160,
+          "y": 104
         },
         "config": {
           "element": {
@@ -932,7 +944,8 @@
               "kind": "portal/out",
               "value": "L4pEW5k2",
               "key": "audition_id",
-              "latch": false
+              "latch": false,
+              "isExtraneous": false
             },
             {
               "id": "6VnbjXnu",
@@ -940,7 +953,8 @@
               "kind": "portal/out",
               "value": "2XZtJrxG",
               "key": "director_token",
-              "latch": false
+              "latch": false,
+              "isExtraneous": false
             }
           ],
           "scriptsModifyEnvVars": true,
@@ -952,6 +966,57 @@
           "namedInputsExpanded": true
         },
         "group": "x6r7bmFn"
+      },
+      "h12RwSLW": {
+        "type": "task/http-request@1",
+        "pos": {
+          "x": 88,
+          "y": 64
+        },
+        "config": {
+          "element": {
+            "id": "CE12aCb9d4C816aD20C8F3b9",
+            "collection": "5eF9bEABFC58121681c5cA43",
+            "inExtensibleCollection": true,
+            "name": "Get Audition Script as a PDF",
+            "method": "GET"
+          },
+          "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
+          "parseBody": "auto",
+          "requestVariables": [
+            {
+              "id": "BxUhRVVx",
+              "type": null,
+              "kind": null,
+              "value": null,
+              "key": "base_url"
+            },
+            {
+              "id": "uaM6JFEW",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "L4pEW5k2",
+              "key": "audition_id",
+              "latch": true
+            },
+            {
+              "id": "czgwM5J7",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "4q1LkJ2U",
+              "key": "actor_token",
+              "latch": true
+            }
+          ],
+          "scriptsModifyEnvVars": true,
+          "trackGlobalEnvironment": true,
+          "requestVariables__expanded": true
+        },
+        "ui": {
+          "data": {},
+          "namedInputsExpanded": true
+        },
+        "group": "rCLDoy8V"
       }
     },
     "connections": {
@@ -1272,6 +1337,24 @@
         "sourcePort": "data",
         "target": "9GoGUCeV",
         "targetPort": "requestVariables|a74Kepkm"
+      },
+      "NBnsA0H4": {
+        "source": "8BJXk4A2",
+        "target": "h12RwSLW",
+        "sourcePort": "success",
+        "targetPort": "AI"
+      },
+      "SwmUJNHK": {
+        "source": "L4pEW5k2",
+        "sourcePort": "data",
+        "target": "h12RwSLW",
+        "targetPort": "requestVariables|uaM6JFEW"
+      },
+      "X8mvMNL7": {
+        "source": "4q1LkJ2U",
+        "sourcePort": "data",
+        "target": "h12RwSLW",
+        "targetPort": "requestVariables|czgwM5J7"
       }
     },
     "annotations": {},
@@ -1295,12 +1378,12 @@
       "rCLDoy8V": {
         "ui": {
           "pos": {
-            "x": 992,
-            "y": -1016
+            "x": 952,
+            "y": -1064
           },
           "size": {
-            "width": 2536,
-            "height": 824
+            "width": 2464,
+            "height": 920
           },
           "color": "grey"
         },
@@ -1368,6 +1451,6 @@
   "info": {
     "_postman_id": "61ee2713-5ef1-457f-99e2-37c74aa63bf8"
   },
-  "_postman_exported_at": "2026-04-12T23:47:09.499Z",
+  "_postman_exported_at": "2026-05-01T15:00:08.750Z",
   "_postman_exported_using": "Postman/Local Mode"
 }
