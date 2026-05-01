@@ -1,22 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Eye Movement Analysis — VS Code version
-Originally from Google Colab (eye_movement_8_4.ipynb)
-
-HOW TO RUN:
-  1. Install dependencies:
-       pip install mediapipe==0.10.20 opencv-python numpy matplotlib
-  2. Run the script:
-       python eye_movement_vscode.py
-     A file-picker dialog will open. Select your video file.
-  3. Optionally pass a video path directly:
-       python eye_movement_vscode.py path/to/video.mp4
-
-EMOTION TIMELINE:
-  Edit the EMOTION_TIMELINE list near the bottom of this file
-  to match your video's emotion segments before running.
-"""
-
 import sys
 import os
 import cv2
