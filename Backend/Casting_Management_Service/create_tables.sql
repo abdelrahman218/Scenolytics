@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS sentences (
   audition_id CHAR(36) NOT NULL,
   emotion ENUM('neutral', 'calm', 'happy', 'sad', 'angry', 'fearful', 'disgust', 'surprised') NOT NULL,
   content TEXT NOT NULL,
+  sentence_order INT NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (audition_id) REFERENCES auditions(id) ON DELETE CASCADE,
