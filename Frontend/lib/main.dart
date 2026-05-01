@@ -2,39 +2,59 @@ import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
 
-import 'config/app_env.dart';
-import 'data/api/casting_api.dart';
-import 'data/api/user_management_api.dart';
-import 'data/repositories/auditions_repository.dart';
 import 'branding/app_logo_placeholder.dart';
 import 'branding/scenolytics_branding.dart';
+import 'config/app_env.dart';
+import 'data/api/auth_api.dart';
+import 'data/api/casting_api.dart';
+import 'data/api/user_management_api.dart';
+import 'data/auth_controller.dart';
+import 'data/auth_session_store.dart';
+import 'data/repositories/auditions_repository.dart';
+import 'data/models/auth_user.dart';
 import 'models/actor_audition_submission.dart';
 import 'pages/audition_rankings_page.dart';
 import 'pages/audition_video_submission_page.dart';
+import 'pages/login_page.dart';
 import 'shell/main_shell.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_controller.dart';
 import 'theme/theme_scope.dart';
+import 'widgets/account_menu_button.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final themeController = ThemeController();
   await themeController.load();
+  final userManagementApi = UserManagementApi(baseUrl: AppEnv.apiBaseUrl);
+  final auth = AuthController(
+    store: const AuthSessionStore(),
+    api: AuthApi(baseUrl: AppEnv.apiBaseUrl),
+    userManagementApi: userManagementApi,
+  );
+  await auth.hydrate();
   runApp(
     ScenolyticsApp(
       themeController: themeController,
+      auth: auth,
+      userManagementApi: userManagementApi,
       logo: const ScenolyticsThemeAwareLogo(),
     ),
   );
 }
 
 class ScenolyticsApp extends StatelessWidget {
-  const ScenolyticsApp({super.key, required this.themeController, this.logo});
+  const ScenolyticsApp({
+    super.key,
+    required this.themeController,
+    required this.auth,
+    required this.userManagementApi,
+    this.logo,
+  });
 
   final ThemeController themeController;
-
-  /// Shown in the header, drawer, and footer via [ScenolyticsBranding].
-  /// Defaults to [ScenolyticsThemeAwareLogo] when omitted.
+  final AuthController auth;
+  final UserManagementApi userManagementApi;
   final Widget? logo;
 
   @override
@@ -44,7 +64,7 @@ class ScenolyticsApp extends StatelessWidget {
       child: ScenolyticsBranding(
         logo: logo ?? const ScenolyticsThemeAwareLogo(),
         child: ListenableBuilder(
-          listenable: themeController,
+          listenable: Listenable.merge(<Listenable>[themeController, auth]),
           builder: (context, _) {
             return MaterialApp(
               title: 'Scenolytics',
@@ -52,7 +72,12 @@ class ScenolyticsApp extends StatelessWidget {
               theme: buildScenolyticsTheme(),
               darkTheme: buildScenolyticsDarkTheme(),
               themeMode: themeController.themeMode,
-              home: const _ScenolyticsHome(),
+              home: auth.isAuthenticated
+                  ? _ScenolyticsHome(
+                      auth: auth,
+                      userManagementApi: userManagementApi,
+                    )
+                  : LoginPage(auth: auth),
             );
           },
         ),
@@ -64,7 +89,13 @@ class ScenolyticsApp extends StatelessWidget {
 enum _ShellPage { actorSubmission, directorRankings }
 
 class _ScenolyticsHome extends StatefulWidget {
-  const _ScenolyticsHome();
+  const _ScenolyticsHome({
+    required this.auth,
+    required this.userManagementApi,
+  });
+
+  final AuthController auth;
+  final UserManagementApi userManagementApi;
 
   @override
   State<_ScenolyticsHome> createState() => _ScenolyticsHomeState();
@@ -79,23 +110,46 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
   String _rankingsAuditionSubtitle = '';
   String? _directorDisplayName;
 
+  AuthUser get _user => widget.auth.user!;
+
+  String get _actorToken => _user.isActor ? _user.token : '';
+  String get _directorToken => _user.isDirector ? _user.token : '';
+
   @override
   void initState() {
     super.initState();
+    if (_user.isDirector) {
+      _page = _ShellPage.directorRankings;
+    } else {
+      _page = _ShellPage.actorSubmission;
+    }
     _auditionsRepository = AuditionsRepository(
       castingApi: CastingApi(baseUrl: AppEnv.apiBaseUrl),
-      userManagementApi: UserManagementApi(baseUrl: AppEnv.apiBaseUrl),
+      userManagementApi: widget.userManagementApi,
       videoPublicBase: AppEnv.videoPublicBase,
     );
     _refreshDirectorRankings();
     _loadDirectorProfileFromBackend();
+
+    if (widget.auth.consumeJustSignedUpFlag()) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        AccountMenuButton.openProfile(
+          context,
+          user: _user,
+          userManagementApi: widget.userManagementApi,
+          email: _user.email,
+          roleLabel: _roleLabel(),
+        );
+      });
+    }
   }
 
   Future<void> _loadDirectorProfileFromBackend() async {
-    if (AppEnv.directorToken.trim().isEmpty) return;
+    if (!_user.isDirector || _directorToken.isEmpty) return;
     try {
       final profile = await _auditionsRepository.loadDirectorProfileUi(
-        AppEnv.directorToken,
+        _directorToken,
       );
       if (!mounted || profile == null) return;
       final name = profile.displayName;
@@ -107,6 +161,12 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
 
   void _goTo(_ShellPage page) {
     if (_page == page) return;
+    if (page == _ShellPage.actorSubmission && !_user.isActor) {
+      return;
+    }
+    if (page == _ShellPage.directorRankings && !_user.isDirector) {
+      return;
+    }
     setState(() => _page = page);
   }
 
@@ -118,14 +178,16 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
   }
 
   Future<void> _refreshDirectorRankings() async {
-    if (AppEnv.directorToken.isEmpty || AppEnv.auditionId.isEmpty) return;
+    if (!_user.isDirector || _directorToken.isEmpty || AppEnv.auditionId.isEmpty) {
+      return;
+    }
     try {
       final header = await _auditionsRepository.loadRankingsAuditionHeader(
-        directorToken: AppEnv.directorToken,
+        directorToken: _directorToken,
         auditionId: AppEnv.auditionId,
       );
       final live = await _auditionsRepository.loadDirectorLeaderboard(
-        directorToken: AppEnv.directorToken,
+        directorToken: _directorToken,
         auditionId: AppEnv.auditionId,
       );
       if (!mounted) return;
@@ -148,10 +210,21 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
         SnackBar(
           content: Text(
             'Could not load rankings (${e.runtimeType}). '
-            'Check SCENO_API_BASE_URL and tokens in .env / .env.device.',
+            'Check SCENO_API_BASE_URL and SCENO_AUDITION_ID.',
           ),
         ),
       );
+    }
+  }
+
+  String _roleLabel() {
+    switch (_user.role) {
+      case 'director':
+        return 'Director';
+      case 'actor':
+        return 'Actor';
+      default:
+        return _user.role;
     }
   }
 
@@ -161,8 +234,9 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
       _ShellPage.actorSubmission => AuditionVideoSubmissionPage(
         onSubmitted: _handleSubmission,
         auditionsRepository: _auditionsRepository,
-        actorToken: AppEnv.actorToken,
+        actorToken: _actorToken,
         auditionId: AppEnv.auditionId,
+        accountEmail: _user.email,
       ),
       _ShellPage.directorRankings => AuditionRankingsPage(
         submissions: _submissions,
@@ -187,12 +261,26 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
       pageTitle: pageTitle,
       currentRouteName: currentRouteName,
       body: body,
-      onSelectHome: () => _goTo(_ShellPage.actorSubmission),
-      onSelectRankings: () {
-        _goTo(_ShellPage.directorRankings);
-        _refreshDirectorRankings();
+      showActorNav: _user.isActor,
+      showDirectorNav: _user.isDirector,
+      accountEmail: _user.email,
+      accountRoleLabel: _roleLabel(),
+      authUser: _user,
+      userManagementApi: widget.userManagementApi,
+      onLogout: () async {
+        await widget.auth.signOut();
       },
-      onSelectSubmitVideo: () => _goTo(_ShellPage.actorSubmission),
+      onSelectHome: _user.isActor
+          ? () => _goTo(_ShellPage.actorSubmission)
+          : null,
+      onSelectRankings: _user.isDirector
+          ? () {
+              _goTo(_ShellPage.directorRankings);
+              _refreshDirectorRankings();
+            }
+          : null,
+      onSelectSubmitVideo:
+          _user.isActor ? () => _goTo(_ShellPage.actorSubmission) : null,
     );
   }
 }

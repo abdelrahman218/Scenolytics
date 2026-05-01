@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../branding/scenolytics_branding.dart';
+import '../data/api/user_management_api.dart';
+import '../data/models/auth_user.dart';
 import '../widgets/account_menu_button.dart';
 import '../widgets/scenolytics_app_drawer.dart';
 
@@ -16,6 +18,13 @@ class MainShell extends StatefulWidget {
     this.onSelectHome,
     this.onSelectRankings,
     this.onSelectSubmitVideo,
+    this.showActorNav = true,
+    this.showDirectorNav = true,
+    this.accountEmail,
+    this.accountRoleLabel,
+    this.authUser,
+    this.userManagementApi,
+    this.onLogout,
   });
 
   final Widget body;
@@ -24,6 +33,13 @@ class MainShell extends StatefulWidget {
   final VoidCallback? onSelectHome;
   final VoidCallback? onSelectRankings;
   final VoidCallback? onSelectSubmitVideo;
+  final bool showActorNav;
+  final bool showDirectorNav;
+  final String? accountEmail;
+  final String? accountRoleLabel;
+  final AuthUser? authUser;
+  final UserManagementApi? userManagementApi;
+  final Future<void> Function()? onLogout;
 
   static const double drawerBreakpoint = 760;
 
@@ -58,6 +74,8 @@ class _MainShellState extends State<MainShell> {
               onSelectHome: widget.onSelectHome,
               onSelectRankings: widget.onSelectRankings,
               onSelectSubmitVideo: widget.onSelectSubmitVideo,
+              showActorNav: widget.showActorNav,
+              showDirectorNav: widget.showDirectorNav,
             )
           : null,
       drawerEnableOpenDragGesture: useDrawer,
@@ -74,6 +92,13 @@ class _MainShellState extends State<MainShell> {
             onSelectHome: widget.onSelectHome,
             onSelectRankings: widget.onSelectRankings,
             onSelectSubmitVideo: widget.onSelectSubmitVideo,
+            showActorNav: widget.showActorNav,
+            showDirectorNav: widget.showDirectorNav,
+            accountEmail: widget.accountEmail,
+            accountRoleLabel: widget.accountRoleLabel,
+            authUser: widget.authUser,
+            userManagementApi: widget.userManagementApi,
+            onLogout: widget.onLogout,
           ),
           Expanded(child: widget.body),
         ],
@@ -92,6 +117,13 @@ class _HeaderBar extends StatelessWidget {
     this.onSelectRankings,
     this.onSelectSubmitVideo,
     this.pageTitle,
+    this.showActorNav = true,
+    this.showDirectorNav = true,
+    this.accountEmail,
+    this.accountRoleLabel,
+    this.authUser,
+    this.userManagementApi,
+    this.onLogout,
   });
 
   final bool showMenu;
@@ -102,6 +134,13 @@ class _HeaderBar extends StatelessWidget {
   final VoidCallback? onSelectRankings;
   final VoidCallback? onSelectSubmitVideo;
   final String? pageTitle;
+  final bool showActorNav;
+  final bool showDirectorNav;
+  final String? accountEmail;
+  final String? accountRoleLabel;
+  final AuthUser? authUser;
+  final UserManagementApi? userManagementApi;
+  final Future<void> Function()? onLogout;
 
   @override
   Widget build(BuildContext context) {
@@ -161,22 +200,24 @@ class _HeaderBar extends StatelessWidget {
                             alignment: Alignment.centerLeft,
                             child: SingleChildScrollView(
                               scrollDirection: Axis.horizontal,
-                              child: Row(
+                                child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   const SizedBox(width: 16),
-                                  _NavButton(
-                                    icon: Icons.video_call_outlined,
-                                    label: 'Actor submission',
-                                    filled: currentRouteName == 'submit-video',
-                                    onPressed: onSelectHome ?? () {},
-                                  ),
-                                  _NavButton(
-                                    icon: Icons.leaderboard_outlined,
-                                    label: 'Director rankings',
-                                    filled: currentRouteName == 'rankings',
-                                    onPressed: onSelectRankings ?? () {},
-                                  ),
+                                  if (showActorNav)
+                                    _NavButton(
+                                      icon: Icons.video_call_outlined,
+                                      label: 'Actor submission',
+                                      filled: currentRouteName == 'submit-video',
+                                      onPressed: onSelectHome ?? () {},
+                                    ),
+                                  if (showDirectorNav)
+                                    _NavButton(
+                                      icon: Icons.leaderboard_outlined,
+                                      label: 'Director rankings',
+                                      filled: currentRouteName == 'rankings',
+                                      onPressed: onSelectRankings ?? () {},
+                                    ),
                                   _NavButton(
                                     icon: Icons.groups_outlined,
                                     label: 'Auditions',
@@ -198,6 +239,11 @@ class _HeaderBar extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(0, 10, 8, 10),
                 child: AccountMenuButton(
                   usePopupMenu: showInlineNav,
+                  userEmail: accountEmail,
+                  accountRoleLabel: accountRoleLabel,
+                  authUser: authUser,
+                  userManagementApi: userManagementApi,
+                  onLogOut: onLogout,
                 ),
               ),
             ],

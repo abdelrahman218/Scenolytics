@@ -14,13 +14,39 @@ class ActorProfileUi {
   final String? portfolioUrl;
 
   static ActorProfileUi fromUserManagementJson(Map<String, dynamic> json) {
-    final fromColumn =
-        stringFromMap(json, const ['display_name', 'displayName']);
-    String? displayName;
-    if (fromColumn != null && fromColumn.isNotEmpty) {
-      displayName =
-          fromColumn.length > 56 ? '${fromColumn.substring(0, 53)}…' : fromColumn;
-    } else {
+    String? fromNames() {
+      final s = stringFromMap(
+        json,
+        const [
+          'display_name',
+          'displayName',
+          'full_name',
+          'fullName',
+          'name',
+        ],
+      );
+      if (s == null || s.isEmpty) {
+        return null;
+      }
+      return s.length > 56 ? '${s.substring(0, 53)}…' : s;
+    }
+
+    String? displayName = fromNames();
+    if (displayName == null || displayName.isEmpty) {
+      final first = stringFromMap(json, const ['first_name', 'firstName']);
+      final last = stringFromMap(json, const ['last_name', 'lastName']);
+      final combined = [first, last]
+          .whereType<String>()
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .join(' ');
+      if (combined.isNotEmpty) {
+        displayName = combined.length > 56
+            ? '${combined.substring(0, 53)}…'
+            : combined;
+      }
+    }
+    if (displayName == null || displayName.isEmpty) {
       final bio = stringFromMap(json, const ['bio']) ?? '';
       if (bio.isNotEmpty) {
         final line = bio.split(RegExp(r'[\r\n]+')).first.trim();

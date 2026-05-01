@@ -11,12 +11,16 @@ class ScenolyticsAppDrawer extends StatelessWidget {
     this.onSelectHome,
     this.onSelectRankings,
     this.onSelectSubmitVideo,
+    this.showActorNav = true,
+    this.showDirectorNav = true,
   });
 
   final String? currentRouteName;
   final VoidCallback? onSelectHome;
   final VoidCallback? onSelectRankings;
   final VoidCallback? onSelectSubmitVideo;
+  final bool showActorNav;
+  final bool showDirectorNav;
 
   @override
   Widget build(BuildContext context) {
@@ -57,24 +61,26 @@ class ScenolyticsAppDrawer extends StatelessWidget {
                 ),
               ),
             ),
-            _DrawerTile(
-              icon: Icons.video_call_outlined,
-              label: 'Actor submission',
-              selected: currentRouteName == 'submit-video',
-              onTap: () {
-                Navigator.pop(context);
-                onSelectHome?.call();
-              },
-            ),
-            _DrawerTile(
-              icon: Icons.leaderboard_outlined,
-              label: 'Director rankings',
-              selected: currentRouteName == 'rankings',
-              onTap: () {
-                Navigator.pop(context);
-                onSelectRankings?.call();
-              },
-            ),
+            if (showActorNav)
+              _DrawerTile(
+                icon: Icons.video_call_outlined,
+                label: 'Actor submission',
+                selected: currentRouteName == 'submit-video',
+                onTap: () {
+                  Navigator.pop(context);
+                  onSelectHome?.call();
+                },
+              ),
+            if (showDirectorNav)
+              _DrawerTile(
+                icon: Icons.leaderboard_outlined,
+                label: 'Director rankings',
+                selected: currentRouteName == 'rankings',
+                onTap: () {
+                  Navigator.pop(context);
+                  onSelectRankings?.call();
+                },
+              ),
             _DrawerTile(
               icon: Icons.groups_outlined,
               label: 'Auditions',

@@ -40,6 +40,8 @@ class AppEnv {
     return t.isEmpty ? 'http://localhost/api/v1/storage/videos' : t;
   }
 
+  /// Optional compile-time fallbacks. The app uses JWTs from in-app sign-in; these
+  /// are only for legacy/tooling and are not required for in-app sign-in.
   static const String actorToken = String.fromEnvironment(
     'SCENO_ACTOR_TOKEN',
     defaultValue: '',
@@ -55,10 +57,11 @@ class AppEnv {
     defaultValue: '',
   );
 
-  static String? validateActorSubmissionConfig() {
+  /// Validates config for the actor submission flow using the resolved token (from auth or .env).
+  static String? validateActorSubmissionFor({required String actorToken}) {
     if (actorToken.isEmpty) {
-      return 'Missing SCENO_ACTOR_TOKEN. Use --dart-define-from-file=Frontend/.env '
-          '(see .vscode/launch.json) or --dart-define=SCENO_ACTOR_TOKEN=…';
+      return 'Sign in as an actor, or set SCENO_ACTOR_TOKEN in your run configuration '
+          '(e.g. --dart-define-from-file=Frontend/.env).';
     }
     if (auditionId.isEmpty) {
       return 'Missing SCENO_AUDITION_ID. Use the same --dart-define-from-file or '

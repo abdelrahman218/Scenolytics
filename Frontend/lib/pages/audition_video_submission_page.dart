@@ -18,12 +18,16 @@ class AuditionVideoSubmissionPage extends StatefulWidget {
     required this.auditionsRepository,
     required this.actorToken,
     required this.auditionId,
+    this.accountEmail,
   });
 
   final ValueChanged<ActorAuditionSubmission> onSubmitted;
   final AuditionsRepository auditionsRepository;
   final String actorToken;
   final String auditionId;
+
+  /// From Identity sign-in; used when User Management has no actor profile yet.
+  final String? accountEmail;
 
   @override
   State<AuditionVideoSubmissionPage> createState() =>
@@ -66,7 +70,9 @@ class _AuditionVideoSubmissionPageState
   }
 
   Future<void> _loadAuditionUi() async {
-    final configError = AppEnv.validateActorSubmissionConfig();
+    final configError = AppEnv.validateActorSubmissionFor(
+      actorToken: widget.actorToken,
+    );
     if (configError != null) return;
     try {
       final ui = await widget.auditionsRepository.loadActorSubmissionAuditionUi(
@@ -101,7 +107,9 @@ class _AuditionVideoSubmissionPageState
   }
 
   Future<void> _checkExistingSubmission() async {
-    final configError = AppEnv.validateActorSubmissionConfig();
+    final configError = AppEnv.validateActorSubmissionFor(
+      actorToken: widget.actorToken,
+    );
     if (configError != null) {
       if (!mounted) return;
       setState(() {
@@ -130,19 +138,39 @@ class _AuditionVideoSubmissionPageState
 
   Future<void> _loadActorProfileFromBackend() async {
     if (widget.actorToken.trim().isEmpty) return;
+    String? displayName;
+    int? age;
     try {
       final profile = await widget.auditionsRepository.loadActorProfileUi(
         widget.actorToken,
       );
-      if (!mounted || profile == null) return;
-      setState(() {
-        final name = profile.displayName;
-        if (name != null && name.isNotEmpty) {
-          _actorDisplayName = name;
-        }
-        _actorAge = profile.age;
-      });
+      if (profile != null) {
+        displayName = profile.displayName;
+        age = profile.age;
+      }
     } catch (_) {}
+    final email = widget.accountEmail?.trim() ?? '';
+    if ((displayName == null || displayName.isEmpty) && email.isNotEmpty) {
+      displayName = _displayNameFromAccountEmail(email);
+    }
+    if (!mounted) return;
+    setState(() {
+      if (displayName != null && displayName.isNotEmpty) {
+        _actorDisplayName = displayName;
+      }
+      if (age != null) {
+        _actorAge = age;
+      }
+    });
+  }
+
+  /// Local part of email when there is no `actor_profiles` row yet.
+  String _displayNameFromAccountEmail(String email) {
+    final at = email.indexOf('@');
+    if (at <= 0) {
+      return email;
+    }
+    return email.substring(0, at);
   }
 
   Future<void> _ensureCameraInitialized() async {
@@ -508,7 +536,9 @@ class _AuditionVideoSubmissionPageState
       );
       return;
     }
-    final configError = AppEnv.validateActorSubmissionConfig();
+    final configError = AppEnv.validateActorSubmissionFor(
+      actorToken: widget.actorToken,
+    );
     if (configError != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
