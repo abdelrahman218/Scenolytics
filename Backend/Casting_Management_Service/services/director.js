@@ -10,8 +10,9 @@ export const createAudition = async (req, res, next) => {
         const script = [];
 
         if (req.body.script){
+            let order = 1;
             for (const senctence of req.body.script) {
-                let savedSentence = await Sentence.create({...senctence, audition_id: audition.id});
+                let savedSentence = await Sentence.create({...senctence, audition_id: audition.id, sentence_order: order++});
                 script.push(savedSentence);
             }
         }
@@ -41,8 +42,10 @@ export const updateAudition = async (req, res, next) => {
         if(req.body.script) {
             await Sentence.deleteByAuditionId(audition_id);
     
+            let order = 1;
             for (const senctence of req.body.script) {
-                let savedSentence = await Sentence.create({...senctence, audition_id: audition.id});
+                let savedSentence = await Sentence.create({...senctence, audition_id: audition.id, sentence_order: order});
+                order = order + 1;
                 script.push(savedSentence);
             }
         }
