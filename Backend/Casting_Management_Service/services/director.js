@@ -1,6 +1,7 @@
 import { Audition } from "../models/audition.js";
 import { AuditionInvitation } from "../models/audition_invitation.js";
 import { AuditionSubmission } from "../models/audition_submission.js";
+import { Callback } from "../models/callback.js";
 import { Sentence } from "../models/sentence.js"
 import { EXCHANGES, publishMessage, ROUTING_KEYS } from "../utils/rabbitmq.js";
 
@@ -128,8 +129,71 @@ export const getAuditionSubmissions = async (req, res, next) => {
 export const reviewSubmission = async (req, res, next) => {
     try {
         const submission = await AuditionSubmission.updateStatus(req.params.submission_id, req.body.status, req.body.director_notes);
+        
+        if (submission.submission_status == 'accepted') {
+
+            const link = '';
+            const callback = await Callback.create({
+                audition_id: submission.audition_id,
+                actor_id: submission.actor_id,
+                audition_submission_id: submission.id,
+                callback_datetime: req.body.callback_datetime || null,
+                link,
+            });
+            publishMessage(EXCHANGES.CALLBACKS, ROUTING_KEYS.CALLBACK_CREATED, callback);
+        }
+
         publishMessage(EXCHANGES.AUDITIONS, ROUTING_KEYS.AUDITION_REVIEWED, submission);
         return res.status(200).json(submission);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getAuditionCallbacks = async (req, res, next) => {
+    try {
+        const callbacks = await Callback.findByAuditionId(req.params.audition_id);
+        return res.status(200).json(callbacks);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const rescheduleCallback = async (req, res, next) => {
+    try {
+        const updatedData = { callback_datetime: req.body.callback_datetime };
+        
+        const callback = await Callback.update(req.params.callback_id, updatedData);
+        publishMessage(EXCHANGES.CALLBACKS, ROUTING_KEYS.CALLBACK_UPDATED, callback);
+        return res.status(200).json(callback);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const createNewCallbackMeeting = async (req, res, next) => {
+    try {
+        const link = '';
+        
+        const callback = await Callback.update(req.params.callback_id, { link });
+        publishMessage(EXCHANGES.CALLBACKS, ROUTING_KEYS.CALLBACK_UPDATED, callback);
+        return res.status(200).json({message: 'New Callback link created successfully', link});
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const reviewCallback = async (req, res, next) => {
+    try {
+        const updatedData = { callback_status: req.body.status };
+        
+        if (req.body.director_notes){
+            updatedData.director_notes = req.body.director_notes;
+        }
+
+        const callback = await Callback.update(req.params.callback_id, updatedData);
+        publishMessage(EXCHANGES.CALLBACKS, ROUTING_KEYS.CALLBACK_UPDATED, callback);
+        return res.status(200).json(callback);
     } catch (error) {
         next(error);
     }

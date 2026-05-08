@@ -1,11 +1,21 @@
 import { checkRequiredFields, checkValidValues } from "./general.js";
 import { AuditionSubmission } from "../models/audition_submission.js";
+import { AuditionInvitation } from "../models/audition_invitation.js";
+
+// Check Authorization
+
+export const checkActorOwnershipOfInvitation = async(req, res, next) => {
+    const invitation = await AuditionInvitation.findById(req.params.invitation_id);
+
+    if (invitation.actor_id !== req.user.user_id) {
+        return res.status(403).json({ message: 'You are not authorized to perform this action' });
+    }
+    next();
+};
 
 // Checking Required Fields for each endpoint
 
 export const checkRequiredFieldsRespondToInvitation = checkRequiredFields(['status']);
-
-//export const checkRequiredFieldsSubmitAuditionSubmission = checkRequiredFields(['media_id']);
 
 // Checking Valid Values for each endpoint
 

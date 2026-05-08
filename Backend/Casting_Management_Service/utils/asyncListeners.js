@@ -1,6 +1,7 @@
 import { Audition } from "../models/audition.js";
 import { AuditionInvitation } from "../models/audition_invitation.js";
 import { AuditionSubmission } from "../models/audition_submission.js";
+import { Callback } from "../models/callback.js";
 import { assertExchange, assertQueue, bindQueue, consumeMessages, EXCHANGES, QUEUES, ROUTING_KEYS } from "./rabbitmq.js";
 
 const handleUserDeleted = async (routingKey, data) => {
@@ -8,6 +9,7 @@ const handleUserDeleted = async (routingKey, data) => {
     await Audition.deleteByDirectorId(data.user_id);
     await AuditionSubmission.deleteByActorId(data.user_id);
     await AuditionInvitation.deleteByActorId(data.user_id);
+    await Callback.deleteByActorId(data.user_id);
   } catch (error) {
     console.error("Coulding delete user data. \n " + data);
   }

@@ -260,6 +260,61 @@
             "collectionId": null,
             "requestId": null
           }
+        },
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "956bc7cE5fFEcCfcD0A8E9e7",
+            "filePath": "postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/ACTOR/Get Actor Callbacks.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "3b2c9DfF956d1Dd7F2eBdf0b",
+            "filePath": "postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/DIRECTOR/Get Audition Callbacks.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "5d4ec3D1A9f9D78067B45E46",
+            "filePath": "postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/DIRECTOR/Reschedule Callback.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "f3dCDb35b50e4bbf3f5C3Ec2",
+            "filePath": "postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/DIRECTOR/Create New Callback Meeting.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "0565DD0A19bEebD8Fe3AD8c1",
+            "filePath": "postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/DIRECTOR/Review Callback.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
         }
       ]
     },

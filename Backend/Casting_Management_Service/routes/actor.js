@@ -1,5 +1,6 @@
 import express from "express";
 import {
+  getActorCallbacks,
   getActorPendingInvitations,
   getActorSubmissions,
   getAuditionPdfScript,
@@ -8,6 +9,7 @@ import {
 } from "../services/actor.js";
 import { checkAuditionExists, checkInvitationIsPending } from "../validators/general.js";
 import {
+  checkActorOwnershipOfInvitation,
   checkAuditionNotSubmitted,
   checkValidValuesRespondToInvitation,
 } from "../validators/actor.js";
@@ -17,6 +19,7 @@ const router = express.Router();
 // ==================== INVITATION ENDPOINTS ====================
 // Actor responds to invitation
 const respondToInvitationValidators = [
+  checkActorOwnershipOfInvitation,
   checkInvitationIsPending,
   checkValidValuesRespondToInvitation,
 ];
@@ -51,5 +54,10 @@ const getAuditionPdfScriptValidators = [
   checkAuditionExists,
 ]
 router.get("/auditions/:audition_id/script", getAuditionPdfScriptValidators, getAuditionPdfScript);
+
+// ==================== CALLBACK ENDPOINTS ====================
+
+// Get callbacks for actor
+router.get("/callbacks", getActorCallbacks);
 
 export default router;
