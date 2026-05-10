@@ -120,6 +120,17 @@ class AuditionsRepository {
     );
   }
 
+  /// Raw casting POST shape — callers must send backend field names (`script` lines use `content` + `emotion`).
+  Future<Map<String, dynamic>> createDirectorAudition({
+    required String directorToken,
+    required Map<String, dynamic> body,
+  }) {
+    return _castingApi.createDirectorAudition(
+      directorToken: directorToken,
+      body: body,
+    );
+  }
+
   /// One round-trip: audition title/theme/emotions plus director label from
   /// casting `director_id` → `GET /api/v1/directors/:id/profile`.
   Future<ActorSubmissionAuditionUi> loadActorSubmissionAuditionUi({
@@ -354,6 +365,21 @@ class AuditionsRepository {
         ]) ??
         metrics.scriptMatch;
 
+    final eyesAnalysisScore = _firstInt(source, const <String>[
+          'eyes_analysis_score',
+          'eye_analysis_score',
+          'gaze_analysis_score',
+          'eyes_score',
+        ]) ??
+        metrics.eyesAnalysis;
+
+    final toneAnalysisScore = _firstInt(source, const <String>[
+          'tone_analysis_score',
+          'speech_tone_score',
+          'prosody_score',
+        ]) ??
+        metrics.toneAnalysis;
+
     final submittedAtRaw = source['submitted_at']?.toString();
     final submittedAt =
         DateTime.tryParse(submittedAtRaw ?? '')?.toUtc() ?? DateTime.now().toUtc();
@@ -384,6 +410,8 @@ class AuditionsRepository {
       emotionalScore: emotionalScore,
       vocalToneScore: vocalToneScore,
       scriptMatchScore: scriptMatchScore,
+      eyesAnalysisScore: eyesAnalysisScore,
+      toneAnalysisScore: toneAnalysisScore,
       recordedVideoUrl: _auditionPlaybackUrl(
         source['media_id']?.toString() ?? source['mediaId']?.toString(),
         videoPublicBase,
@@ -508,12 +536,18 @@ class AuditionsRepository {
     final emotional = nextMetric();
     final vocalTone = nextMetric();
     final scriptMatch = nextMetric();
-    final overall = (emotional + vocalTone + scriptMatch) / 3.0;
+    final eyesAnalysis = nextMetric();
+    final toneAnalysis = nextMetric();
+    final overall =
+        (emotional + vocalTone + scriptMatch + eyesAnalysis + toneAnalysis) /
+            5.0;
     return _SubmissionMetrics(
       overall: overall,
       emotional: emotional,
       vocalTone: vocalTone,
       scriptMatch: scriptMatch,
+      eyesAnalysis: eyesAnalysis,
+      toneAnalysis: toneAnalysis,
     );
   }
 
@@ -529,12 +563,16 @@ class _SubmissionMetrics {
     required this.emotional,
     required this.vocalTone,
     required this.scriptMatch,
+    required this.eyesAnalysis,
+    required this.toneAnalysis,
   });
 
   final double overall;
   final int emotional;
   final int vocalTone;
   final int scriptMatch;
+  final int eyesAnalysis;
+  final int toneAnalysis;
 }
 
 extension on ActorAuditionSubmission {
@@ -551,6 +589,8 @@ extension on ActorAuditionSubmission {
       emotionalScore: emotionalScore,
       vocalToneScore: vocalToneScore,
       scriptMatchScore: scriptMatchScore,
+      eyesAnalysisScore: eyesAnalysisScore,
+      toneAnalysisScore: toneAnalysisScore,
       recordedVideoUrl: recordedVideoUrl,
     );
   }

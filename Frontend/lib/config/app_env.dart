@@ -11,6 +11,10 @@
 /// **LAN IP** (e.g. `http://192.168.1.42`, same port as the gateway, often 80) and allow HTTP
 /// cleartext on Android if needed. **Android emulator:** use `http://10.0.2.2` to reach the host.
 /// **Chrome / web on the same PC** as the backend: `http://localhost` is fine.
+///
+/// **`172.19.x.x` / `10.x.x.x`:** Often Hyper‑V/WSL virtual adapters—the phone on Wi‑Fi
+/// usually cannot reach them. Prefer your **Wireless LAN adapter IPv4** from `ipconfig`, plus
+/// the Docker **API_GATEWAY_PORT** if not 80.
 class AppEnv {
   /// Raw compile-time value; empty string would make Flutter **web** resolve `/api/...`
   /// against `localhost:<dev-server-port>` (404). Never expose an empty base URL.

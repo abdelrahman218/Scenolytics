@@ -25,6 +25,72 @@ class AuthApi {
 
   Uri _uri(String path) => _baseUri.resolve(path);
 
+  bool _looksLikeNetworkFailure(Object error) {
+    if (error is http.ClientException) return true;
+    final t = error.toString().toLowerCase();
+    return t.contains('socketexception') ||
+        t.contains('failed host lookup') ||
+        t.contains('connection refused') ||
+        t.contains('connection reset') ||
+        t.contains('connection timed out') ||
+        t.contains('network is unreachable') ||
+        t.contains('no route to host') ||
+        t.contains('software caused connection abort');
+  }
+
+  /// Plain-language hint when [SocketException] / [ClientException] prevents reaching auth.
+  String _networkTroubleshoot(Object error) {
+    final uri = _baseUri;
+    final origin = uri.hasScheme && uri.host.isNotEmpty
+        ? uri.origin
+        : uri.toString();
+
+    final buf = StringBuffer(
+      'Cannot reach the identity API at $origin (${error.runtimeType}). ',
+    );
+
+    final host = uri.host.toLowerCase();
+    if (host == 'localhost' ||
+        host == '127.0.0.1' ||
+        host == '::1' ||
+        host == '[::1]') {
+      buf.write(
+        'On a physical phone, localhost is the phone itself, not your PC. ',
+      );
+      buf.write(
+        'Use your computer Wi‑Fi IPv4 (run ipconfig → Wireless LAN) plus Docker '
+        'gateway port in SCENO_API_BASE_URL, e.g. '
+        'http://192.168.1.50:8080 — passed via '
+        '--dart-define-from-file=Frontend/.env.device at flutter run/build. ',
+      );
+    }
+
+    if (host.startsWith('172.') || host.startsWith('10.')) {
+      buf.write(
+        'Address $host may be a Hyper‑V/WSL/virtual adapter many phones cannot '
+        'route to; try your Wi‑Fi adapter IPv4 instead. ',
+      );
+    }
+
+    buf.write(
+      'Ensure Docker publishes API_GATEWAY_PORT and Windows Firewall allows inbound '
+      'TCP on that port from your LAN.',
+    );
+
+    return buf.toString().trim();
+  }
+
+  Future<http.Response> _postAuthJson(Uri uri, String body) async {
+    try {
+      return await _client.post(uri, headers: _jsonHeaders, body: body);
+    } catch (e) {
+      if (_looksLikeNetworkFailure(e)) {
+        throw AuthApiException(_networkTroubleshoot(e));
+      }
+      rethrow;
+    }
+  }
+
   static const _jsonHeaders = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
@@ -32,10 +98,9 @@ class AuthApi {
 
   /// `POST /api/v1/auth/login` — returns JWT and user.
   Future<AuthUser> logIn({required String email, required String password}) async {
-    final response = await _client.post(
+    final response = await _postAuthJson(
       _uri('/api/v1/auth/login'),
-      headers: _jsonHeaders,
-      body: jsonEncode({
+      jsonEncode({
         'email': email.trim(),
         'password': password,
       }),
@@ -77,10 +142,9 @@ class AuthApi {
     if (age != null) body['age'] = age;
     final g = gender?.trim();
     if (g != null && g.isNotEmpty) body['gender'] = g;
-    final response = await _client.post(
+    final response = await _postAuthJson(
       _uri('/api/v1/auth/signup'),
-      headers: _jsonHeaders,
-      body: jsonEncode(body),
+      jsonEncode(body),
     );
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return;

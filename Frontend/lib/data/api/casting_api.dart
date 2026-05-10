@@ -153,6 +153,27 @@ class CastingApi {
     return _asMap(body['audition']);
   }
 
+  /// POST `/director/auditions/create_audition` — body must match casting service expectations.
+  Future<Map<String, dynamic>> createDirectorAudition({
+    required String directorToken,
+    required Map<String, dynamic> body,
+  }) async {
+    final response = await _client.post(
+      _uri('/api/v1/casting/director/auditions/create_audition'),
+      headers: _authHeaders(directorToken),
+      body: jsonEncode(body),
+    );
+    final decoded = _decodeJsonMap(response);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(
+        decoded['message']?.toString() ?? 'Failed to create audition.',
+        statusCode: response.statusCode,
+        responseBody: response.body,
+      );
+    }
+    return _asMap(decoded['audition']);
+  }
+
   List<Map<String, dynamic>> _decodeJsonList(
     http.Response response,
     String fallbackMessage,

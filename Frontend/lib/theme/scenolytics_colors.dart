@@ -224,6 +224,10 @@ abstract final class ScenolyticsColors {
   static const Color metricVocalTone = Color(0xFF38BDF8);
   static const Color metricBodyLanguage = Color(0xFF34D399);
   static const Color metricScriptMatch = Color(0xFFFBBF24);
+  /// Eyes / gaze-style analysis bar on director ranking cards.
+  static const Color metricEyesAnalysis = Color(0xFFA78BFA);
+  /// Tone analysis bar (distinct from vocal emotion in UI copy).
+  static const Color metricToneAnalysis = Color(0xFFFB7185);
   static const Color overallScoreChip = Color(0xFF22C55E);
   static const Color overallScoreChipOn = Color(0xFFFFFFFF);
   static const Color rankMedalBackdrop = Color(0xFF1E293B);

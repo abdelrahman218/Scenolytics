@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/gestures.dart';
 import 'dart:math' as math;
+import '../models/actor_audition_submission.dart';
 import '../theme/scenolytics_colors.dart';
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -221,6 +221,23 @@ class AlignmentResult {
       ),
     ],
   );
+
+  factory AlignmentResult.mockForSubmission(ActorAuditionSubmission s) {
+    final base = AlignmentResult.mock();
+    return AlignmentResult(
+      actorName: s.actorName.trim().isEmpty ? base.actorName : s.actorName.trim(),
+      age: s.age > 0 ? s.age : base.age,
+      score: s.scriptMatchScore,
+      matched: base.matched,
+      added: base.added,
+      removed: base.removed,
+      changed: base.changed,
+      changedPairs: base.changedPairs,
+      addedWords: base.addedWords,
+      removedWords: base.removedWords,
+      sentences: base.sentences,
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -228,11 +245,18 @@ class AlignmentResult {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class ScriptAlignmentScorePage extends StatelessWidget {
-  const ScriptAlignmentScorePage({super.key});
+  const ScriptAlignmentScorePage({
+    super.key,
+    required this.submission,
+    this.result,
+  });
+
+  final ActorAuditionSubmission submission;
+  final AlignmentResult? result;
 
   @override
   Widget build(BuildContext context) {
-    final data = AlignmentResult.mock();
+    final data = result ?? AlignmentResult.mockForSubmission(submission);
     final wide = _isWide(context);
 
     return Scaffold(
@@ -810,8 +834,11 @@ class _WordListSectionState extends State<_WordListSection>
 
   void _toggle() {
     setState(() => _expanded = !_expanded);
-    if (_expanded) _controller.forward();
-    else _controller.reverse();
+    if (_expanded) {
+      _controller.forward();
+    } else {
+      _controller.reverse();
+    }
   }
 
   @override

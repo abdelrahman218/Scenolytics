@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../branding/scenolytics_branding.dart';
 import '../theme/scenolytics_colors.dart';
-import '../widgets/account_menu_button.dart';
+import 'account_menu_button.dart';
 
 class ScenolyticsAppDrawer extends StatelessWidget {
   const ScenolyticsAppDrawer({
@@ -10,22 +10,69 @@ class ScenolyticsAppDrawer extends StatelessWidget {
     this.currentRouteName,
     this.onSelectHome,
     this.onSelectRankings,
+    this.onSelectCreateAudition,
     this.onSelectSubmitVideo,
     this.showActorNav = true,
     this.showDirectorNav = true,
+    this.onLogout,
   });
 
   final String? currentRouteName;
   final VoidCallback? onSelectHome;
   final VoidCallback? onSelectRankings;
+  final VoidCallback? onSelectCreateAudition;
   final VoidCallback? onSelectSubmitVideo;
   final bool showActorNav;
   final bool showDirectorNav;
+  final Future<void> Function()? onLogout;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final logo = ScenolyticsBranding.of(context).logo;
+    final tapCreateAudition = onSelectCreateAudition;
+
+    final navTiles = <Widget>[
+      if (showActorNav)
+        _DrawerTile(
+          icon: Icons.video_call_outlined,
+          label: 'Actor submission',
+          selected: currentRouteName == 'submit-video',
+          onTap: () {
+            Navigator.pop(context);
+            onSelectHome?.call();
+          },
+        ),
+      if (showDirectorNav)
+        _DrawerTile(
+          icon: Icons.leaderboard_outlined,
+          label: 'Director rankings',
+          selected: currentRouteName == 'rankings',
+          onTap: () {
+            Navigator.pop(context);
+            onSelectRankings?.call();
+          },
+        ),
+      if (showDirectorNav && tapCreateAudition != null)
+        _DrawerTile(
+          icon: Icons.add_circle_outline_rounded,
+          label: 'Create audition',
+          selected: currentRouteName == 'create-audition',
+          onTap: () {
+            Navigator.pop(context);
+            tapCreateAudition();
+          },
+        ),
+      _DrawerTile(
+        icon: Icons.settings_outlined,
+        label: 'Settings',
+        selected: false,
+        onTap: () {
+          Navigator.pop(context);
+          AccountMenuButton.openSettings(context);
+        },
+      ),
+    ];
 
     return Drawer(
       backgroundColor: theme.colorScheme.surface,
@@ -61,44 +108,14 @@ class ScenolyticsAppDrawer extends StatelessWidget {
                 ),
               ),
             ),
-            if (showActorNav)
-              _DrawerTile(
-                icon: Icons.video_call_outlined,
-                label: 'Actor submission',
-                selected: currentRouteName == 'submit-video',
-                onTap: () {
-                  Navigator.pop(context);
-                  onSelectHome?.call();
-                },
+            Expanded(
+              child: ListView(
+                padding: EdgeInsets.zero,
+                children: navTiles,
               ),
-            if (showDirectorNav)
-              _DrawerTile(
-                icon: Icons.leaderboard_outlined,
-                label: 'Director rankings',
-                selected: currentRouteName == 'rankings',
-                onTap: () {
-                  Navigator.pop(context);
-                  onSelectRankings?.call();
-                },
-              ),
-            _DrawerTile(
-              icon: Icons.groups_outlined,
-              label: 'Auditions',
-              selected: false,
-              onTap: () => Navigator.pop(context),
             ),
-            _DrawerTile(
-              icon: Icons.settings_outlined,
-              label: 'Settings',
-              selected: false,
-              onTap: () {
-                Navigator.pop(context);
-                AccountMenuButton.openSettings(context);
-              },
-            ),
-            const Spacer(),
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
               child: Text(
                 'Scenolytics',
                 textAlign: TextAlign.center,
@@ -107,6 +124,26 @@ class ScenolyticsAppDrawer extends StatelessWidget {
                 ),
               ),
             ),
+            if (onLogout != null)
+              ListTile(
+                leading: Icon(Icons.logout_rounded, color: theme.colorScheme.error),
+                title: Text(
+                  'Log out',
+                  style: TextStyle(
+                    color: theme.colorScheme.error,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                onTap: () async {
+                  await AccountMenuButton.confirmLogOut(
+                    context,
+                    onLogOut: onLogout,
+                  );
+                  if (context.mounted) {
+                    Navigator.of(context).maybePop();
+                  }
+                },
+              ),
           ],
         ),
       ),

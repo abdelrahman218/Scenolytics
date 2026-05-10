@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/gestures.dart';
+import '../models/actor_audition_submission.dart';
 import '../theme/scenolytics_colors.dart';
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -145,7 +145,14 @@ class SentenceEmotion {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class FacialEmotionScorePage extends StatelessWidget {
-  const FacialEmotionScorePage({super.key});
+  const FacialEmotionScorePage({
+    super.key,
+    required this.submission,
+    this.sentences = _sentences,
+  });
+
+  final ActorAuditionSubmission submission;
+  final List<SentenceEmotion> sentences;
 
   // ── BACKEND: replace with data from your API ──
   static const _sentences = [
@@ -181,6 +188,11 @@ class FacialEmotionScorePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final wide = _isWide(context);
+    final actorName = submission.actorName.trim().isEmpty
+        ? 'Actor'
+        : submission.actorName.trim();
+    final actorAge = submission.age;
+    final actorScore = submission.emotionalScore;
     return Scaffold(
       backgroundColor: ScenolyticsColors.pageBackground,
       body: Column(
@@ -188,8 +200,18 @@ class FacialEmotionScorePage extends StatelessWidget {
           _AppBar(),
           Expanded(
             child: wide
-                ? _WebLayout(sentences: _sentences)
-                : _MobileLayout(sentences: _sentences),
+                ? _WebLayout(
+                    sentences: sentences,
+                    actorName: actorName,
+                    actorAge: actorAge,
+                    actorScore: actorScore,
+                  )
+                : _MobileLayout(
+                    sentences: sentences,
+                    actorName: actorName,
+                    actorAge: actorAge,
+                    actorScore: actorScore,
+                  ),
           ),
         ],
       ),
@@ -201,15 +223,22 @@ class FacialEmotionScorePage extends StatelessWidget {
 
 class _MobileLayout extends StatelessWidget {
   final List<SentenceEmotion> sentences;
-  const _MobileLayout({required this.sentences});
+  final String actorName;
+  final int actorAge;
+  final int actorScore;
+  const _MobileLayout({
+    required this.sentences,
+    required this.actorName,
+    required this.actorAge,
+    required this.actorScore,
+  });
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // BACKEND: replace with real actor data
-        const _ActorCard(name: 'Yousef', age: 20, score: 74),
+        _ActorCard(name: actorName, age: actorAge, score: actorScore),
         const SizedBox(height: 14),
         _OverallVideoPlayer(
           // BACKEND: replace duration & videoUrl from API
@@ -235,15 +264,22 @@ class _MobileLayout extends StatelessWidget {
 
 class _WebLayout extends StatelessWidget {
   final List<SentenceEmotion> sentences;
-  const _WebLayout({required this.sentences});
+  final String actorName;
+  final int actorAge;
+  final int actorScore;
+  const _WebLayout({
+    required this.sentences,
+    required this.actorName,
+    required this.actorAge,
+    required this.actorScore,
+  });
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
       children: [
-        // BACKEND: replace with real actor data
-        const _ActorCard(name: 'Yousef', age: 20, score: 74),
+        _ActorCard(name: actorName, age: actorAge, score: actorScore),
         const SizedBox(height: 16),
         _OverallVideoPlayer(
           // BACKEND: replace duration & videoUrl from API
