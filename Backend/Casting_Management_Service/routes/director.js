@@ -1,24 +1,16 @@
 import express from "express";
 import {
   createAudition,
-  deleteAudition,
-  getActorsForAudition,
-  getAuditionSubmissions,
   getAllDirectorAuditions,
   getDirectorPendingInvitations,
-  inviteActorsToAudition,
-  reviewSubmission,
-  updateAudition,
-  getAuditionPendingInvitations,
 } from "../services/director.js";
 import {
+  checkDirectorOwnershipOfAudition,
   checkRequiredFieldsCreateAudition,
-  checkRequiredFieldsReviewSubmission,
-  checkSubmissionExists,
   checkValidValuesAuditionData,
-  checkValidValuesReviewSubmission,
 } from "../validators/director.js";
 import { checkAuditionExists } from "../validators/general.js";
+import directorAuditionRouter from "./director_audition_auditionId.js";
 
 const router = express.Router();
 
@@ -37,58 +29,20 @@ router.post(
 // Get director's auditions
 router.get("/auditions", getAllDirectorAuditions);
 
-// Update audition
-const updateAudtionValidators = [
+// Router for specific audition
+const directorAuditionRouterValidators = [
   checkAuditionExists,
-  checkValidValuesAuditionData,
+  checkDirectorOwnershipOfAudition,
 ];
-router.patch(
+router.use(
   "/auditions/:audition_id",
-  updateAudtionValidators,
-  updateAudition,
-);
-
-// Delete audition
-const deleteAudtionValidators = [checkAuditionExists];
-router.delete(
-  "/auditions/:audition_id",
-  deleteAudtionValidators,
-  deleteAudition,
+  directorAuditionRouterValidators,
+  directorAuditionRouter,
 );
 
 // ==================== INVITATION ENDPOINTS ====================
 
-// Invite actors to audition
-const inviteActorsToAuditionValidators = [checkAuditionExists];
-router.post("/auditions/:audition_id/invite_actors", inviteActorsToAuditionValidators, inviteActorsToAudition);
-
-// Get director's pending invitations for specific audition
-router.get(
-  "/auditions/:audition_id/invitations/pending",
-  getAuditionPendingInvitations,
-);
-
 // Get director's pending invitations
 router.get("/invitations/pending", getDirectorPendingInvitations);
-
-// Get list of actors for audition
-router.get("/auditions/:audition_id/actors", getActorsForAudition);
-
-// ==================== SUBMISSION ENDPOINTS ====================
-
-// Get submissions for audition
-router.get("/auditions/:audition_id/submissions", getAuditionSubmissions);
-
-// Director reviews submission
-const reviewSubmissionValidators = [
-  checkRequiredFieldsReviewSubmission,
-  checkValidValuesReviewSubmission,
-  checkSubmissionExists,
-];
-router.patch(
-  "/submissions/:submission_id/review",
-  reviewSubmissionValidators,
-  reviewSubmission,
-);
 
 export default router;

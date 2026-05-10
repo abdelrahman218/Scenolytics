@@ -1,0 +1,7 @@
+$kind: http-request
+name: Get Audition Callbacks
+url: "{{base_url}}/api/v1/casting/director/auditions/{{audition_id}}/callbacks"
+method: GET
+headers:
+  Authorization: Bearer {{director_token}}
+order: 12000

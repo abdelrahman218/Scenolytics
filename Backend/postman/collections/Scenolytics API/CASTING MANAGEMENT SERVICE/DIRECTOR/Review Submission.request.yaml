@@ -1,6 +1,6 @@
 $kind: http-request
 name: Review Submission
-url: "{{base_url}}/api/v1/casting/director/submissions/{{submission_id}}/review"
+url: "{{base_url}}/api/v1/casting/director/auditions/{{audition_id}}/submissions/{{submission_id}}/review"
 method: PATCH
 headers:
   Content-Type: application/json
@@ -10,6 +10,7 @@ body:
   content: |-
     {
       "status": "accepted",
-      "director_notes": "Strong performance"
+      "director_notes": "Strong performance",
+      "callback_datetime": "2026-06-15T14:00:00"
     }
 order: 11000
