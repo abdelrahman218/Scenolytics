@@ -196,7 +196,7 @@
         "type": "task/http-request@1",
         "pos": {
           "x": 640,
-          "y": 568
+          "y": 448
         },
         "config": {
           "element": {
@@ -241,7 +241,7 @@
         "type": "task/http-request@1",
         "pos": {
           "x": 1192,
-          "y": 824
+          "y": 704
         },
         "config": {
           "element": {
@@ -294,7 +294,7 @@
         "type": "task/http-request@1",
         "pos": {
           "x": 1616,
-          "y": 824
+          "y": 704
         },
         "config": {
           "element": {
@@ -497,7 +497,7 @@
         "type": "task/http-request@1",
         "pos": {
           "x": 2160,
-          "y": 824
+          "y": 704
         },
         "config": {
           "element": {
@@ -647,7 +647,7 @@
         "type": "task/http-request@1",
         "pos": {
           "x": 96,
-          "y": 880
+          "y": 760
         },
         "config": {
           "element": {
@@ -860,8 +860,8 @@
       "vJ_5DW14": {
         "type": "value/reference@2",
         "pos": {
-          "x": 992,
-          "y": -1584
+          "x": 1024,
+          "y": -1344
         },
         "config": {
           "value": "body.audition.id",
@@ -875,8 +875,8 @@
       "L4pEW5k2": {
         "type": "portal/in@1",
         "pos": {
-          "x": 1336,
-          "y": -1584
+          "x": 1384,
+          "y": -1344
         },
         "config": {
           "value": "audition_id"
@@ -891,7 +891,7 @@
         "type": "task/http-request@1",
         "pos": {
           "x": 2160,
-          "y": 472
+          "y": 352
         },
         "config": {
           "element": {
@@ -981,7 +981,7 @@
         "type": "task/http-request@1",
         "pos": {
           "x": 88,
-          "y": 432
+          "y": 312
         },
         "config": {
           "element": {
@@ -1030,27 +1030,15 @@
         },
         "group": "rCLDoy8V"
       },
-      "uaqANtn4": {
-        "type": "task/http-request@2",
-        "pos": {
-          "x": 88,
-          "y": 56
-        },
-        "config": {
-          "element": {
-            "id": "181DFbcE5C893f1df42A5eCd",
-            "collection": "5eF9bEABFC58121681c5cA43",
-            "inExtensibleCollection": true,
-            "name": "Get All Auditions",
       "LQkqFvxk": {
         "type": "task/http-request@2",
         "pos": {
           "x": 3080,
-          "y": 320
+          "y": 568
         },
         "config": {
           "element": {
-            "id": "956bc7cE5fFEcCfcD0A8E9e7",
+            "id": "e5A8c77AfF0Eb5B71bE9FfbF",
             "collection": "5eF9bEABFC58121681c5cA43",
             "inExtensibleCollection": true,
             "name": "Get Actor Callbacks",
@@ -1060,21 +1048,19 @@
           "parseBody": "auto",
           "requestVariables": [
             {
-              "id": "c4QNKlNA",
-              "id": "mPw5BhMF",
+              "id": "dSZrl6YR",
               "type": null,
               "kind": null,
               "value": null,
               "key": "base_url"
             },
             {
-              "id": "uggXOw-f",
-              "id": "Df4K3tH1",
+              "id": "dCaR-w2m",
               "type": "portal/out@2",
               "kind": "portal/out",
               "value": "4q1LkJ2U",
               "key": "actor_token",
-              "latch": true
+              "latch": false
             }
           ],
           "scriptsModifyEnvVars": true,
@@ -1096,7 +1082,7 @@
         },
         "config": {
           "element": {
-            "id": "3b2c9DfF956d1Dd7F2eBdf0b",
+            "id": "147DAd26AffC619e8e5Ae09f",
             "collection": "5eF9bEABFC58121681c5cA43",
             "inExtensibleCollection": true,
             "name": "Get Audition Callbacks",
@@ -1106,14 +1092,14 @@
           "parseBody": "auto",
           "requestVariables": [
             {
-              "id": "A_qR1mEC",
+              "id": "_ogBpmfg",
               "type": null,
               "kind": null,
               "value": null,
               "key": "base_url"
             },
             {
-              "id": "SGZbqlj2",
+              "id": "z9g0WyVg",
               "type": "portal/out@2",
               "kind": "portal/out",
               "value": "L4pEW5k2",
@@ -1121,7 +1107,7 @@
               "latch": false
             },
             {
-              "id": "nDO1D2kD",
+              "id": "3LUX-GUq",
               "type": "portal/out@2",
               "kind": "portal/out",
               "value": "2XZtJrxG",
@@ -1148,7 +1134,7 @@
         },
         "config": {
           "element": {
-            "id": "5d4ec3D1A9f9D78067B45E46",
+            "id": "090650C85A0e2357F0BBee6E",
             "collection": "5eF9bEABFC58121681c5cA43",
             "inExtensibleCollection": true,
             "name": "Reschedule Callback",
@@ -1158,14 +1144,14 @@
           "parseBody": "auto",
           "requestVariables": [
             {
-              "id": "YCME4aYs",
+              "id": "U4o2Ui3F",
               "type": null,
               "kind": null,
               "value": null,
               "key": "base_url"
             },
             {
-              "id": "CnfH_TnS",
+              "id": "mePUg98W",
               "type": "portal/out@2",
               "kind": "portal/out",
               "value": "L4pEW5k2",
@@ -1173,7 +1159,7 @@
               "latch": false
             },
             {
-              "id": "XOAiuAQh",
+              "id": "5nbUJEdd",
               "type": "portal/out@2",
               "kind": "portal/out",
               "value": "IjWqHoCJ",
@@ -1181,7 +1167,7 @@
               "latch": false
             },
             {
-              "id": "kw1-Q_mG",
+              "id": "q3MPtcSW",
               "type": "portal/out@2",
               "kind": "portal/out",
               "value": "2XZtJrxG",
@@ -1236,7 +1222,7 @@
         },
         "config": {
           "element": {
-            "id": "f3dCDb35b50e4bbf3f5C3Ec2",
+            "id": "9FfefFD3Baaf66Cb7e4A4ebe",
             "collection": "5eF9bEABFC58121681c5cA43",
             "inExtensibleCollection": true,
             "name": "Create New Callback Meeting",
@@ -1246,14 +1232,14 @@
           "parseBody": "auto",
           "requestVariables": [
             {
-              "id": "v_bAKmH0",
+              "id": "19crHKSM",
               "type": null,
               "kind": null,
               "value": null,
               "key": "base_url"
             },
             {
-              "id": "L4ClldIW",
+              "id": "BdCZG1gT",
               "type": "portal/out@2",
               "kind": "portal/out",
               "value": "L4pEW5k2",
@@ -1261,7 +1247,7 @@
               "latch": false
             },
             {
-              "id": "wTWzdGGc",
+              "id": "Iyob4UlV",
               "type": "portal/out@2",
               "kind": "portal/out",
               "value": "IjWqHoCJ",
@@ -1269,7 +1255,7 @@
               "latch": false
             },
             {
-              "id": "dxnbgBOf",
+              "id": "62c1lbnj",
               "type": "portal/out@2",
               "kind": "portal/out",
               "value": "2XZtJrxG",
@@ -1296,7 +1282,7 @@
         },
         "config": {
           "element": {
-            "id": "0565DD0A19bEebD8Fe3AD8c1",
+            "id": "FccbdDC62ca5beA3EE26b9CC",
             "collection": "5eF9bEABFC58121681c5cA43",
             "inExtensibleCollection": true,
             "name": "Review Callback",
@@ -1306,14 +1292,14 @@
           "parseBody": "auto",
           "requestVariables": [
             {
-              "id": "CxmydO16",
+              "id": "GBymFeRz",
               "type": null,
               "kind": null,
               "value": null,
               "key": "base_url"
             },
             {
-              "id": "QtOlLS-9",
+              "id": "T7lJpgtj",
               "type": "portal/out@2",
               "kind": "portal/out",
               "value": "L4pEW5k2",
@@ -1321,7 +1307,7 @@
               "latch": false
             },
             {
-              "id": "x4ZCBCu6",
+              "id": "oFAvcb2d",
               "type": "portal/out@2",
               "kind": "portal/out",
               "value": "IjWqHoCJ",
@@ -1329,7 +1315,7 @@
               "latch": false
             },
             {
-              "id": "w5U7k9bo",
+              "id": "KDpoHYcJ",
               "type": "portal/out@2",
               "kind": "portal/out",
               "value": "2XZtJrxG",
@@ -1347,6 +1333,50 @@
           "namedInputsExpanded": true
         },
         "group": "x6r7bmFn"
+      },
+      "mHstgJWB": {
+        "type": "task/http-request@2",
+        "pos": {
+          "x": 88,
+          "y": 24
+        },
+        "config": {
+          "element": {
+            "id": "e8B5a2b0F27Bda5F8Aac3ee9",
+            "collection": "5eF9bEABFC58121681c5cA43",
+            "inExtensibleCollection": true,
+            "name": "Get All Auditions",
+            "method": "GET"
+          },
+          "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
+          "parseBody": "auto",
+          "requestVariables": [
+            {
+              "id": "nOboZF66",
+              "type": null,
+              "kind": null,
+              "value": null,
+              "key": "base_url"
+            },
+            {
+              "id": "lb1VJgdV",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "4q1LkJ2U",
+              "key": "actor_token",
+              "latch": false
+            }
+          ],
+          "scriptsModifyEnvVars": true,
+          "ignoreTestResults": true,
+          "trackGlobalEnvironment": true,
+          "requestVariables__expanded": true
+        },
+        "ui": {
+          "data": {},
+          "namedInputsExpanded": true
+        },
+        "group": "rCLDoy8V"
       }
     },
     "connections": {
@@ -1680,17 +1710,6 @@
         "target": "h12RwSLW",
         "targetPort": "requestVariables|czgwM5J7"
       },
-      "ZuwWsj-_": {
-        "source": "8BJXk4A2",
-        "target": "uaqANtn4",
-        "sourcePort": "success",
-        "targetPort": "AI"
-      },
-      "Eh_Z13rf": {
-        "source": "4q1LkJ2U",
-        "sourcePort": "data",
-        "target": "uaqANtn4",
-        "targetPort": "requestVariables|uggXOw-f"
       "xwZs49_K": {
         "source": "L4pEW5k2",
         "sourcePort": "data",
@@ -1703,29 +1722,11 @@
         "sourcePort": "success",
         "targetPort": "AI"
       },
-      "yB4e4lxr": {
-        "source": "4q1LkJ2U",
-        "sourcePort": "data",
-        "target": "LQkqFvxk",
-        "targetPort": "requestVariables|Df4K3tH1"
-      },
       "eHHdvuwN": {
         "source": "HPyReBkh",
         "target": "jrMFbTky",
         "sourcePort": "success",
         "targetPort": "AI"
-      },
-      "vgsqohFv": {
-        "source": "L4pEW5k2",
-        "sourcePort": "data",
-        "target": "jrMFbTky",
-        "targetPort": "requestVariables|SGZbqlj2"
-      },
-      "CKGF-QBM": {
-        "source": "2XZtJrxG",
-        "sourcePort": "data",
-        "target": "jrMFbTky",
-        "targetPort": "requestVariables|nDO1D2kD"
       },
       "qKXeON7u": {
         "source": "jrMFbTky",
@@ -1745,47 +1746,11 @@
         "sourcePort": "out",
         "targetPort": "data"
       },
-      "7HzLBCpN": {
-        "source": "L4pEW5k2",
-        "sourcePort": "data",
-        "target": "t93GElic",
-        "targetPort": "requestVariables|CnfH_TnS"
-      },
-      "g3aHj84D": {
-        "source": "IjWqHoCJ",
-        "sourcePort": "data",
-        "target": "t93GElic",
-        "targetPort": "requestVariables|XOAiuAQh"
-      },
-      "ZDa-w1AQ": {
-        "source": "2XZtJrxG",
-        "sourcePort": "data",
-        "target": "t93GElic",
-        "targetPort": "requestVariables|kw1-Q_mG"
-      },
       "n-Gmslqe": {
         "source": "t93GElic",
         "target": "1plM1T8C",
         "sourcePort": "success",
         "targetPort": "AI"
-      },
-      "srrJbwqr": {
-        "source": "L4pEW5k2",
-        "sourcePort": "data",
-        "target": "1plM1T8C",
-        "targetPort": "requestVariables|L4ClldIW"
-      },
-      "llj3Vslu": {
-        "source": "IjWqHoCJ",
-        "sourcePort": "data",
-        "target": "1plM1T8C",
-        "targetPort": "requestVariables|wTWzdGGc"
-      },
-      "_oNVMMqX": {
-        "source": "2XZtJrxG",
-        "sourcePort": "data",
-        "target": "1plM1T8C",
-        "targetPort": "requestVariables|dxnbgBOf"
       },
       "0o3m6k-R": {
         "source": "1plM1T8C",
@@ -1793,29 +1758,95 @@
         "sourcePort": "success",
         "targetPort": "AI"
       },
-      "wLDsAojS": {
-        "source": "L4pEW5k2",
-        "sourcePort": "data",
-        "target": "bqFzy-g_",
-        "targetPort": "requestVariables|QtOlLS-9"
-      },
-      "GcuRf3qD": {
-        "source": "IjWqHoCJ",
-        "sourcePort": "data",
-        "target": "bqFzy-g_",
-        "targetPort": "requestVariables|x4ZCBCu6"
-      },
-      "u2MxPjPI": {
-        "source": "2XZtJrxG",
-        "sourcePort": "data",
-        "target": "bqFzy-g_",
-        "targetPort": "requestVariables|w5U7k9bo"
-      },
       "CYiys1dF": {
         "source": "bqFzy-g_",
         "target": "8N_WwPwy",
         "sourcePort": "success",
         "targetPort": "AI"
+      },
+      "C7Zp_RU5": {
+        "source": "L4pEW5k2",
+        "sourcePort": "data",
+        "target": "jrMFbTky",
+        "targetPort": "requestVariables|z9g0WyVg"
+      },
+      "wLnEhtiI": {
+        "source": "2XZtJrxG",
+        "sourcePort": "data",
+        "target": "jrMFbTky",
+        "targetPort": "requestVariables|3LUX-GUq"
+      },
+      "PtgjdmT4": {
+        "source": "4q1LkJ2U",
+        "sourcePort": "data",
+        "target": "LQkqFvxk",
+        "targetPort": "requestVariables|dCaR-w2m"
+      },
+      "TCQ2AE4z": {
+        "source": "L4pEW5k2",
+        "sourcePort": "data",
+        "target": "t93GElic",
+        "targetPort": "requestVariables|mePUg98W"
+      },
+      "-A_OReyD": {
+        "source": "IjWqHoCJ",
+        "sourcePort": "data",
+        "target": "t93GElic",
+        "targetPort": "requestVariables|5nbUJEdd"
+      },
+      "U5wVM1Iz": {
+        "source": "2XZtJrxG",
+        "sourcePort": "data",
+        "target": "t93GElic",
+        "targetPort": "requestVariables|q3MPtcSW"
+      },
+      "Gn9aXF_a": {
+        "source": "L4pEW5k2",
+        "sourcePort": "data",
+        "target": "1plM1T8C",
+        "targetPort": "requestVariables|BdCZG1gT"
+      },
+      "0D4wCCrn": {
+        "source": "IjWqHoCJ",
+        "sourcePort": "data",
+        "target": "1plM1T8C",
+        "targetPort": "requestVariables|Iyob4UlV"
+      },
+      "BStYQ8Tb": {
+        "source": "2XZtJrxG",
+        "sourcePort": "data",
+        "target": "1plM1T8C",
+        "targetPort": "requestVariables|62c1lbnj"
+      },
+      "vXOLF6dN": {
+        "source": "L4pEW5k2",
+        "sourcePort": "data",
+        "target": "bqFzy-g_",
+        "targetPort": "requestVariables|T7lJpgtj"
+      },
+      "-QKcuepJ": {
+        "source": "2XZtJrxG",
+        "sourcePort": "data",
+        "target": "bqFzy-g_",
+        "targetPort": "requestVariables|KDpoHYcJ"
+      },
+      "xES5NBc2": {
+        "source": "IjWqHoCJ",
+        "sourcePort": "data",
+        "target": "bqFzy-g_",
+        "targetPort": "requestVariables|oFAvcb2d"
+      },
+      "dxpztSNa": {
+        "source": "8BJXk4A2",
+        "target": "mHstgJWB",
+        "sourcePort": "success",
+        "targetPort": "AI"
+      },
+      "FFpPBB45": {
+        "source": "4q1LkJ2U",
+        "sourcePort": "data",
+        "target": "mHstgJWB",
+        "targetPort": "requestVariables|lb1VJgdV"
       }
     },
     "annotations": {},
@@ -1827,8 +1858,8 @@
             "y": -16
           },
           "size": {
-            "width": 5664,
-            "height": 1672
+            "width": 5628,
+            "height": 1724
           },
           "color": "yellow"
         },
@@ -1840,11 +1871,11 @@
         "ui": {
           "pos": {
             "x": 952,
-            "y": -1432
+            "y": -1312
           },
           "size": {
-            "width": 2464,
-            "height": 1288
+            "width": 3472,
+            "height": 1248
           },
           "color": "grey"
         },
@@ -1912,6 +1943,6 @@
   "info": {
     "_postman_id": "61ee2713-5ef1-457f-99e2-37c74aa63bf8"
   },
-  "_postman_exported_at": "2026-05-11T11:38:52.013Z",
+  "_postman_exported_at": "2026-05-11T13:15:07.498Z",
   "_postman_exported_using": "Postman/Local Mode"
 }
