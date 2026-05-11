@@ -1060,6 +1060,22 @@
               "kind": "portal/out",
               "value": "4q1LkJ2U",
               "key": "actor_token",
+              "latch": false,
+              "isExtraneous": false
+            },
+            {
+              "id": "dSZrl6YR",
+              "type": null,
+              "kind": null,
+              "value": null,
+              "key": "base_url"
+            },
+            {
+              "id": "dCaR-w2m",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "4q1LkJ2U",
+              "key": "actor_token",
               "latch": false
             }
           ],
@@ -1091,6 +1107,31 @@
           "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
           "parseBody": "auto",
           "requestVariables": [
+            {
+              "id": "_ogBpmfg",
+              "type": null,
+              "kind": null,
+              "value": null,
+              "key": "base_url"
+            },
+            {
+              "id": "z9g0WyVg",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "L4pEW5k2",
+              "key": "audition_id",
+              "latch": false,
+              "isExtraneous": false
+            },
+            {
+              "id": "3LUX-GUq",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "2XZtJrxG",
+              "key": "director_token",
+              "latch": false,
+              "isExtraneous": false
+            },
             {
               "id": "_ogBpmfg",
               "type": null,
@@ -1143,6 +1184,40 @@
           "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
           "parseBody": "auto",
           "requestVariables": [
+            {
+              "id": "U4o2Ui3F",
+              "type": null,
+              "kind": null,
+              "value": null,
+              "key": "base_url"
+            },
+            {
+              "id": "mePUg98W",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "L4pEW5k2",
+              "key": "audition_id",
+              "latch": false,
+              "isExtraneous": false
+            },
+            {
+              "id": "5nbUJEdd",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "IjWqHoCJ",
+              "key": "callback_id",
+              "latch": false,
+              "isExtraneous": false
+            },
+            {
+              "id": "q3MPtcSW",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "2XZtJrxG",
+              "key": "director_token",
+              "latch": false,
+              "isExtraneous": false
+            },
             {
               "id": "U4o2Ui3F",
               "type": null,
@@ -1244,6 +1319,40 @@
               "kind": "portal/out",
               "value": "L4pEW5k2",
               "key": "audition_id",
+              "latch": false,
+              "isExtraneous": false
+            },
+            {
+              "id": "Iyob4UlV",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "IjWqHoCJ",
+              "key": "callback_id",
+              "latch": false,
+              "isExtraneous": false
+            },
+            {
+              "id": "62c1lbnj",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "2XZtJrxG",
+              "key": "director_token",
+              "latch": false,
+              "isExtraneous": false
+            },
+            {
+              "id": "19crHKSM",
+              "type": null,
+              "kind": null,
+              "value": null,
+              "key": "base_url"
+            },
+            {
+              "id": "BdCZG1gT",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "L4pEW5k2",
+              "key": "audition_id",
               "latch": false
             },
             {
@@ -1304,6 +1413,40 @@
               "kind": "portal/out",
               "value": "L4pEW5k2",
               "key": "audition_id",
+              "latch": false,
+              "isExtraneous": false
+            },
+            {
+              "id": "oFAvcb2d",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "IjWqHoCJ",
+              "key": "callback_id",
+              "latch": false,
+              "isExtraneous": false
+            },
+            {
+              "id": "KDpoHYcJ",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "2XZtJrxG",
+              "key": "director_token",
+              "latch": false,
+              "isExtraneous": false
+            },
+            {
+              "id": "GBymFeRz",
+              "type": null,
+              "kind": null,
+              "value": null,
+              "key": "base_url"
+            },
+            {
+              "id": "T7lJpgtj",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "L4pEW5k2",
+              "key": "audition_id",
               "latch": false
             },
             {
@@ -1342,7 +1485,7 @@
         },
         "config": {
           "element": {
-            "id": "e8B5a2b0F27Bda5F8Aac3ee9",
+            "id": "CBc20ffDCe6929eB4b32117b",
             "collection": "5eF9bEABFC58121681c5cA43",
             "inExtensibleCollection": true,
             "name": "Get All Auditions",
@@ -1364,7 +1507,8 @@
               "kind": "portal/out",
               "value": "4q1LkJ2U",
               "key": "actor_token",
-              "latch": false
+              "latch": false,
+              "isExtraneous": false
             }
           ],
           "scriptsModifyEnvVars": true,
@@ -1943,6 +2087,6 @@
   "info": {
     "_postman_id": "61ee2713-5ef1-457f-99e2-37c74aa63bf8"
   },
-  "_postman_exported_at": "2026-05-11T13:15:07.498Z",
+  "_postman_exported_at": "2026-05-11T13:30:45.610Z",
   "_postman_exported_using": "Postman/Local Mode"
 }
