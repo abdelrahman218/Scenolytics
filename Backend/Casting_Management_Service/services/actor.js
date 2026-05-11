@@ -8,6 +8,15 @@ import { s3 } from '../config/s3.js'
 import { createScriptPDF } from "../utils/pdfMaker.js";
 import { Sentence } from "../models/sentence.js";
 
+export const getAllAuditions = async (req, res, next) => {
+    try {
+        const auditions = await Audition.findAll();
+        return res.status(200).json(auditions);
+    } catch (error) {
+        next(error);
+    }
+};
+
 export const respondToInvitation = async (req, res, next) => {
     try {
         const invitation = await AuditionInvitation.updateStatus(req.params.invitation_id, req.body.status);

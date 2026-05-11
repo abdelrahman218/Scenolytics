@@ -88,6 +88,7 @@ Below is a comprehensive list of all implemented API endpoints grouped by their 
 - `GET /api/v1/casting/actor/auditions/submissions` - Actor reviews personal submitted tapes
 - `POST /api/v1/casting/actor/auditions/:audition_id/submit` - Actor uploads video specifically against a call
 - `GET /api/v1/casting/actor/auditions/:audition_id/script` - Get audition script as PDF
+- `GET /api/v1/casting/actor/auditions/` - Get all auditions
 
 ### 6. Notification Service
 **Base Route:** `/api/v1/notifications`

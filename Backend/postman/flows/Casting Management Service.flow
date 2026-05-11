@@ -196,7 +196,7 @@
         "type": "task/http-request@1",
         "pos": {
           "x": 640,
-          "y": 200
+          "y": 568
         },
         "config": {
           "element": {
@@ -241,7 +241,7 @@
         "type": "task/http-request@1",
         "pos": {
           "x": 1192,
-          "y": 456
+          "y": 824
         },
         "config": {
           "element": {
@@ -294,7 +294,7 @@
         "type": "task/http-request@1",
         "pos": {
           "x": 1616,
-          "y": 456
+          "y": 824
         },
         "config": {
           "element": {
@@ -497,7 +497,7 @@
         "type": "task/http-request@1",
         "pos": {
           "x": 2160,
-          "y": 456
+          "y": 824
         },
         "config": {
           "element": {
@@ -647,7 +647,7 @@
         "type": "task/http-request@1",
         "pos": {
           "x": 96,
-          "y": 512
+          "y": 880
         },
         "config": {
           "element": {
@@ -742,7 +742,8 @@
           ],
           "scriptsModifyEnvVars": true,
           "trackGlobalEnvironment": true,
-          "requestVariables__expanded": true
+          "requestVariables__expanded": true,
+          "ignoreTestResults": true
         },
         "ui": {
           "data": {},
@@ -850,8 +851,8 @@
       "vJ_5DW14": {
         "type": "value/reference@2",
         "pos": {
-          "x": 1040,
-          "y": -1104
+          "x": 992,
+          "y": -1584
         },
         "config": {
           "value": "body.audition.id",
@@ -865,8 +866,8 @@
       "L4pEW5k2": {
         "type": "portal/in@1",
         "pos": {
-          "x": 1352,
-          "y": -1104
+          "x": 1336,
+          "y": -1584
         },
         "config": {
           "value": "audition_id"
@@ -881,7 +882,7 @@
         "type": "task/http-request@1",
         "pos": {
           "x": 2160,
-          "y": 104
+          "y": 472
         },
         "config": {
           "element": {
@@ -971,7 +972,7 @@
         "type": "task/http-request@1",
         "pos": {
           "x": 88,
-          "y": 64
+          "y": 432
         },
         "config": {
           "element": {
@@ -1011,6 +1012,50 @@
             }
           ],
           "scriptsModifyEnvVars": true,
+          "trackGlobalEnvironment": true,
+          "requestVariables__expanded": true
+        },
+        "ui": {
+          "data": {},
+          "namedInputsExpanded": true
+        },
+        "group": "rCLDoy8V"
+      },
+      "uaqANtn4": {
+        "type": "task/http-request@2",
+        "pos": {
+          "x": 88,
+          "y": 56
+        },
+        "config": {
+          "element": {
+            "id": "181DFbcE5C893f1df42A5eCd",
+            "collection": "5eF9bEABFC58121681c5cA43",
+            "inExtensibleCollection": true,
+            "name": "Get All Auditions",
+            "method": "GET"
+          },
+          "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
+          "parseBody": "auto",
+          "requestVariables": [
+            {
+              "id": "c4QNKlNA",
+              "type": null,
+              "kind": null,
+              "value": null,
+              "key": "base_url"
+            },
+            {
+              "id": "uggXOw-f",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "4q1LkJ2U",
+              "key": "actor_token",
+              "latch": true
+            }
+          ],
+          "scriptsModifyEnvVars": true,
+          "ignoreTestResults": true,
           "trackGlobalEnvironment": true,
           "requestVariables__expanded": true
         },
@@ -1357,6 +1402,18 @@
         "sourcePort": "data",
         "target": "h12RwSLW",
         "targetPort": "requestVariables|czgwM5J7"
+      },
+      "ZuwWsj-_": {
+        "source": "8BJXk4A2",
+        "target": "uaqANtn4",
+        "sourcePort": "success",
+        "targetPort": "AI"
+      },
+      "Eh_Z13rf": {
+        "source": "4q1LkJ2U",
+        "sourcePort": "data",
+        "target": "uaqANtn4",
+        "targetPort": "requestVariables|uggXOw-f"
       }
     },
     "annotations": {},
@@ -1381,11 +1438,11 @@
         "ui": {
           "pos": {
             "x": 952,
-            "y": -1064
+            "y": -1432
           },
           "size": {
             "width": 2464,
-            "height": 920
+            "height": 1288
           },
           "color": "grey"
         },
@@ -1453,6 +1510,6 @@
   "info": {
     "_postman_id": "61ee2713-5ef1-457f-99e2-37c74aa63bf8"
   },
-  "_postman_exported_at": "2026-05-01T16:30:14.084Z",
+  "_postman_exported_at": "2026-05-11T11:38:52.013Z",
   "_postman_exported_using": "Postman/Local Mode"
 }

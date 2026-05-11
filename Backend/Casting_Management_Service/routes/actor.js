@@ -2,6 +2,7 @@ import express from "express";
 import {
   getActorPendingInvitations,
   getActorSubmissions,
+  getAllAuditions,
   getAuditionPdfScript,
   respondToInvitation,
   submitAuditionSubmission,
@@ -51,5 +52,8 @@ const getAuditionPdfScriptValidators = [
   checkAuditionExists,
 ]
 router.get("/auditions/:audition_id/script", getAuditionPdfScriptValidators, getAuditionPdfScript);
+
+// Get all auditions
+router.get("/auditions", getAllAuditions);
 
 export default router;
