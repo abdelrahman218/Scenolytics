@@ -7,6 +7,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { s3 } from '../config/s3.js'
 import { createScriptPDF } from "../utils/pdfMaker.js";
 import { Sentence } from "../models/sentence.js";
+import { Callback } from "../models/callback.js";
 
 export const getAllAuditions = async (req, res, next) => {
     try {
@@ -94,6 +95,15 @@ export const submitAuditionSubmission = async (req, res, next) => {
 
         publishMessage(EXCHANGES.AUDITIONS, ROUTING_KEYS.AUDITION_SUBMITTED, submission);
         return res.status(201).json({message: 'Submission metadata saved successfully', submission, uploadURL});
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getActorCallbacks = async (req, res, next) => {
+    try {
+        const callback = await Callback.findByActorId(req.user.user_id);
+        return res.status(200).json(callback);
     } catch (error) {
         next(error);
     }

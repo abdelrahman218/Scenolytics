@@ -19,6 +19,7 @@ EMOTION TIMELINE:
 
 import sys
 import os
+import json
 import cv2
 import mediapipe as mp
 import numpy as np
@@ -85,7 +86,13 @@ THRESHOLDS = {
 
 SHIFT_WINDOW_SEC       = 2.0
 SHIFT_THRESHOLD_STRONG = 0.015   # clear gaze shift
-SHIFT_THRESHOLD_SUBTLE = 0.005   # subtle but measurable
+
+VERBOSE = False  # set True for detailed logs
+
+
+def vprint(message=""):
+    if VERBOSE:
+        print(message)
 
 # ── MediaPipe eye landmarks ───────────────────────────────────
 EYE_LANDMARKS = {
@@ -111,16 +118,8 @@ EYE_CORNERS   = {
 
 SHIFT_COLORS = {
     "STRONG_SHIFT": "#22c55e",
-    "SUBTLE_SHIFT": "#f59e0b",
     "NO_SHIFT":     "#ef4444",
     "NO_DATA":      "#64748b",
-}
-
-SHIFT_LABELS = {
-    "STRONG_SHIFT": "✓ EYES MOVED",
-    "SUBTLE_SHIFT": "~ SUBTLE SHIFT",
-    "NO_SHIFT":     "✗ EYES FROZEN",
-    "NO_DATA":      "— NO DATA",
 }
 
 
@@ -198,12 +197,13 @@ def run_quality_check(video_path):
     frame_height  = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     duration_sec  = total_frames / fps
 
-    print(f"\nVideo info:")
-    print(f"  Resolution   : {frame_width} x {frame_height}")
-    print(f"  FPS          : {fps:.1f}")
-    print(f"  Total frames : {total_frames}")
-    print(f"  Duration     : {duration_sec:.1f} seconds")
-    print(f"\nRunning quality check...")
+    if VERBOSE:
+        print(f"\nVideo info:")
+        print(f"  Resolution   : {frame_width} x {frame_height}")
+        print(f"  FPS          : {fps:.1f}")
+        print(f"  Total frames : {total_frames}")
+        print(f"  Duration     : {duration_sec:.1f} seconds")
+        print(f"\nRunning quality check...")
 
     usable_frames = []
     skipped_frames = []
@@ -279,26 +279,27 @@ def run_quality_check(video_path):
         "usable_frame_data": usable_frames,
     }
 
-    print(f"\n{'='*45}")
-    print(f"  QUALITY CHECK REPORT")
-    print(f"{'='*45}")
-    print(f"  Usable frames    : {len(usable_frames)} / {total_processed} ({usable_ratio*100:.1f}%)")
-    print(f"  Skipped frames   : {len(skipped_frames)}")
+    if VERBOSE:
+        print(f"\n{'='*45}")
+        print(f"  QUALITY CHECK REPORT")
+        print(f"{'='*45}")
+        print(f"  Usable frames    : {len(usable_frames)} / {total_processed} ({usable_ratio*100:.1f}%)")
+        print(f"  Skipped frames   : {len(skipped_frames)}")
 
-    if skipped_frames:
-        print(f"\n  Skip reasons:")
-        for reason, count in skip_reasons.items():
-            if count > 0:
-                print(f"    - {reason}: {count} frames")
+        if skipped_frames:
+            print(f"\n  Skip reasons:")
+            for reason, count in skip_reasons.items():
+                if count > 0:
+                    print(f"    - {reason}: {count} frames")
 
-    status = "PASS - Video is usable" if video_is_usable else "FAIL - Video quality too low"
-    print(f"\n  {status}")
+        status = "PASS - Video is usable" if video_is_usable else "FAIL - Video quality too low"
+        print(f"\n  {status}")
 
-    if not video_is_usable:
-        print(f"\n  WARNING: Only {usable_ratio*100:.1f}% of frames are usable.")
-        print(f"  Eye metrics will not be reliable for this submission.")
+        if not video_is_usable:
+            print(f"\n  WARNING: Only {usable_ratio*100:.1f}% of frames are usable.")
+            print(f"  Eye metrics will not be reliable for this submission.")
 
-    print(f"{'='*45}\n")
+        print(f"{'='*45}\n")
     return report
 
 
@@ -377,7 +378,7 @@ def run_ear_and_iris_extraction(quality_report):
       ear_time_series  — shape [N, 2]  cols: [timestamp_ms, avg_ear]
       iris_series      — list of dicts: {timestamp_ms, h_ratio, v_ratio, landmarks}
     """
-    if not quality_report["video_is_usable"]:
+    if not quality_report["video_is_usable"] and VERBOSE:
         print("WARNING: Video failed quality check. Results are LOW CONFIDENCE.")
 
     usable_frames = quality_report["usable_frame_data"]
@@ -388,7 +389,7 @@ def run_ear_and_iris_extraction(quality_report):
         print("ERROR: No usable frames. Cannot extract features.")
         return None, None
 
-    print(f"Extracting EAR & iris ratios from {len(usable_frames)} usable frames...")
+    vprint(f"Extracting EAR & iris ratios from {len(usable_frames)} usable frames...")
 
     ear_rows    = []
     iris_series = []
@@ -411,15 +412,16 @@ def run_ear_and_iris_extraction(quality_report):
     ear_time_series = np.array(ear_rows, dtype=np.float64)
 
     ear_vals = ear_time_series[:, 1]
-    print(f"\n{'='*45}")
-    print(f"  EAR EXTRACTION REPORT")
-    print(f"{'='*45}")
-    print(f"  Frames processed : {len(ear_time_series)}")
-    print(f"  EAR min          : {np.min(ear_vals):.4f}")
-    print(f"  EAR max          : {np.max(ear_vals):.4f}")
-    print(f"  EAR mean         : {np.mean(ear_vals):.4f}")
-    print(f"  Time range       : {ear_time_series[0,0]:.0f}ms → {ear_time_series[-1,0]:.0f}ms")
-    print(f"{'='*45}\n")
+    if VERBOSE:
+        print(f"\n{'='*45}")
+        print(f"  EAR EXTRACTION REPORT")
+        print(f"{'='*45}")
+        print(f"  Frames processed : {len(ear_time_series)}")
+        print(f"  EAR min          : {np.min(ear_vals):.4f}")
+        print(f"  EAR max          : {np.max(ear_vals):.4f}")
+        print(f"  EAR mean         : {np.mean(ear_vals):.4f}")
+        print(f"  Time range       : {ear_time_series[0,0]:.0f}ms → {ear_time_series[-1,0]:.0f}ms")
+        print(f"{'='*45}\n")
 
     return ear_time_series, iris_series
 
@@ -458,17 +460,18 @@ def run_baseline_establishment(ear_time_series):
         "blink_frames":    int(np.sum(~blink_mask)),
     }
 
-    print(f"\n{'='*45}")
-    print(f"  BASELINE ESTABLISHMENT REPORT")
-    print(f"{'='*45}")
-    print(f"  Total frames     : {len(ear_values)}")
-    print(f"  Blink frames     : {eye_profile['blink_frames']} removed")
-    print(f"  Clean frames     : {len(ear_values_clean)} used for baseline")
-    print(f"  Baseline (median): {baseline:.4f}")
-    print(f"  Lower range (p25): {lower_range:.4f}")
-    print(f"  Upper range (p75): {upper_range:.4f}")
-    print(f"  Natural spread   : {eye_profile['iqr']:.4f}")
-    print(f"{'='*45}\n")
+    if VERBOSE:
+        print(f"\n{'='*45}")
+        print(f"  BASELINE ESTABLISHMENT REPORT")
+        print(f"{'='*45}")
+        print(f"  Total frames     : {len(ear_values)}")
+        print(f"  Blink frames     : {eye_profile['blink_frames']} removed")
+        print(f"  Clean frames     : {len(ear_values_clean)} used for baseline")
+        print(f"  Baseline (median): {baseline:.4f}")
+        print(f"  Lower range (p25): {lower_range:.4f}")
+        print(f"  Upper range (p75): {upper_range:.4f}")
+        print(f"  Natural spread   : {eye_profile['iqr']:.4f}")
+        print(f"{'='*45}\n")
 
     return eye_profile
 
@@ -491,8 +494,9 @@ def run_normalization(ear_time_series, eye_profile):
     timestamps  = timestamps[blink_mask]
     ear_values  = ear_values[blink_mask]
 
-    print(f"  Blink frames filtered : {np.sum(~blink_mask)} frames removed")
-    print(f"  Frames remaining      : {np.sum(blink_mask)}")
+    if VERBOSE:
+        print(f"  Blink frames filtered : {np.sum(~blink_mask)} frames removed")
+        print(f"  Frames remaining      : {np.sum(blink_mask)}")
 
     normalized  = ((ear_values - baseline) / baseline) * 100
 
@@ -504,16 +508,17 @@ def run_normalization(ear_time_series, eye_profile):
 
     normalized_series = np.column_stack((timestamps, smoothed))
 
-    print(f"\n{'='*45}")
-    print(f"  NORMALIZATION REPORT")
-    print(f"{'='*45}")
-    print(f"  Frames processed   : {len(smoothed)}")
-    print(f"  Baseline used      : {baseline:.4f}")
-    print(f"  Smoothing window   : {window_size} frames")
-    print(f"  Raw range          : {normalized.min():.1f}% → {normalized.max():.1f}%")
-    print(f"  Smoothed range     : {smoothed.min():.1f}% → {smoothed.max():.1f}%")
-    print(f"  Smoothed mean      : {smoothed.mean():.2f}%")
-    print(f"{'='*45}\n")
+    if VERBOSE:
+        print(f"\n{'='*45}")
+        print(f"  NORMALIZATION REPORT")
+        print(f"{'='*45}")
+        print(f"  Frames processed   : {len(smoothed)}")
+        print(f"  Baseline used      : {baseline:.4f}")
+        print(f"  Smoothing window   : {window_size} frames")
+        print(f"  Raw range          : {normalized.min():.1f}% → {normalized.max():.1f}%")
+        print(f"  Smoothed range     : {smoothed.min():.1f}% → {smoothed.max():.1f}%")
+        print(f"  Smoothed mean      : {smoothed.mean():.2f}%")
+        print(f"{'='*45}\n")
 
     return normalized_series
 
@@ -543,37 +548,35 @@ def run_eye_openness_scoring(normalized_series, eye_profile):
         excess  = avg_deviation - strong_threshold
         score   = min(100, 75 + (excess / strong_threshold) * 25)
         result  = "expressive"
-        message = (f"Eyes moved strongly ({avg_deviation:.2f}% avg deviation) "
-                   f"— strong physical expression")
+        message = "Eyes moved strongly — strong physical expression"
     elif avg_deviation >= weak_threshold:
         position = ((avg_deviation - weak_threshold) /
                     (strong_threshold - weak_threshold))
         score    = 25 + position * 50
         result   = "subtle"
-        message  = (f"Eyes moved subtly ({avg_deviation:.2f}% avg deviation) "
-                    f"— present but could be stronger")
+        message  = "Eyes moved subtly — present but could be stronger"
     else:
         position = avg_deviation / weak_threshold if weak_threshold > 0 else 0
         score    = position * 25
         result   = "flat"
-        message  = (f"Eyes stayed flat ({avg_deviation:.2f}% avg deviation) "
-                    f"— no meaningful physical change")
+        message  = "Eyes stayed flat — no meaningful physical change"
 
     score = round(score, 1)
 
-    print(f"\n{'='*52}")
-    print(f"  PART A — EXPRESSIVE SCORING")
-    print(f"{'='*52}")
-    print(f"  Video window       : {start_ms/1000:.1f}s → {end_ms/1000:.1f}s")
-    print(f"  Peak opening       : {peak_above:+.2f}%")
-    print(f"  Peak narrowing     : -{peak_below:.2f}%")
-    print(f"  Avg deviation      : {avg_deviation:.2f}%")
-    print(f"  Strong threshold   : {strong_threshold:.2f}%")
-    print(f"  Weak threshold     : {weak_threshold:.2f}%")
-    print(f"  Result             : {result.upper()}")
-    print(f"  Expressive score   : {score} / 100")
-    print(f"  {message}")
-    print(f"{'='*52}\n")
+    if VERBOSE:
+        print(f"\n{'='*52}")
+        print(f"  PART A — EXPRESSIVE SCORING")
+        print(f"{'='*52}")
+        print(f"  Video window       : {start_ms/1000:.1f}s → {end_ms/1000:.1f}s")
+        print(f"  Peak opening       : {peak_above:+.2f}%")
+        print(f"  Peak narrowing     : -{peak_below:.2f}%")
+        print(f"  Avg deviation      : {avg_deviation:.2f}%")
+        print(f"  Strong threshold   : {strong_threshold:.2f}%")
+        print(f"  Weak threshold     : {weak_threshold:.2f}%")
+        print(f"  Result             : {result.upper()}")
+        print(f"  Expressive score   : {score} / 100")
+        print(f"  {message}")
+        print(f"{'='*52}\n")
 
     return {
         "peak_above":       round(peak_above, 2),
@@ -609,8 +612,9 @@ def calibrate_gaze_centre(iris_series):
     h_tol = max(h_tol, 0.02)
     v_tol = max(v_tol, 0.02)
 
-    print(f"\n  Gaze centre  : H={center_h:.3f}  V={center_v:.3f}")
-    print(f"  Gaze tolerance: H±{h_tol:.3f}  V±{v_tol:.3f}")
+    if VERBOSE:
+        print(f"\n  Gaze centre  : H={center_h:.3f}  V={center_v:.3f}")
+        print(f"  Gaze tolerance: H±{h_tol:.3f}  V±{v_tol:.3f}")
 
     return center_h, center_v, h_tol, v_tol
 
@@ -630,30 +634,142 @@ def classify_gaze(h, v, center_h, center_v, h_tol, v_tol):
     return h_dir or v_dir or "CENTER"
 
 
+def normalize_emotion_timeline(emotion_timeline):
+    """
+    Normalize timeline entries to dicts with keys:
+    start_sec, end_sec, emotion, sentence
+    Accepts dict entries or (start, end, emotion[, sentence]) tuples.
+    """
+    normalized = []
+    for item in emotion_timeline:
+        if isinstance(item, dict):
+            start_sec = item.get("start_sec")
+            end_sec = item.get("end_sec")
+            emotion = item.get("emotion")
+            sentence = item.get("sentence", "")
+        elif isinstance(item, (list, tuple)) and len(item) >= 3:
+            start_sec, end_sec, emotion = item[0], item[1], item[2]
+            sentence = item[3] if len(item) >= 4 else ""
+        else:
+            raise ValueError("Invalid EMOTION_TIMELINE entry format")
+
+        normalized.append({
+            "start_sec": start_sec,
+            "end_sec": end_sec,
+            "emotion": emotion,
+            "sentence": sentence,
+        })
+
+    return normalized
+
+
+def export_transition_json(results, out_path="emotion_transitions.json",
+                           image_map=None, image_aspect_ratio=None):
+    image_map = image_map or {}
+    payload = []
+    for r in results:
+        images = image_map.get(r.get("time_ms"), {})
+        payload.append({
+            "time_sec": r.get("time_sec"),
+            "time_ms": r.get("time_ms"),
+            "from_emotion": r.get("from_emotion"),
+            "to_emotion": r.get("to_emotion"),
+            "from_sentence": r.get("from_sentence", ""),
+            "to_sentence": r.get("to_sentence", ""),
+            "label": r.get("label"),
+            "score": r.get("score"),
+            "displacement": r.get("displacement"),
+            "dir_before": r.get("dir_before"),
+            "dir_after": r.get("dir_after"),
+            "message": r.get("message"),
+            "before_image": images.get("before_image"),
+            "after_image": images.get("after_image"),
+            "image_aspect_ratio": image_aspect_ratio,
+        })
+
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump({"transitions": payload}, f, ensure_ascii=True, indent=2)
+    vprint(f"Saved → {out_path}")
+
+
+def export_final_analysis_json(expressive_result, transition_results,
+                               out_path="eyes_analysis_result.json",
+                               image_map=None, image_aspect_ratio=None):
+    image_map = image_map or {}
+
+    score = None
+    result = None
+    message = None
+    if expressive_result:
+        score = expressive_result.get("score")
+        result = expressive_result.get("result", "").upper()
+        message = expressive_result.get("message")
+
+    transitions = []
+    for r in transition_results:
+        images = image_map.get(r.get("time_ms"), {})
+        transitions.append({
+            "time_sec": r.get("time_sec"),
+            "time_ms": r.get("time_ms"),
+            "from_emotion": r.get("from_emotion"),
+            "to_emotion": r.get("to_emotion"),
+            "from_sentence": r.get("from_sentence", ""),
+            "to_sentence": r.get("to_sentence", ""),
+            "label": r.get("label"),
+            "score": r.get("score"),
+            "displacement": r.get("displacement"),
+            "dir_before": r.get("dir_before"),
+            "dir_after": r.get("dir_after"),
+            "message": r.get("message"),
+            "before_image": images.get("before_image"),
+            "after_image": images.get("after_image"),
+            "image_aspect_ratio": image_aspect_ratio,
+        })
+
+    payload = {
+        "score": score,
+        "result": result,
+        "message": message,
+        "transitions": transitions,
+    }
+
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=True, indent=2)
+    vprint(f"Saved → {out_path}")
+
+
+
+
 # ============================================================
 # GAZE SHIFT AT EMOTION TRANSITIONS
 # ============================================================
 
 def find_emotion_transitions(emotion_timeline):
+    timeline = normalize_emotion_timeline(emotion_timeline)
     transitions = []
-    for i in range(1, len(emotion_timeline)):
-        prev_start, prev_end, prev_emotion = emotion_timeline[i - 1]
-        curr_start, curr_end, curr_emotion = emotion_timeline[i]
+    for i in range(1, len(timeline)):
+        prev_item = timeline[i - 1]
+        curr_item = timeline[i]
+        prev_emotion = prev_item["emotion"]
+        curr_emotion = curr_item["emotion"]
         if prev_emotion.lower().strip() != curr_emotion.lower().strip():
             transitions.append({
-                "time_sec":     curr_start,
-                "time_ms":      curr_start * 1000,
-                "from_emotion": prev_emotion,
-                "to_emotion":   curr_emotion,
+                "time_sec":      curr_item["start_sec"],
+                "time_ms":       curr_item["start_sec"] * 1000,
+                "from_emotion":  prev_emotion,
+                "to_emotion":    curr_emotion,
+                "from_sentence": prev_item.get("sentence", ""),
+                "to_sentence":   curr_item.get("sentence", ""),
             })
 
-    print(f"\n{'='*55}")
-    print(f"  EMOTION TRANSITIONS DETECTED")
-    print(f"{'='*55}")
-    print(f"  Total transitions : {len(transitions)}")
-    for t in transitions:
-        print(f"    {t['time_sec']:.0f}s  :  {t['from_emotion']} → {t['to_emotion']}")
-    print(f"{'='*55}\n")
+    if VERBOSE:
+        print(f"\n{'='*55}")
+        print(f"  EMOTION TRANSITIONS DETECTED")
+        print(f"{'='*55}")
+        print(f"  Total transitions : {len(transitions)}")
+        for t in transitions:
+            print(f"    {t['time_sec']:.0f}s  :  {t['from_emotion']} → {t['to_emotion']}")
+        print(f"{'='*55}\n")
     return transitions
 
 
@@ -697,8 +813,6 @@ def measure_gaze_shifts(iris_series, transitions,
 
         if displacement >= SHIFT_THRESHOLD_STRONG:
             score, label = 100.0, "STRONG_SHIFT"
-        elif displacement >= SHIFT_THRESHOLD_SUBTLE:
-            score, label = 50.0, "SUBTLE_SHIFT"
         else:
             score, label = 0.0, "NO_SHIFT"
 
@@ -717,30 +831,30 @@ def measure_gaze_shifts(iris_series, transitions,
             "label":        label,
         })
 
-    ICONS = {"STRONG_SHIFT": "✓✓", "SUBTLE_SHIFT": "✓ ",
-             "NO_SHIFT": "✗ ", "NO_DATA": "— "}
+    ICONS = {"STRONG_SHIFT": "✓✓", "NO_SHIFT": "✗ ", "NO_DATA": "— "}
     scored      = [r for r in results if r["score"] is not None]
     final_score = np.mean([r["score"] for r in scored]) if scored else 0.0
 
-    print(f"\n{'='*60}")
-    print(f"  EYE GAZE SHIFT AT EMOTION TRANSITIONS")
-    print(f"{'='*60}")
-    for r in results:
-        icon = ICONS.get(r["label"], "?")
-        if r["displacement"] is not None:
-            print(f"\n  [{icon}] {r['time_sec']:.0f}s  "
-                  f"{r['from_emotion']:>10} → {r['to_emotion']:<10}")
-            print(f"        Gaze: {r['dir_before']} → {r['dir_after']}  |  "
-                  f"shift: {r['displacement']:.5f}")
-            print(f"        Volatility: {r['vol_before']:.5f} → {r['vol_after']:.5f}")
-            print(f"        Score: {r['score']:.0f}  ({r['label']})")
-        else:
-            print(f"\n  [{icon}] {r['time_sec']:.0f}s  "
-                  f"{r['from_emotion']:>10} → {r['to_emotion']:<10}")
-            print(f"        {r['message']}")
-    print(f"\n  {'─'*40}")
-    print(f"  Gaze Shift Score : {final_score:.1f} / 100")
-    print(f"{'='*60}\n")
+    if VERBOSE:
+        print(f"\n{'='*60}")
+        print(f"  EYE GAZE SHIFT AT EMOTION TRANSITIONS")
+        print(f"{'='*60}")
+        for r in results:
+            icon = ICONS.get(r["label"], "?")
+            if r["displacement"] is not None:
+                print(f"\n  [{icon}] {r['time_sec']:.0f}s  "
+                      f"{r['from_emotion']:>10} → {r['to_emotion']:<10}")
+                print(f"        Gaze: {r['dir_before']} → {r['dir_after']}  |  "
+                      f"shift: {r['displacement']:.5f}")
+                print(f"        Volatility: {r['vol_before']:.5f} → {r['vol_after']:.5f}")
+                print(f"        Score: {r['score']:.0f}  ({r['label']})")
+            else:
+                print(f"\n  [{icon}] {r['time_sec']:.0f}s  "
+                      f"{r['from_emotion']:>10} → {r['to_emotion']:<10}")
+                print(f"        {r['message']}")
+        print(f"\n  {'─'*40}")
+        print(f"  Gaze Shift Score : {final_score:.1f} / 100")
+        print(f"{'='*60}\n")
 
     return results, round(final_score, 2)
 
@@ -803,28 +917,38 @@ def _draw_transition_frame(ax, cap, iris_series,
     ax.axis("off")
 
 
+def _safe_slug(text):
+    if not text:
+        return ""
+    out = []
+    for ch in text.lower():
+        if ch.isalnum():
+            out.append(ch)
+        elif ch in {" ", "-"}:
+            out.append("_")
+    slug = "".join(out)
+    while "__" in slug:
+        slug = slug.replace("__", "_")
+    return slug.strip("_")
+
+
 def visualize_gaze_transitions(report, iris_series, results,
                                 center_h, center_v, h_tol, v_tol,
                                 video_path, window_sec=SHIFT_WINDOW_SEC):
     valid = [r for r in results if r["displacement"] is not None]
+    image_map = {}
     if not valid:
-        print("No valid transitions to visualize.")
-        return
+        if VERBOSE:
+            print("No valid transitions to visualize.")
+        return image_map
 
-    n_cols       = len(valid)
     usable_ts_map = {fd["timestamp_ms"]: fd for fd in report["usable_frame_data"]}
     timestamps   = np.array([f["timestamp_ms"] for f in iris_series])
     h_vals       = np.array([f["h_ratio"]      for f in iris_series])
     window_ms    = window_sec * 1000
     cap          = cv2.VideoCapture(video_path)
 
-    fig = plt.figure(figsize=(max(16, n_cols * 5.5), 20))
-    fig.patch.set_facecolor("#0f172a")
-    gs  = gridspec.GridSpec(3, n_cols, figure=fig,
-                            height_ratios=[1.5, 1.5, 1.0],
-                            hspace=0.40, wspace=0.20)
-
-    for col, r in enumerate(valid):
+    for idx, r in enumerate(valid, start=1):
         t_ms  = r["time_ms"]
         color = SHIFT_COLORS[r["label"]]
 
@@ -834,128 +958,48 @@ def visualize_gaze_transitions(report, iris_series, results,
         if not len(before_idx) or not len(after_idx):
             continue
 
-        best_before = before_idx[np.argmin(np.abs(timestamps[before_idx] - (t_ms - 1000)))]
-        best_after  = after_idx [np.argmin(np.abs(timestamps[after_idx]  - (t_ms + 1000)))]
+        best_before = before_idx[np.argmin(np.abs(timestamps[before_idx] - (t_ms - window_ms)))]
+        best_after  = after_idx [np.argmin(np.abs(timestamps[after_idx]  - (t_ms + window_ms)))]
 
-        ax_before = fig.add_subplot(gs[0, col])
+        from_slug = _safe_slug(r.get("from_emotion", ""))
+        to_slug = _safe_slug(r.get("to_emotion", ""))
+        base_name = f"metric_gaze_shift_transition_{idx}_{int(r['time_sec'])}s"
+        if from_slug and to_slug:
+            base_name += f"_{from_slug}_to_{to_slug}"
+
+        fig = plt.figure(figsize=(6.5, 6.5))
+        fig.patch.set_facecolor("#0f172a")
+        ax_before = fig.add_subplot(1, 1, 1)
         _draw_transition_frame(ax_before, cap, iris_series, usable_ts_map, best_before, color,
                                f"BEFORE  ({r['from_emotion']})\n{timestamps[best_before]/1000:.1f}s",
                                r["dir_before"])
+        out_before = f"{base_name}_before.png"
+        plt.savefig(out_before, dpi=130, bbox_inches="tight",
+                    facecolor=fig.get_facecolor())
+        plt.close(fig)
+        if VERBOSE:
+            print(f"Saved → {out_before}")
 
-        ax_after = fig.add_subplot(gs[1, col])
+        fig = plt.figure(figsize=(6.5, 6.5))
+        fig.patch.set_facecolor("#0f172a")
+        ax_after = fig.add_subplot(1, 1, 1)
         _draw_transition_frame(ax_after, cap, iris_series, usable_ts_map, best_after, color,
                                f"AFTER  ({r['to_emotion']})\n{timestamps[best_after]/1000:.1f}s",
                                r["dir_after"])
+        out_after = f"{base_name}_after.png"
+        plt.savefig(out_after, dpi=130, bbox_inches="tight",
+                    facecolor=fig.get_facecolor())
+        plt.close(fig)
+        if VERBOSE:
+            print(f"Saved → {out_after}")
 
-        # Iris trace
-        ax_trace = fig.add_subplot(gs[2, col])
-        ax_trace.set_facecolor("#1e293b")
+        image_map[r["time_ms"]] = {
+            "before_image": out_before,
+            "after_image": out_after,
+        }
 
-        full_mask = (timestamps >= t_ms - window_ms) & (timestamps <= t_ms + window_ms)
-        t_sec     = timestamps[full_mask] / 1000
-        h_win     = h_vals[full_mask]
-
-        for i_pt in range(len(t_sec)):
-            c = "#3b82f6" if t_sec[i_pt] < r["time_sec"] else "#a855f7"
-            ax_trace.scatter(t_sec[i_pt], h_win[i_pt], c=c, s=5, alpha=0.7, zorder=3)
-
-        ax_trace.axvline(r["time_sec"], color="white", linewidth=1.5,
-                         linestyle="--", alpha=0.9, zorder=4)
-        ax_trace.axhline(center_h, color="#22c55e", linewidth=0.8,
-                         linestyle="--", alpha=0.5)
-        ax_trace.fill_between([t_sec.min(), t_sec.max()],
-                              center_h - h_tol, center_h + h_tol,
-                              color="#22c55e", alpha=0.06)
-        ax_trace.axhline(r["h_before"], color="#3b82f6", linewidth=1.2, alpha=0.8,
-                         label=f'Before: {r["h_before"]:.3f}')
-        ax_trace.axhline(r["h_after"], color="#a855f7",  linewidth=1.2, alpha=0.8,
-                         label=f'After: {r["h_after"]:.3f}')
-
-        mid_t = r["time_sec"]
-        ax_trace.annotate("", xy=(mid_t + 0.3, r["h_after"]),
-                          xytext=(mid_t - 0.3, r["h_before"]),
-                          arrowprops=dict(arrowstyle="->", color=color, lw=2.5))
-
-        ax_trace.set_xlabel("Time (s)", color="#94a3b8", fontsize=9)
-        ax_trace.set_ylabel("H ratio",  color="#94a3b8", fontsize=9)
-        ax_trace.tick_params(colors="#94a3b8", labelsize=8)
-        for sp in ax_trace.spines.values():
-            sp.set_edgecolor("#334155")
-
-        badge = SHIFT_LABELS[r["label"]]
-        ax_trace.set_title(f"{badge}\nshift={r['displacement']:.4f}  score={r['score']:.0f}",
-                           color=color, fontsize=10, fontweight="bold", pad=6)
-        ax_trace.legend(loc="upper right", fontsize=7,
-                        facecolor="#1e293b", labelcolor="white")
-
-    fig.suptitle("EYE GAZE SHIFT AT EMOTION TRANSITIONS\n"
-                 "Did the actor's eyes move when the emotion changed?",
-                 color="white", fontsize=14, fontweight="bold", y=0.99)
     cap.release()
-
-    out_path = "metric_gaze_shift_transitions.png"
-    plt.savefig(out_path, dpi=130, bbox_inches="tight",
-                facecolor=fig.get_facecolor())
-    plt.close(fig)
-    print(f"Saved → {out_path}")
-
-
-# ============================================================
-# BLINK RATE & PATTERN
-# ============================================================
-
-def compute_blink_metrics(ear_time_series, emotion_segments, blink_threshold=0.15):
-    timestamps = ear_time_series[:, 0]
-    ear_vals   = ear_time_series[:, 1]
-
-    is_blinking = ear_vals < blink_threshold
-    edges       = np.diff(is_blinking.astype(int))
-    starts      = np.where(edges == 1)[0] + 1
-    if is_blinking[0]:
-        starts = np.insert(starts, 0, 0)
-    ends = np.where(edges == -1)[0]
-    if is_blinking[-1]:
-        ends = np.append(ends, len(is_blinking) - 1)
-
-    blink_events = []
-    for s, e in zip(starts, ends):
-        duration = timestamps[e] - timestamps[s]
-        if duration >= 30:
-            blink_events.append({
-                "start_ms":   timestamps[s],
-                "end_ms":     timestamps[e],
-                "duration_ms": duration,
-            })
-
-    print(f"\n{'='*65}")
-    print(f"  METRIC — BLINK RATE & PATTERN")
-    print(f"{'='*65}")
-    print(f"  Total blinks detected in video: {len(blink_events)}")
-    print(f"{'-'*65}")
-
-    for beat in emotion_segments:
-        start_sec, end_sec, emotion = beat
-        start_ms, end_ms = start_sec * 1000, end_sec * 1000
-        seg_dur_min = (end_sec - start_sec) / 60.0
-
-        seg_blinks = [b for b in blink_events
-                      if b["start_ms"] >= start_ms and b["end_ms"] <= end_ms]
-        blinks_count = len(seg_blinks)
-        bpm  = blinks_count / seg_dur_min if seg_dur_min > 0 else 0.0
-        avg_dur = np.mean([b["duration_ms"] for b in seg_blinks]) if blinks_count > 0 else 0
-
-        print(f"  Segment: {start_sec:.1f}s → {end_sec:.1f}s ({emotion})")
-        print(f"    Total Blinks : {blinks_count}")
-
-        bpm_label = ("Fast / Anxious"     if bpm > 25 else
-                     "Slow / Suppressed"  if bpm < 8  else "Normal")
-        print(f"    Blink Rate   : {bpm:.1f} BPM ({bpm_label})")
-        if blinks_count > 0:
-            print(f"    Avg Duration : {avg_dur:.0f}ms")
-        print()
-
-    print(f"{'='*65}\n")
-    return blink_events
+    return image_map
 
 
 
@@ -964,24 +1008,24 @@ def compute_blink_metrics(ear_time_series, emotion_segments, blink_threshold=0.1
 # EMOTION TIMELINE  ← EDIT THIS TO MATCH YOUR VIDEO
 # ============================================================
 #
-# Format: list of (start_sec, end_sec, "emotion_label")
+# Format: list of dicts with start/end, emotion, and sentence text.
 #
 # Example for a 60-second audition:
-#   (0,   20, "neutral")   — actor starts composed
-#   (20,  40, "sad")       — emotion shifts
-#   (40,  60, "angry")     — climax
+#   {"start_sec": 0,  "end_sec": 20, "emotion": "neutral", "sentence": "..."}
+#   {"start_sec": 20, "end_sec": 40, "emotion": "sad",     "sentence": "..."}
+#   {"start_sec": 40, "end_sec": 60, "emotion": "angry",   "sentence": "..."}
 #
 # If you have no specific breakdown, leave the default
 # below (one segment covering the full video duration).
 # The script will run without gaze-shift analysis.
 
 EMOTION_TIMELINE = [
-    (0,   10,  "neutral"),
-    (10,   20, "happy"),
-    (20,  30, "angry"),
-    (30,  32, "sad"),
+    # EDIT THESE VALUES ↓
+    {"start_sec": 0,  "end_sec": 11, "emotion": "angry", "sentence": "i don't understand my feelings i really don't i don't understand how i could hate you so much after all this time"},
+    {"start_sec": 12, "end_sec": 20, "emotion": "fearful",   "sentence": "how no matter how much i'd like not to hate you i hate you even more it grows i can't even see now"},
+    {"start_sec": 21, "end_sec": 37, "emotion": "sad",   "sentence": "all i see is this picture of you you and her i don't even know if this picture's real any more i don't even care it's a made up picture it invades my head the two of you in this picture it stings me more than if i actually see you with her"},
+    {"start_sec": 38, "end_sec": 74, "emotion": "sad",   "sentence": "it cuts it cuts me it cuts me so deep i'll never get over it and i can't get rid of this picture either it's just crumpled uninvited kind of like a little torture And I blame you more for this little torture than I do for what you did"},
 ]
-
 
 
 # ============================================================
@@ -989,12 +1033,14 @@ EMOTION_TIMELINE = [
 # ============================================================
 
 def main():
-    print("=" * 55)
-    print("  EYE MOVEMENT ANALYSIS — VS Code")
-    print("=" * 55)
+    if VERBOSE:
+        print("=" * 55)
+        print("  EYE MOVEMENT ANALYSIS — VS Code")
+        print("=" * 55)
 
     video_filename = select_video_file()
-    print(f"\nVideo selected: {video_filename}")
+    if VERBOSE:
+        print(f"\nVideo selected: {video_filename}")
 
     # ── Step 1 ──────────────────────────────────────────────
     report = run_quality_check(video_filename)
@@ -1023,14 +1069,15 @@ def main():
     # ── Step 5 Part A ────────────────────────────────────────
     expressive_result = run_eye_openness_scoring(normalized_series, eye_profile)
 
-    if expressive_result is not None:
-        print(f"EYE OPENNESS FINAL SCORE : {expressive_result['score']} / 100")
-        print(f"RESULT LABEL             : {expressive_result['result'].upper()}")
-    else:
-        print("EYE OPENNESS FINAL SCORE : N/A")
+    if VERBOSE:
+        if expressive_result is not None:
+            print(f"EXPRESSIVE EYES SCORE : {expressive_result['score']} / 100")
+            print(f"RESULT LABEL             : {expressive_result['result'].upper()}")
+        else:
+            print("EXPRESSIVE EYES SCORE : N/A")
 
     # ── Gaze calibration ────────────────────────────────────
-    print("\nCalibrating gaze centre from iris data...")
+    vprint("\nCalibrating gaze centre from iris data...")
     center_h, center_v, h_tol, v_tol = calibrate_gaze_centre(iris_series)
 
     # ── Gaze shift at emotion transitions ───────────────────
@@ -1043,7 +1090,7 @@ def main():
             window_sec=SHIFT_WINDOW_SEC
         )
 
-        visualize_gaze_transitions(
+        image_map = visualize_gaze_transitions(
             report       = report,
             iris_series  = iris_series,
             results      = shift_results,
@@ -1055,16 +1102,44 @@ def main():
             window_sec   = SHIFT_WINDOW_SEC,
         )
 
-        print(f"\nGAZE SHIFT SCORE : {shift_score} / 100")
+        export_transition_json(shift_results, image_map=image_map)
+        export_final_analysis_json(
+            expressive_result,
+            shift_results,
+            image_map=image_map,
+        )
+
+        vprint(f"\nGAZE SHIFT SCORE : {shift_score} / 100")
     else:
-        print("\nNo emotion transitions found. Skipping gaze-shift analysis.")
-        print("Edit EMOTION_TIMELINE at the bottom of this file and re-run.")
+        export_transition_json([])
+        export_final_analysis_json(expressive_result, [])
+        if VERBOSE:
+            print("\nNo emotion transitions found. Skipping gaze-shift analysis.")
+            print("Edit EMOTION_TIMELINE at the bottom of this file and re-run.")
 
-    # ── Blink metrics ────────────────────────────────────────
-    emotion_segments = EMOTION_TIMELINE
-    compute_blink_metrics(ear_time_series, emotion_segments, blink_threshold=0.15)
+    print("\n" + "=" * 55)
+    print("FINAL OUTPUT")
+    print("=" * 55)
+    print("1) Expressive eyes score and result")
+    if expressive_result is not None:
+        print(f"   Score   : {expressive_result['score']} / 100")
+        print(f"   Result  : {expressive_result['result'].upper()}")
+        print(f"   Message : {expressive_result['message']}")
+    else:
+        print("   Score   : N/A")
+        print("   Result  : N/A")
+        print("   Message : N/A")
 
-    print("\nAll done! Check the current folder for any saved .png outputs.")
+    print("\n2) Emotions transition at sentence change")
+    if transitions:
+        for t in transitions:
+            print(f"   - {t['time_sec']:.0f}s : {t['from_emotion']} -> {t['to_emotion']}")
+            if t.get("to_sentence"):
+                print(f"     Sentence : {t['to_sentence']}")
+    else:
+        print("   - None")
+
+    vprint("\nAll done! Check the current folder for any saved .png outputs.")
 
 
 if __name__ == "__main__":

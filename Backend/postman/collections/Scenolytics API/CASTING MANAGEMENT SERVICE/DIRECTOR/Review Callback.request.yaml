@@ -1,0 +1,15 @@
+$kind: http-request
+name: Review Callback
+url: "{{base_url}}/api/v1/casting/director/auditions/{{audition_id}}/callbacks/{{callback_id}}/review"
+method: PATCH
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{director_token}}
+body:
+  type: json
+  content: |-
+    {
+      "status": "accepted",
+      "director_notes": "Great callback performance"
+    }
+order: 15000

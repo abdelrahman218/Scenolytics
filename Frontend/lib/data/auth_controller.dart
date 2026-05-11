@@ -6,6 +6,7 @@ import 'api/auth_api.dart';
 import 'api/user_management_api.dart';
 import 'auth_session_store.dart';
 import 'models/auth_user.dart';
+import '../utils/jwt_user_id.dart';
 
 /// Holds the signed-in [AuthUser] and syncs to [AuthSessionStore].
 class AuthController extends ChangeNotifier {
@@ -44,6 +45,33 @@ class AuthController extends ChangeNotifier {
     required String password,
   }) async {
     final u = await _api.logIn(email: email, password: password);
+    _user = u;
+    await _store.save(u);
+    notifyListeners();
+  }
+
+  /// Offline dev login: uses a JWT already supplied via `--dart-define` (e.g. from `.env`).
+  /// Does not call the identity API. [email] is a placeholder for UI only.
+  Future<void> signInWithPreconfiguredJwt({
+    required String token,
+    required String role,
+    String email = 'dev@local',
+  }) async {
+    final t = token.trim();
+    if (t.isEmpty) {
+      throw AuthApiException('No JWT configured for this role.');
+    }
+    final userId = userIdFromActorJwt(t);
+    if (userId == null || userId.isEmpty) {
+      throw AuthApiException(
+        'Could not read user id from JWT. Check the token payload.',
+      );
+    }
+    final r = role.trim().toLowerCase();
+    if (r != 'actor' && r != 'director') {
+      throw AuthApiException('Dev login only supports actor or director roles.');
+    }
+    final u = AuthUser(token: t, userId: userId, email: email.trim(), role: r);
     _user = u;
     await _store.save(u);
     notifyListeners();

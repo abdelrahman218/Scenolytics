@@ -57,3 +57,22 @@ CREATE TABLE IF NOT EXISTS audition_invitations (
   INDEX idx_audition_id (audition_id),
   INDEX idx_actor_id (actor_id)
 );
+
+CREATE TABLE IF NOT EXISTS callbacks (
+  id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+  audition_id CHAR(36) NOT NULL,
+  audition_submission_id CHAR(36) NOT NULL,
+  actor_id CHAR(36) NOT NULL,
+  callback_status ENUM('created', 'scheduled', 'completed', 'accepted', 'rejected') DEFAULT 'created',
+  callback_datetime DATETIME DEFAULT NULL,
+  callback_duration_minutes INT UNSIGNED DEFAULT NULL,
+  link VARCHAR(255) DEFAULT NULL,
+  director_notes TEXT DEFAULT NULL,
+  completed_at TIMESTAMP DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (audition_id) REFERENCES auditions(id) ON DELETE CASCADE,
+  FOREIGN KEY (audition_submission_id) REFERENCES audition_submissions(id) ON DELETE CASCADE,
+  INDEX idx_audition_id (audition_id),
+  INDEX idx_audition_submission_id (audition_submission_id)
+);

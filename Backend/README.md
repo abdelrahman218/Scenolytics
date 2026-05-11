@@ -73,22 +73,46 @@ Below is a comprehensive list of all implemented API endpoints grouped by their 
 
 ### 5. Casting Management Service
 **Base Route:** `/api/v1/casting`
+
+**General**
 - `GET /api/v1/casting/auditions/:audition_id` - Get public/general view of an audition
-- `POST /api/v1/casting/director/auditions` - Director posts a casting call/audition opportunity
-- `GET /api/v1/casting/director/auditions` - Directors review all their managed auditions
-- `PATCH /api/v1/casting/director/auditions/:audition_id` - Director updates casting call info
-- `DELETE /api/v1/casting/director/auditions/:audition_id` - Director deletes casting call
-- `POST /api/v1/casting/director/auditions/:audition_id/invite_actors` - Send mass/direct invites
-- `GET /api/v1/casting/director/auditions/:audition_id/actors` - Fetch linked/invited actors
-- `GET /api/v1/casting/director/auditions/:audition_id/submissions` - Retrieve actor tape submissions
-- `GET /api/v1/casting/director/invitations/pending` - Fetch unread invitations to review later
-- `PATCH /api/v1/casting/director/invitations/:invitation_id` - Confirm/Alter invitation tracking link
-- `PATCH /api/v1/casting/actor/invitations/:invitation_id` - Actor accepts or declines a casting invite
-- `GET /api/v1/casting/actor/invitations` - Check all active opportunities an actor was invited for
-- `GET /api/v1/casting/actor/auditions/submissions` - Actor reviews personal submitted tapes
-- `POST /api/v1/casting/actor/auditions/:audition_id/submit` - Actor uploads video specifically against a call
+
+**Director — Auditions**
+- `POST /api/v1/casting/director/auditions/create_audition` - Create a new audition/casting call
+- `GET /api/v1/casting/director/auditions` - List all director's auditions
+- `PATCH /api/v1/casting/director/auditions/:audition_id` - Update audition details
+- `DELETE /api/v1/casting/director/auditions/:audition_id` - Delete an audition
+
+**Director — Invitations**
+- `POST /api/v1/casting/director/auditions/:audition_id/invite_actors` - Invite actors to an audition
+- `GET /api/v1/casting/director/auditions/:audition_id/invitations/pending` - Get pending invitations for a specific audition
+- `GET /api/v1/casting/director/invitations/pending` - Get all director's pending invitations
+- `GET /api/v1/casting/director/auditions/:audition_id/actors` - Get list of actors for an audition
+
+**Director — Submissions**
+- `GET /api/v1/casting/director/auditions/:audition_id/submissions` - Get submissions for an audition
+- `PATCH /api/v1/casting/director/auditions/:audition_id/submissions/:submission_id/review` - Review a submission (accept/reject)
+
+**Director — Callbacks**
+- `GET /api/v1/casting/director/auditions/:audition_id/callbacks` - Get callbacks for an audition
+- `PATCH /api/v1/casting/director/auditions/:audition_id/callbacks/:callback_id/reschedule` - Reschedule a callback
+- `PATCH /api/v1/casting/director/auditions/:audition_id/callbacks/:callback_id/new_meeting` - Generate a new callback meeting link
+- `PATCH /api/v1/casting/director/auditions/:audition_id/callbacks/:callback_id/review` - Review a callback (accept/reject)
+
+**Actor — Invitations**
+- `GET /api/v1/casting/actor/invitations` - Get actor's pending invitations
+- `PATCH /api/v1/casting/actor/invitations/:invitation_id/respond` - Respond to an invitation (accept/decline)
+
+**Actor — Submissions**
+- `GET /api/v1/casting/actor/auditions/submissions` - Get actor's submissions
+- `POST /api/v1/casting/actor/auditions/:audition_id/submissions` - Submit an audition (returns presigned upload URL)
+
+**Actor — Auditions**
 - `GET /api/v1/casting/actor/auditions/:audition_id/script` - Get audition script as PDF
 - `GET /api/v1/casting/actor/auditions/` - Get all auditions
+
+**Actor — Callbacks**
+- `GET /api/v1/casting/actor/callbacks` - Get actor's callbacks
 
 ### 6. Notification Service
 **Base Route:** `/api/v1/notifications`

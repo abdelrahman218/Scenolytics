@@ -10,6 +10,8 @@ class ActorAuditionSubmission {
     required this.emotionalScore,
     required this.vocalToneScore,
     required this.scriptMatchScore,
+    required this.eyesAnalysisScore,
+    required this.toneAnalysisScore,
     this.recordedVideoUrl,
   });
 
@@ -21,10 +23,13 @@ class ActorAuditionSubmission {
 
   /// Breakdown scores (0–100) for audition analytics UI.
   /// [emotionalScore] = facial emotions; [vocalToneScore] = vocal emotion; [scriptMatchScore] = script match.
+  /// [eyesAnalysisScore] / [toneAnalysisScore] = optional breakdown rows when the API supplies them.
   final int age;
   final int emotionalScore;
   final int vocalToneScore;
   final int scriptMatchScore;
+  final int eyesAnalysisScore;
+  final int toneAnalysisScore;
 
   /// HTTPS URL to the uploaded audition recording, when known (director playback).
   final String? recordedVideoUrl;
