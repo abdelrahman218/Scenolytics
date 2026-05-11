@@ -264,6 +264,17 @@
         {
           "local": {
             "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "181DFbcE5C893f1df42A5eCd",
+            "filePath": "postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/ACTOR/Get All Auditions.request.yaml"
+          }
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
             "requestId": "956bc7cE5fFEcCfcD0A8E9e7",
             "filePath": "postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/ACTOR/Get Actor Callbacks.request.yaml"
           },
