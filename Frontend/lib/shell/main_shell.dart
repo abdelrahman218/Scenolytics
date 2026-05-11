@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../branding/scenolytics_branding.dart';
@@ -17,6 +15,7 @@ class MainShell extends StatefulWidget {
     this.currentRouteName = 'rankings',
     this.onSelectHome,
     this.onSelectRankings,
+    this.onSelectCreateAudition,
     this.onSelectSubmitVideo,
     this.showActorNav = true,
     this.showDirectorNav = true,
@@ -32,6 +31,7 @@ class MainShell extends StatefulWidget {
   final String currentRouteName;
   final VoidCallback? onSelectHome;
   final VoidCallback? onSelectRankings;
+  final VoidCallback? onSelectCreateAudition;
   final VoidCallback? onSelectSubmitVideo;
   final bool showActorNav;
   final bool showDirectorNav;
@@ -58,28 +58,31 @@ class _MainShellState extends State<MainShell> {
 
     final theme = Theme.of(context);
 
-    final edgeDrag = useDrawer
-        ? math.max(
-            56.0,
-            MediaQuery.paddingOf(context).left + 40.0,
-          )
-        : null;
-
     return Scaffold(
       key: _scaffoldKey,
+      // On narrow layouts the shell uses a drawer; keep the body full-height so
+      // the keyboard overlays instead of shrinking the column (which would pin
+      // the page footer directly under the header). Wider layouts keep inset
+      // resize for desktop/tablet forms.
+      resizeToAvoidBottomInset: !useDrawer,
       backgroundColor: theme.colorScheme.surface,
       drawer: useDrawer
           ? ScenolyticsAppDrawer(
               currentRouteName: widget.currentRouteName,
               onSelectHome: widget.onSelectHome,
               onSelectRankings: widget.onSelectRankings,
+              onSelectCreateAudition: widget.onSelectCreateAudition,
               onSelectSubmitVideo: widget.onSelectSubmitVideo,
               showActorNav: widget.showActorNav,
               showDirectorNav: widget.showDirectorNav,
+              onLogout: widget.onLogout,
             )
           : null,
       drawerEnableOpenDragGesture: useDrawer,
-      drawerEdgeDragWidth: edgeDrag,
+      // Full-width drag strip so a left-to-right swipe can open the drawer from
+      // anywhere (narrow layouts only). May compete with horizontal scrollables.
+      drawerEdgeDragWidth:
+          useDrawer ? MediaQuery.sizeOf(context).width : null,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -91,6 +94,7 @@ class _MainShellState extends State<MainShell> {
             currentRouteName: widget.currentRouteName,
             onSelectHome: widget.onSelectHome,
             onSelectRankings: widget.onSelectRankings,
+            onSelectCreateAudition: widget.onSelectCreateAudition,
             onSelectSubmitVideo: widget.onSelectSubmitVideo,
             showActorNav: widget.showActorNav,
             showDirectorNav: widget.showDirectorNav,
@@ -115,6 +119,7 @@ class _HeaderBar extends StatelessWidget {
     required this.currentRouteName,
     this.onSelectHome,
     this.onSelectRankings,
+    this.onSelectCreateAudition,
     this.onSelectSubmitVideo,
     this.pageTitle,
     this.showActorNav = true,
@@ -132,6 +137,7 @@ class _HeaderBar extends StatelessWidget {
   final String currentRouteName;
   final VoidCallback? onSelectHome;
   final VoidCallback? onSelectRankings;
+  final VoidCallback? onSelectCreateAudition;
   final VoidCallback? onSelectSubmitVideo;
   final String? pageTitle;
   final bool showActorNav;
@@ -147,6 +153,7 @@ class _HeaderBar extends StatelessWidget {
     final theme = Theme.of(context);
     final width = MediaQuery.sizeOf(context).width;
     final showInlineNav = width >= MainShell.drawerBreakpoint;
+    final tapCreateAudition = onSelectCreateAudition;
 
     return Material(
       elevation: 2,
@@ -218,11 +225,15 @@ class _HeaderBar extends StatelessWidget {
                                       filled: currentRouteName == 'rankings',
                                       onPressed: onSelectRankings ?? () {},
                                     ),
-                                  _NavButton(
-                                    icon: Icons.groups_outlined,
-                                    label: 'Auditions',
-                                    onPressed: () {},
-                                  ),
+                                  if (showDirectorNav &&
+                                      tapCreateAudition != null)
+                                    _NavButton(
+                                      icon: Icons.add_circle_outline_rounded,
+                                      label: 'Create audition',
+                                      filled: currentRouteName ==
+                                          'create-audition',
+                                      onPressed: tapCreateAudition,
+                                    ),
                                 ],
                               ),
                             ),

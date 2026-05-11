@@ -23,6 +23,7 @@ class AuthFlowScaffold extends StatelessWidget {
     final logo = ScenolyticsBranding.of(context).logo;
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       body: DecoratedBox(
         decoration: BoxDecoration(
           gradient: ScenolyticsColors.pageBackdropGradientFor(brightness),
@@ -30,7 +31,12 @@ class AuthFlowScaffold extends StatelessWidget {
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              padding: EdgeInsets.fromLTRB(
+                20,
+                24,
+                20,
+                24 + MediaQuery.viewInsetsOf(context).bottom,
+              ),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 440),
                 child: Column(

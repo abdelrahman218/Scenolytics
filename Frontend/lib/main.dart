@@ -15,6 +15,7 @@ import 'data/models/auth_user.dart';
 import 'models/actor_audition_submission.dart';
 import 'pages/audition_rankings_page.dart';
 import 'pages/audition_video_submission_page.dart';
+import 'pages/director_audition_creation_page.dart';
 import 'pages/login_page.dart';
 import 'shell/main_shell.dart';
 import 'theme/app_theme.dart';
@@ -86,7 +87,7 @@ class ScenolyticsApp extends StatelessWidget {
   }
 }
 
-enum _ShellPage { actorSubmission, directorRankings }
+enum _ShellPage { actorSubmission, directorRankings, directorCreateAudition }
 
 class _ScenolyticsHome extends StatefulWidget {
   const _ScenolyticsHome({
@@ -167,6 +168,9 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
     if (page == _ShellPage.directorRankings && !_user.isDirector) {
       return;
     }
+    if (page == _ShellPage.directorCreateAudition && !_user.isDirector) {
+      return;
+    }
     setState(() => _page = page);
   }
 
@@ -245,16 +249,29 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
         directorDisplayName: _directorDisplayName,
         onRefresh: _refreshDirectorRankings,
       ),
+      _ShellPage.directorCreateAudition => DirectorAuditionCreationPage(
+        auditionsRepository: _auditionsRepository,
+        directorToken: _directorToken,
+        onAuditionCreated: (audition) {
+          final id = audition['id']?.toString();
+          developer.log(
+            'Audition created${id != null && id.isNotEmpty ? ': $id' : ''}',
+            name: 'Scenolytics',
+          );
+        },
+      ),
     };
 
     final pageTitle = switch (_page) {
       _ShellPage.actorSubmission => 'Actor portal',
       _ShellPage.directorRankings => 'Director portal',
+      _ShellPage.directorCreateAudition => 'Create audition',
     };
 
     final currentRouteName = switch (_page) {
       _ShellPage.actorSubmission => 'submit-video',
       _ShellPage.directorRankings => 'rankings',
+      _ShellPage.directorCreateAudition => 'create-audition',
     };
 
     return MainShell(
@@ -278,6 +295,9 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
               _goTo(_ShellPage.directorRankings);
               _refreshDirectorRankings();
             }
+          : null,
+      onSelectCreateAudition: _user.isDirector
+          ? () => _goTo(_ShellPage.directorCreateAudition)
           : null,
       onSelectSubmitVideo:
           _user.isActor ? () => _goTo(_ShellPage.actorSubmission) : null,

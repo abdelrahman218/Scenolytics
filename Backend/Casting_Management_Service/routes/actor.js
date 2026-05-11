@@ -3,6 +3,7 @@ import {
   getActorCallbacks,
   getActorPendingInvitations,
   getActorSubmissions,
+  getAllAuditions,
   getAuditionPdfScript,
   respondToInvitation,
   submitAuditionSubmission,
@@ -55,6 +56,8 @@ const getAuditionPdfScriptValidators = [
 ]
 router.get("/auditions/:audition_id/script", getAuditionPdfScriptValidators, getAuditionPdfScript);
 
+// Get all auditions
+router.get("/auditions", getAllAuditions);
 // ==================== CALLBACK ENDPOINTS ====================
 
 // Get callbacks for actor

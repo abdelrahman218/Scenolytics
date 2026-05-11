@@ -109,6 +109,7 @@ Below is a comprehensive list of all implemented API endpoints grouped by their 
 
 **Actor — Auditions**
 - `GET /api/v1/casting/actor/auditions/:audition_id/script` - Get audition script as PDF
+- `GET /api/v1/casting/actor/auditions/` - Get all auditions
 
 **Actor — Callbacks**
 - `GET /api/v1/casting/actor/callbacks` - Get actor's callbacks

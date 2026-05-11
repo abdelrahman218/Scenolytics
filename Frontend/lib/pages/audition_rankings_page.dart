@@ -7,6 +7,9 @@ import 'package:video_player/video_player.dart';
 
 import '../data/audition_rankings_sort.dart';
 import '../models/actor_audition_submission.dart';
+import '../pages/facial_emotion_score.dart';
+import '../pages/script_alignemnt_score_page.dart';
+import '../pages/vocal_emotion_score.dart';
 import '../theme/scenolytics_colors.dart';
 import '../widgets/scenolytics_footer.dart';
 
@@ -153,11 +156,15 @@ class _AuditionRankingsPageState extends State<AuditionRankingsPage> {
       ]);
     }
 
+    final kb = MediaQuery.viewInsetsOf(context).bottom;
     Widget scrollView = CustomScrollView(
       physics: widget.onRefresh != null
           ? const AlwaysScrollableScrollPhysics()
           : null,
-      slivers: slivers,
+      slivers: [
+        ...slivers,
+        SliverToBoxAdapter(child: SizedBox(height: kb)),
+      ],
     );
 
     if (widget.onRefresh != null) {
@@ -1264,36 +1271,39 @@ class _CompactRankCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _ActorRankMedal(rank: entry.rank),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              s.actorName.trim().isEmpty ? '—' : s.actorName,
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: cs.onSurface,
-                              ),
-                            ),
-                            if (s.age > 0) ...[
-                              const SizedBox(height: 4),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _ActorRankMedal(rank: entry.rank),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
                               Text(
-                                'Age: ${s.age}',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: cs.onSurfaceVariant,
+                                s.actorName.trim().isEmpty ? '—' : s.actorName,
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: cs.onSurface,
                                 ),
                               ),
+                              if (s.age > 0) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Age: ${s.age}',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: cs.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
-                      ),
-                      _OverallScoreChip(score: s.score),
-                    ],
+                        _OverallScoreChip(score: s.score),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 16),
                   LayoutBuilder(
@@ -1315,6 +1325,16 @@ class _CompactRankCard extends StatelessWidget {
                           s.scriptMatchScore,
                           ScenolyticsColors.metricScriptMatch,
                         ),
+                        (
+                          'Eyes analysis',
+                          s.eyesAnalysisScore,
+                          ScenolyticsColors.metricEyesAnalysis,
+                        ),
+                        (
+                          'Tone analysis',
+                          s.toneAnalysisScore,
+                          ScenolyticsColors.metricToneAnalysis,
+                        ),
                       ];
                       final track = b == Brightness.dark
                           ? ScenolyticsColors.actorCardMetricTrackDark
@@ -1322,11 +1342,41 @@ class _CompactRankCard extends StatelessWidget {
 
                       Widget cell(int i) {
                         final (label, value, color) = metrics[i];
+                        VoidCallback? onTap;
+                        if (i == 0) {
+                          onTap = () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) =>
+                                    FacialEmotionScorePage(submission: s),
+                              ),
+                            );
+                          };
+                        } else if (i == 1) {
+                          onTap = () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) =>
+                                    VocalEmotionScorePage(submission: s),
+                              ),
+                            );
+                          };
+                        } else if (i == 2) {
+                          onTap = () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) =>
+                                    ScriptAlignmentScorePage(submission: s),
+                              ),
+                            );
+                          };
+                        }
                         return _ActorMetricBar(
                           label: label,
                           value: value,
                           barColor: color,
                           trackColor: track,
+                          onTap: onTap,
                         );
                       }
 
@@ -1344,19 +1394,42 @@ class _CompactRankCard extends StatelessWidget {
                             const SizedBox(height: 12),
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [Expanded(child: cell(2))],
+                              children: [
+                                Expanded(child: cell(2)),
+                                const SizedBox(width: 10),
+                                Expanded(child: cell(3)),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [Expanded(child: cell(4))],
                             ),
                           ],
                         );
                       }
 
-                      return Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          for (var i = 0; i < 3; i++) ...[
-                            if (i > 0) const SizedBox(width: 10),
-                            Expanded(child: cell(i)),
-                          ],
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              for (var i = 0; i < 3; i++) ...[
+                                if (i > 0) const SizedBox(width: 10),
+                                Expanded(child: cell(i)),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(child: cell(3)),
+                              const SizedBox(width: 10),
+                              Expanded(child: cell(4)),
+                            ],
+                          ),
                         ],
                       );
                     },
@@ -1547,12 +1620,14 @@ class _ActorMetricBar extends StatelessWidget {
     required this.value,
     required this.barColor,
     required this.trackColor,
+    this.onTap,
   });
 
   final String label;
   final int value;
   final Color barColor;
   final Color trackColor;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1560,43 +1635,53 @@ class _ActorMetricBar extends StatelessWidget {
     final cs = theme.colorScheme;
     final v = value.clamp(0, 100) / 100.0;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: cs.onSurfaceVariant,
-                  fontWeight: FontWeight.w600,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '$value',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: cs.onSurface,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: v,
+                  minHeight: 6,
+                  backgroundColor: trackColor,
+                  color: barColor,
                 ),
               ),
-            ),
-            Text(
-              '$value',
-              style: theme.textTheme.labelLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-                color: cs.onSurface,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: v,
-            minHeight: 6,
-            backgroundColor: trackColor,
-            color: barColor,
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 }
