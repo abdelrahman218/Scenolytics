@@ -60,13 +60,25 @@ class UserManagementApi {
   }
 
   /// Returns profile JSON or null if missing / network error.
-  Future<Map<String, dynamic>?> getActorProfile(String userId) async {
+  ///
+  /// When [bearerToken] is set (e.g. director JWT on rankings, or the actor's own
+  /// token on profile), it is sent as `Authorization: Bearer …` so gateways that
+  /// require auth for `GET /actors/.../profile` still return a row.
+  Future<Map<String, dynamic>?> getActorProfile(
+    String userId, {
+    String? bearerToken,
+  }) async {
     final trimmed = userId.trim();
     if (trimmed.isEmpty) return null;
+    final headers = <String, String>{
+      'Accept': 'application/json',
+      if (bearerToken != null && bearerToken.trim().isNotEmpty)
+        'Authorization': 'Bearer ${bearerToken.trim()}',
+    };
     try {
       final response = await _client.get(
         _uri('/api/v1/actors/$trimmed/profile'),
-        headers: const {'Accept': 'application/json'},
+        headers: headers,
       );
       if (response.statusCode == 404) {
         _logProfileFailure('getActorProfile', trimmed, response);
@@ -98,13 +110,18 @@ class UserManagementApi {
 
   /// Prefer inner `profile` or `data` when the gateway wraps the row.
   Map<String, dynamic> _unwrapProfileBody(Map<String, dynamic> body) {
-    final inner = body['profile'];
-    if (inner is Map) {
-      return inner.map((k, v) => MapEntry(k.toString(), v));
-    }
-    final data = body['data'];
-    if (data is Map) {
-      return data.map((k, v) => MapEntry(k.toString(), v));
+    for (final key in const [
+      'profile',
+      'data',
+      'actor',
+      'actor_profile',
+      'actorProfile',
+      'result',
+    ]) {
+      final inner = body[key];
+      if (inner is Map) {
+        return inner.map((k, v) => MapEntry(k.toString(), v));
+      }
     }
     return body;
   }

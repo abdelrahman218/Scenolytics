@@ -8,6 +8,7 @@ import 'package:video_player/video_player.dart';
 import '../data/audition_rankings_sort.dart';
 import '../models/actor_audition_submission.dart';
 import '../pages/facial_emotion_score.dart';
+import '../pages/ranking_eyes_tone_details_page.dart';
 import '../pages/script_alignemnt_score_page.dart';
 import '../pages/vocal_emotion_score.dart';
 import '../theme/scenolytics_colors.dart';
@@ -1325,16 +1326,6 @@ class _CompactRankCard extends StatelessWidget {
                           s.scriptMatchScore,
                           ScenolyticsColors.metricScriptMatch,
                         ),
-                        (
-                          'Eyes analysis',
-                          s.eyesAnalysisScore,
-                          ScenolyticsColors.metricEyesAnalysis,
-                        ),
-                        (
-                          'Tone analysis',
-                          s.toneAnalysisScore,
-                          ScenolyticsColors.metricToneAnalysis,
-                        ),
                       ];
                       final track = b == Brightness.dark
                           ? ScenolyticsColors.actorCardMetricTrackDark
@@ -1396,43 +1387,54 @@ class _CompactRankCard extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Expanded(child: cell(2)),
-                                const SizedBox(width: 10),
-                                Expanded(child: cell(3)),
                               ],
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [Expanded(child: cell(4))],
                             ),
                           ],
                         );
                       }
 
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              for (var i = 0; i < 3; i++) ...[
-                                if (i > 0) const SizedBox(width: 10),
-                                Expanded(child: cell(i)),
-                              ],
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(child: cell(3)),
-                              const SizedBox(width: 10),
-                              Expanded(child: cell(4)),
-                            ],
-                          ),
+                          for (var i = 0; i < 3; i++) ...[
+                            if (i > 0) const SizedBox(width: 10),
+                            Expanded(child: cell(i)),
+                          ],
                         ],
                       );
                     },
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => RankingEyesToneDetailsPage(
+                                submission: s,
+                              ),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.insights_outlined, size: 18),
+                        label: const Text('More details'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: cs.primary,
+                          side: BorderSide(
+                            color: cs.primary.withValues(alpha: 0.45),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 16),
                   LayoutBuilder(
