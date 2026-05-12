@@ -1,15 +1,23 @@
+import Actor from "../models/actor.js";
 import { Audition } from "../models/audition.js";
 import { AuditionInvitation } from "../models/audition_invitation.js";
 import { AuditionSubmission } from "../models/audition_submission.js";
 import { Callback } from "../models/callback.js";
+import { GoogleCalendarCredentials } from "../models/google_calender_credentials.js";
 import { assertExchange, assertQueue, bindQueue, consumeMessages, EXCHANGES, QUEUES, ROUTING_KEYS } from "./rabbitmq.js";
 
-const handleUserDeleted = async (routingKey, data) => {
+const handleUserEvents = async (routingKey, data) => {
   try {
-    await Audition.deleteByDirectorId(data.user_id);
-    await AuditionSubmission.deleteByActorId(data.user_id);
-    await AuditionInvitation.deleteByActorId(data.user_id);
-    await Callback.deleteByActorId(data.user_id);
+    if (routingKey === ROUTING_KEYS.USER_CREATED && data?.role === 'actor'){
+      await Actor.Create(data.user_id, data.email);
+    }else if (routingKey === ROUTING_KEYS.USER_DELETED){
+      await Actor.Delete(data.user_id);
+      await Audition.deleteByDirectorId(data.user_id);
+      await AuditionSubmission.deleteByActorId(data.user_id);
+      await AuditionInvitation.deleteByActorId(data.user_id);
+      await Callback.deleteByActorId(data.user_id);
+      await GoogleCalendarCredentials.deleteByDirectorId(data.user_id);
+    }
   } catch (error) {
     console.error("Coulding delete user data. \n " + data);
   }
@@ -24,7 +32,7 @@ const handleEvaluationDone = async (routingKey, data) => {
 };
 
 const executeAsyncListeners = () => {
-  consumeMessages(QUEUES.USER_EVENTS, handleUserDeleted);
+  consumeMessages(QUEUES.USER_EVENTS, handleUserEvents);
   consumeMessages(QUEUES.EVALUATION_EVENTS, handleEvaluationDone);
 };
 

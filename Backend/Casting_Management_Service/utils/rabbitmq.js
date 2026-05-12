@@ -25,6 +25,7 @@ export const QUEUES = {
 };
 
 export const ROUTING_KEYS = {
+  USER_CREATED: 'user.created',
   USER_DELETED: 'user.deleted',
   AUDITION_CREATED: 'audition.created',
   AUDITION_UPDATED: 'audition.updated',

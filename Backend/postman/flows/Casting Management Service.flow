@@ -807,8 +807,8 @@
       "8N_WwPwy": {
         "type": "task/http-request@1",
         "pos": {
-          "x": 5320,
-          "y": 56
+          "x": 5048,
+          "y": 48
         },
         "config": {
           "element": {
@@ -1062,21 +1062,6 @@
               "key": "actor_token",
               "latch": false,
               "isExtraneous": false
-            },
-            {
-              "id": "dSZrl6YR",
-              "type": null,
-              "kind": null,
-              "value": null,
-              "key": "base_url"
-            },
-            {
-              "id": "dCaR-w2m",
-              "type": "portal/out@2",
-              "kind": "portal/out",
-              "value": "4q1LkJ2U",
-              "key": "actor_token",
-              "latch": false
             }
           ],
           "scriptsModifyEnvVars": true,
@@ -1131,123 +1116,6 @@
               "key": "director_token",
               "latch": false,
               "isExtraneous": false
-            },
-            {
-              "id": "_ogBpmfg",
-              "type": null,
-              "kind": null,
-              "value": null,
-              "key": "base_url"
-            },
-            {
-              "id": "z9g0WyVg",
-              "type": "portal/out@2",
-              "kind": "portal/out",
-              "value": "L4pEW5k2",
-              "key": "audition_id",
-              "latch": false
-            },
-            {
-              "id": "3LUX-GUq",
-              "type": "portal/out@2",
-              "kind": "portal/out",
-              "value": "2XZtJrxG",
-              "key": "director_token",
-              "latch": false
-            }
-          ],
-          "scriptsModifyEnvVars": true,
-          "ignoreTestResults": true,
-          "trackGlobalEnvironment": true,
-          "requestVariables__expanded": true
-        },
-        "ui": {
-          "data": {},
-          "namedInputsExpanded": true
-        },
-        "group": "x6r7bmFn"
-      },
-      "t93GElic": {
-        "type": "task/http-request@2",
-        "pos": {
-          "x": 4104,
-          "y": 128
-        },
-        "config": {
-          "element": {
-            "id": "090650C85A0e2357F0BBee6E",
-            "collection": "5eF9bEABFC58121681c5cA43",
-            "inExtensibleCollection": true,
-            "name": "Reschedule Callback",
-            "method": "PATCH"
-          },
-          "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
-          "parseBody": "auto",
-          "requestVariables": [
-            {
-              "id": "U4o2Ui3F",
-              "type": null,
-              "kind": null,
-              "value": null,
-              "key": "base_url"
-            },
-            {
-              "id": "mePUg98W",
-              "type": "portal/out@2",
-              "kind": "portal/out",
-              "value": "L4pEW5k2",
-              "key": "audition_id",
-              "latch": false,
-              "isExtraneous": false
-            },
-            {
-              "id": "5nbUJEdd",
-              "type": "portal/out@2",
-              "kind": "portal/out",
-              "value": "IjWqHoCJ",
-              "key": "callback_id",
-              "latch": false,
-              "isExtraneous": false
-            },
-            {
-              "id": "q3MPtcSW",
-              "type": "portal/out@2",
-              "kind": "portal/out",
-              "value": "2XZtJrxG",
-              "key": "director_token",
-              "latch": false,
-              "isExtraneous": false
-            },
-            {
-              "id": "U4o2Ui3F",
-              "type": null,
-              "kind": null,
-              "value": null,
-              "key": "base_url"
-            },
-            {
-              "id": "mePUg98W",
-              "type": "portal/out@2",
-              "kind": "portal/out",
-              "value": "L4pEW5k2",
-              "key": "audition_id",
-              "latch": false
-            },
-            {
-              "id": "5nbUJEdd",
-              "type": "portal/out@2",
-              "kind": "portal/out",
-              "value": "IjWqHoCJ",
-              "key": "callback_id",
-              "latch": false
-            },
-            {
-              "id": "q3MPtcSW",
-              "type": "portal/out@2",
-              "kind": "portal/out",
-              "value": "2XZtJrxG",
-              "key": "director_token",
-              "latch": false
             }
           ],
           "scriptsModifyEnvVars": true,
@@ -1289,104 +1157,10 @@
           "data": {}
         }
       },
-      "1plM1T8C": {
-        "type": "task/http-request@2",
-        "pos": {
-          "x": 4512,
-          "y": 128
-        },
-        "config": {
-          "element": {
-            "id": "9FfefFD3Baaf66Cb7e4A4ebe",
-            "collection": "5eF9bEABFC58121681c5cA43",
-            "inExtensibleCollection": true,
-            "name": "Create New Callback Meeting",
-            "method": "PATCH"
-          },
-          "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
-          "parseBody": "auto",
-          "requestVariables": [
-            {
-              "id": "19crHKSM",
-              "type": null,
-              "kind": null,
-              "value": null,
-              "key": "base_url"
-            },
-            {
-              "id": "BdCZG1gT",
-              "type": "portal/out@2",
-              "kind": "portal/out",
-              "value": "L4pEW5k2",
-              "key": "audition_id",
-              "latch": false,
-              "isExtraneous": false
-            },
-            {
-              "id": "Iyob4UlV",
-              "type": "portal/out@2",
-              "kind": "portal/out",
-              "value": "IjWqHoCJ",
-              "key": "callback_id",
-              "latch": false,
-              "isExtraneous": false
-            },
-            {
-              "id": "62c1lbnj",
-              "type": "portal/out@2",
-              "kind": "portal/out",
-              "value": "2XZtJrxG",
-              "key": "director_token",
-              "latch": false,
-              "isExtraneous": false
-            },
-            {
-              "id": "19crHKSM",
-              "type": null,
-              "kind": null,
-              "value": null,
-              "key": "base_url"
-            },
-            {
-              "id": "BdCZG1gT",
-              "type": "portal/out@2",
-              "kind": "portal/out",
-              "value": "L4pEW5k2",
-              "key": "audition_id",
-              "latch": false
-            },
-            {
-              "id": "Iyob4UlV",
-              "type": "portal/out@2",
-              "kind": "portal/out",
-              "value": "IjWqHoCJ",
-              "key": "callback_id",
-              "latch": false
-            },
-            {
-              "id": "62c1lbnj",
-              "type": "portal/out@2",
-              "kind": "portal/out",
-              "value": "2XZtJrxG",
-              "key": "director_token",
-              "latch": false
-            }
-          ],
-          "scriptsModifyEnvVars": true,
-          "ignoreTestResults": true,
-          "trackGlobalEnvironment": true,
-          "requestVariables__expanded": true
-        },
-        "ui": {
-          "data": {},
-          "namedInputsExpanded": true
-        },
-        "group": "x6r7bmFn"
-      },
       "bqFzy-g_": {
         "type": "task/http-request@2",
         "pos": {
-          "x": 4872,
+          "x": 4504,
           "y": 128
         },
         "config": {
@@ -1433,37 +1207,6 @@
               "key": "director_token",
               "latch": false,
               "isExtraneous": false
-            },
-            {
-              "id": "GBymFeRz",
-              "type": null,
-              "kind": null,
-              "value": null,
-              "key": "base_url"
-            },
-            {
-              "id": "T7lJpgtj",
-              "type": "portal/out@2",
-              "kind": "portal/out",
-              "value": "L4pEW5k2",
-              "key": "audition_id",
-              "latch": false
-            },
-            {
-              "id": "oFAvcb2d",
-              "type": "portal/out@2",
-              "kind": "portal/out",
-              "value": "IjWqHoCJ",
-              "key": "callback_id",
-              "latch": false
-            },
-            {
-              "id": "KDpoHYcJ",
-              "type": "portal/out@2",
-              "kind": "portal/out",
-              "value": "2XZtJrxG",
-              "key": "director_token",
-              "latch": false
             }
           ],
           "scriptsModifyEnvVars": true,
@@ -1521,6 +1264,66 @@
           "namedInputsExpanded": true
         },
         "group": "rCLDoy8V"
+      },
+      "oTaRJYTx": {
+        "type": "task/http-request@2",
+        "pos": {
+          "x": 4064,
+          "y": 128
+        },
+        "config": {
+          "element": {
+            "id": "090650C85A0e2357F0BBee6E",
+            "collection": "5eF9bEABFC58121681c5cA43",
+            "inExtensibleCollection": true,
+            "name": "Reschedule Callback",
+            "method": "PATCH"
+          },
+          "environment": "fc443a52-d7f5-5dc3-887c-18968eb6786c",
+          "parseBody": "auto",
+          "requestVariables": [
+            {
+              "id": "GIC_4rqP",
+              "type": null,
+              "kind": null,
+              "value": null,
+              "key": "base_url"
+            },
+            {
+              "id": "J-ONLywo",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "L4pEW5k2",
+              "key": "audition_id",
+              "latch": false
+            },
+            {
+              "id": "VDSWhFQc",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "IjWqHoCJ",
+              "key": "callback_id",
+              "latch": false
+            },
+            {
+              "id": "0J7N7uiS",
+              "type": "portal/out@2",
+              "kind": "portal/out",
+              "value": "2XZtJrxG",
+              "key": "director_token",
+              "latch": false
+            }
+          ],
+          "scriptsModifyEnvVars": true,
+          "ignoreTestResults": true,
+          "trackGlobalEnvironment": true,
+          "requestVariables__expanded": true
+        },
+        "ui": {
+          "data": {},
+          "namedInputsExpanded": true
+        },
+        "group": "x6r7bmFn"
       }
     },
     "connections": {
@@ -1872,12 +1675,6 @@
         "sourcePort": "success",
         "targetPort": "AI"
       },
-      "qKXeON7u": {
-        "source": "jrMFbTky",
-        "target": "t93GElic",
-        "sourcePort": "success",
-        "targetPort": "AI"
-      },
       "vBDKiZyP": {
         "source": "jrMFbTky",
         "target": "c1cUY-Ss",
@@ -1889,18 +1686,6 @@
         "target": "IjWqHoCJ",
         "sourcePort": "out",
         "targetPort": "data"
-      },
-      "n-Gmslqe": {
-        "source": "t93GElic",
-        "target": "1plM1T8C",
-        "sourcePort": "success",
-        "targetPort": "AI"
-      },
-      "0o3m6k-R": {
-        "source": "1plM1T8C",
-        "target": "bqFzy-g_",
-        "sourcePort": "success",
-        "targetPort": "AI"
       },
       "CYiys1dF": {
         "source": "bqFzy-g_",
@@ -1925,42 +1710,6 @@
         "sourcePort": "data",
         "target": "LQkqFvxk",
         "targetPort": "requestVariables|dCaR-w2m"
-      },
-      "TCQ2AE4z": {
-        "source": "L4pEW5k2",
-        "sourcePort": "data",
-        "target": "t93GElic",
-        "targetPort": "requestVariables|mePUg98W"
-      },
-      "-A_OReyD": {
-        "source": "IjWqHoCJ",
-        "sourcePort": "data",
-        "target": "t93GElic",
-        "targetPort": "requestVariables|5nbUJEdd"
-      },
-      "U5wVM1Iz": {
-        "source": "2XZtJrxG",
-        "sourcePort": "data",
-        "target": "t93GElic",
-        "targetPort": "requestVariables|q3MPtcSW"
-      },
-      "Gn9aXF_a": {
-        "source": "L4pEW5k2",
-        "sourcePort": "data",
-        "target": "1plM1T8C",
-        "targetPort": "requestVariables|BdCZG1gT"
-      },
-      "0D4wCCrn": {
-        "source": "IjWqHoCJ",
-        "sourcePort": "data",
-        "target": "1plM1T8C",
-        "targetPort": "requestVariables|Iyob4UlV"
-      },
-      "BStYQ8Tb": {
-        "source": "2XZtJrxG",
-        "sourcePort": "data",
-        "target": "1plM1T8C",
-        "targetPort": "requestVariables|62c1lbnj"
       },
       "vXOLF6dN": {
         "source": "L4pEW5k2",
@@ -1991,6 +1740,36 @@
         "sourcePort": "data",
         "target": "mHstgJWB",
         "targetPort": "requestVariables|lb1VJgdV"
+      },
+      "-XYudPBQ": {
+        "source": "jrMFbTky",
+        "target": "oTaRJYTx",
+        "sourcePort": "success",
+        "targetPort": "AI"
+      },
+      "RFpdB-Jb": {
+        "source": "oTaRJYTx",
+        "target": "bqFzy-g_",
+        "sourcePort": "success",
+        "targetPort": "AI"
+      },
+      "hvnO1tJN": {
+        "source": "L4pEW5k2",
+        "sourcePort": "data",
+        "target": "oTaRJYTx",
+        "targetPort": "requestVariables|J-ONLywo"
+      },
+      "oyoKVuS4": {
+        "source": "IjWqHoCJ",
+        "sourcePort": "data",
+        "target": "oTaRJYTx",
+        "targetPort": "requestVariables|VDSWhFQc"
+      },
+      "giM1us2b": {
+        "source": "2XZtJrxG",
+        "sourcePort": "data",
+        "target": "oTaRJYTx",
+        "targetPort": "requestVariables|0J7N7uiS"
       }
     },
     "annotations": {},
@@ -2002,8 +1781,8 @@
             "y": -16
           },
           "size": {
-            "width": 5628,
-            "height": 1724
+            "width": 5356,
+            "height": 1828
           },
           "color": "yellow"
         },
@@ -2087,6 +1866,6 @@
   "info": {
     "_postman_id": "61ee2713-5ef1-457f-99e2-37c74aa63bf8"
   },
-  "_postman_exported_at": "2026-05-11T13:30:45.610Z",
+  "_postman_exported_at": "2026-05-12T03:34:14.328Z",
   "_postman_exported_using": "Postman/Local Mode"
 }

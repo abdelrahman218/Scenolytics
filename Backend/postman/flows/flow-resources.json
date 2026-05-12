@@ -275,30 +275,8 @@
         {
           "local": {
             "collectionId": "5eF9bEABFC58121681c5cA43",
-            "requestId": "090650C85A0e2357F0BBee6E",
-            "filePath": "postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/DIRECTOR/Reschedule Callback.request.yaml"
-          },
-          "cloud": {
-            "collectionId": null,
-            "requestId": null
-          }
-        },
-        {
-          "local": {
-            "collectionId": "5eF9bEABFC58121681c5cA43",
             "requestId": "e5A8c77AfF0Eb5B71bE9FfbF",
             "filePath": "postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/ACTOR/Get Actor Callbacks.request.yaml"
-          },
-          "cloud": {
-            "collectionId": null,
-            "requestId": null
-          }
-        },
-        {
-          "local": {
-            "collectionId": "5eF9bEABFC58121681c5cA43",
-            "requestId": "9FfefFD3Baaf66Cb7e4A4ebe",
-            "filePath": "postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/DIRECTOR/Create New Callback Meeting.request.yaml"
           },
           "cloud": {
             "collectionId": null,
@@ -321,6 +299,17 @@
             "collectionId": "5eF9bEABFC58121681c5cA43",
             "requestId": "CBc20ffDCe6929eB4b32117b",
             "filePath": "postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/ACTOR/Get All Auditions.request.yaml"
+          },
+          "cloud": {
+            "collectionId": null,
+            "requestId": null
+          }
+        },
+        {
+          "local": {
+            "collectionId": "5eF9bEABFC58121681c5cA43",
+            "requestId": "090650C85A0e2357F0BBee6E",
+            "filePath": "postman/collections/Scenolytics API/CASTING MANAGEMENT SERVICE/DIRECTOR/Reschedule Callback.request.yaml"
           },
           "cloud": {
             "collectionId": null,
