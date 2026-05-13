@@ -1,5 +1,12 @@
 USE callback_management_db;
 
+CREATE TABLE IF NOT EXISTS actors (
+  user_id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+  email VARCHAR(255) NOT NULL UNIQUE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS auditions (
   id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
   director_id CHAR(36) NOT NULL,
@@ -63,16 +70,26 @@ CREATE TABLE IF NOT EXISTS callbacks (
   audition_id CHAR(36) NOT NULL,
   audition_submission_id CHAR(36) NOT NULL,
   actor_id CHAR(36) NOT NULL,
-  callback_status ENUM('created', 'scheduled', 'completed', 'accepted', 'rejected') DEFAULT 'created',
+  callback_status ENUM('scheduled', 'accepted', 'rejected') DEFAULT 'scheduled',
   callback_datetime DATETIME DEFAULT NULL,
-  callback_duration_minutes INT UNSIGNED DEFAULT NULL,
   link VARCHAR(255) DEFAULT NULL,
+  event_id VARCHAR(255) DEFAULT NULL,
   director_notes TEXT DEFAULT NULL,
-  completed_at TIMESTAMP DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (audition_id) REFERENCES auditions(id) ON DELETE CASCADE,
   FOREIGN KEY (audition_submission_id) REFERENCES audition_submissions(id) ON DELETE CASCADE,
   INDEX idx_audition_id (audition_id),
   INDEX idx_audition_submission_id (audition_submission_id)
+);
+
+CREATE TABLE IF NOT EXISTS google_calendar_credentials (
+  id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+  director_id CHAR(36) NOT NULL UNIQUE,
+  google_access_token TEXT NOT NULL,
+  google_refresh_token TEXT NOT NULL,
+  google_token_expiry TIMESTAMP NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_director_id (director_id)
 );

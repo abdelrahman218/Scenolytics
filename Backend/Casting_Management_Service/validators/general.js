@@ -37,3 +37,5 @@ export const checkAuditionExists = async(req, res, next) => {
     }
     next();
 };
+
+export const checkRequiredFieldsGoogleConnectCallback = checkRequiredFields(['code', 'state']);

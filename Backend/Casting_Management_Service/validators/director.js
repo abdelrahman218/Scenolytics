@@ -2,6 +2,7 @@ import { checkRequiredFields, checkValidValues } from "./general.js";
 import { AuditionSubmission } from "../models/audition_submission.js";
 import { Callback } from "../models/callback.js";
 import { Audition } from "../models/audition.js";
+import { GoogleCalendarCredentials } from "../models/google_calender_credentials.js";
 
 // Check Authorization
 
@@ -58,5 +59,31 @@ export const checkSubmissionIsPendingOrUnderReview = async(req, res, next) => {
     if (submission.status !== 'pending' && submission.status !== 'under_review') {
         return res.status(400).json({ message: `Submission is already ${submission.status}` });
     }
+    next();
+};
+
+export const checkDateTimeExistsWhenSubmissionAccepted = async(req, res, next) => {
+    if (req.body.status === 'accepted' && !req.body.callback_datetime) {
+        return res.status(400).json({ message: 'Callback datetime required' });
+    }
+    next();
+};
+
+export const checkCallbackIsScheduled = async(req, res, next) => {
+    const callback = await Callback.findById(req.params.callback_id);
+    
+    if (callback.callback_status !== 'scheduled') {
+        return res.status(400).json({ message: `Callback is already ${callback.callback_status}` });
+    }
+    next();
+};
+
+export const checkDirectorConnectedToGoogle = async(req, res, next) => {
+    const googleCredentials = await GoogleCalendarCredentials.findByDirectorId(req.user.user_id);
+    
+    if (!googleCredentials) {
+        return res.status(400).json({ message: 'Director is not connected to Google' });
+    }
+
     next();
 };
