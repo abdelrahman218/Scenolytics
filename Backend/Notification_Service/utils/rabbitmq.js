@@ -20,7 +20,8 @@ export const QUEUES = {
   USER_EVENTS: 'notification_user_events_queue',
   AUDITION_EVENTS: 'notification_audition_events_queue',
   EVALUATION_EVENTS: 'notification_evaluation_events_queue',
-  INVITATION_EVENTS: 'notification_invitation_events_queue'
+  INVITATION_EVENTS: 'notification_invitation_events_queue',
+  CALLBACK_EVENTS: 'notification_callback_events_queue',
 };
 
 export const ROUTING_KEYS = {
@@ -30,6 +31,9 @@ export const ROUTING_KEYS = {
   EVALUATION_COMPLETED: 'evaluation.completed',
   INVITATION_CREATED: 'invitation.created',
   INVITATION_UPDATED: 'invitation.updated',
+  CALLBACK_CREATED: 'callback.created',
+  CALLBACK_UPDATED: 'callback.updated',
+  CALLBACK_REVIEWED: 'callback.reviewed',
 };
 
 /**

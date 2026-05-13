@@ -8,7 +8,10 @@ import { assertExchange, assertQueue, bindQueue, consumeMessages, EXCHANGES, QUE
 
 const handleUserEvents = async (routingKey, data) => {
   try {
-    if (routingKey === ROUTING_KEYS.USER_CREATED && data?.role === 'actor'){
+    if (routingKey === ROUTING_KEYS.USER_CREATED){
+      if(data.role !== 'actor'){
+        return;
+      }
       await Actor.Create(data.user_id, data.email);
     }else if (routingKey === ROUTING_KEYS.USER_DELETED){
       await Actor.Delete(data.user_id);
@@ -19,7 +22,7 @@ const handleUserEvents = async (routingKey, data) => {
       await GoogleCalendarCredentials.deleteByDirectorId(data.user_id);
     }
   } catch (error) {
-    console.error("Coulding delete user data. \n " + data);
+    console.error("Couldn\'t create/delete user data. \n " + data);
   }
 };
 

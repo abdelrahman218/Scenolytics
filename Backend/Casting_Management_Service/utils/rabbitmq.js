@@ -32,6 +32,7 @@ export const ROUTING_KEYS = {
   AUDITION_DELETED: 'audition.deleted',
   CALLBACK_CREATED: 'callback.created',
   CALLBACK_UPDATED: 'callback.updated',
+  CALLBACK_REVIEWED: 'callback.reviewed',
   AUDITION_SUBMITTED: 'audition.submitted',
   AUDITION_REVIEWED: 'audition.reviewed',
   VIDEO_UPLOADED: 'video.uploaded',

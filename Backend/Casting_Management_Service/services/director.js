@@ -295,10 +295,10 @@ export const reviewCallback = async (req, res, next) => {
     const callback = await Callback.update(req.params.callback_id, updatedData);
     publishMessage(
       EXCHANGES.CALLBACKS,
-      ROUTING_KEYS.CALLBACK_UPDATED,
-      callback,
+      ROUTING_KEYS.CALLBACK_REVIEWED,
+      callback
     );
-    return res.status(200).json(callback);
+    return res.status(200).json({ message: "Callback reviewed successfully", callback });
   } catch (error) {
     next(error);
   }
