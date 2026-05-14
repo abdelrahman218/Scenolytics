@@ -58,6 +58,7 @@ EVALUATION_RESPONSE_FIELDS = [
     'vocal_tone_score',
     'script_alignment_score',
     'overall_performance_score',
+    "eye_expression_score",
     'detected_emotions',
     'ai_feedback',
     'evaluation_status',

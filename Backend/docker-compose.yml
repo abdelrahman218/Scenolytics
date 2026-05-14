@@ -297,7 +297,7 @@ services:
       RABBITMQ_URL: ${RABBITMQ_URL}
       VIDEO_STORAGE_PATH: /app/videos
     deploy:
-      replicas: 3
+      replicas: 1
     ports:
       - "${AI_EVALUATION_SERVICE_PORT}-${AI_EVALUATION_SERVICE_END_PORT}:${AI_EVALUATION_SERVICE_PORT}"
     volumes:

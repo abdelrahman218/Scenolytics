@@ -2,10 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install only what's needed
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libopenblas-dev \
-    liblapack-dev \
     libgomp1 \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
@@ -14,12 +11,12 @@ COPY requirements.txt .
 
 RUN pip install --upgrade pip
 
-# Install PyTorch (CPU only, smaller)
+# PyTorch CPU only
 RUN pip install --no-cache-dir \
     torch==2.4.0 torchaudio==2.4.0 \
     --index-url https://download.pytorch.org/whl/cpu
 
-# Install core stack
+# Core stack
 RUN pip install --no-cache-dir \
     numpy==1.26.4 \
     tensorflow==2.15.0 \
@@ -31,7 +28,9 @@ RUN pip install --no-cache-dir \
 # Install rest
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Final cleanup (important)
+# Re-pin numpy LAST (mediapipe upgrades it)
+RUN pip install --no-cache-dir "numpy==1.26.4" --force-reinstall
+
 RUN pip cache purge
 
 COPY . .

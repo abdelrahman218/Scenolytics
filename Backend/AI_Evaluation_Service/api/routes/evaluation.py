@@ -24,27 +24,52 @@ router = APIRouter(prefix='/api/evaluations', tags=['evaluations'])
 
 # ==================== Request Models ====================
 
+from pydantic import BaseModel, Field, field_validator
+
 class ProcessRequest(BaseModel):
     evaluation_id: str
     media_id: str
-    script_text: Optional[str] = Field(None, description="Expected script for alignment scoring")
+    script_text: Optional[str] = Field(
+        None,
+        description='JSON string: [{"content": "...", "emotion": "angry"}, ...]'
+    )
+
+    @field_validator("script_text", mode="before")
+    @classmethod
+    def coerce_script_text(cls, v):
+        if isinstance(v, list):
+            return json.dumps(v)
+        return v
 
 
 class CreateEvaluationRequest(BaseModel):
     """Request model for creating a new evaluation"""
     media_id: str = Field(..., description="Video media identifier")
     submission_id: Optional[str] = Field(None, description="Audition submission ID")
-    script_text: Optional[str] = Field(None, description="Expected script for alignment scoring")
+    script_text: Optional[str] = Field(
+        None,
+        description=(
+            "Expected script for alignment and emotion scoring. "
+            "Send as a JSON-encoded string or a raw JSON array: "
+            '[{"content": "sentence text", "emotion": "angry"}, ...]'
+        ),
+    )
+
+    @field_validator("script_text", mode="before")
+    @classmethod
+    def coerce_script_text(cls, v):
+        if isinstance(v, list):
+            return json.dumps(v)
+        return v
 
     class Config:
         json_schema_extra = {
             "example": {
                 "media_id": "video-actor-001",
                 "submission_id": "submission-audition-001",
-                "script_text": "To be or not to be, that is the question."
+                "script_text": '[{"content": "i don\'t understand my feelings", "emotion": "angry"}, {"content": "how no matter how much i\'d like not to hate you", "emotion": "fearful"}]'
             }
         }
-
 
 # ==================== Pydantic Models ====================
 
@@ -65,7 +90,10 @@ class EvaluationResponse(BaseModel):
     vocal_tone_score: Optional[float]
     script_alignment_score: Optional[float]
     overall_performance_score: Optional[float]
+    eye_expression_score: Optional[Dict[str, Any]]
     detected_emotions: Optional[Dict[str, Any]]
+    detected_emotions_vocal: Optional[Dict[str, Any]]
+    script_alignment_details: Optional[Dict[str, Any]]
     ai_feedback: Optional[str]
     evaluation_status: str
     error_message: Optional[str]
@@ -87,6 +115,16 @@ class EvaluationResponse(BaseModel):
                     "secondary": "neutral",
                     "confidence": 0.92
                 },
+                "detected_emotions_vocal": {
+                    "primary": "happy",
+                    "confidence": 0.88,
+                    "all_emotions": {
+                        "happy": 0.88,
+                        "neutral": 0.07,
+                        "sad": 0.05
+                    }
+                },
+                "eye_expression_score": 88.0,
                 "ai_feedback": "Excellent performance!",
                 "evaluation_status": "completed",
                 "error_message": None,
@@ -111,6 +149,28 @@ def _row_to_response(row: dict) -> EvaluationResponse:
             )
         except Exception:
             detected_emotions = None
+    
+    detected_emotions_vocal = None
+    if row.get("detected_emotions_vocal"):
+        try:
+            detected_emotions_vocal = (
+                json.loads(row["detected_emotions_vocal"])
+                if isinstance(row["detected_emotions_vocal"], str)
+                else row["detected_emotions_vocal"]
+            )
+        except Exception:
+            detected_emotions_vocal = None
+    
+    script_alignment_details = None
+    if row.get("script_alignment_details"):
+        try:
+            script_alignment_details = (
+                json.loads(row["script_alignment_details"])
+                if isinstance(row["script_alignment_details"], str)
+                else row["script_alignment_details"]
+            )
+        except Exception:
+            script_alignment_details = None
 
     def _iso(val):
         if val is None:
@@ -126,6 +186,13 @@ def _row_to_response(row: dict) -> EvaluationResponse:
         script_alignment_score=float(row["script_alignment_score"]) if row.get("script_alignment_score") is not None else None,
         overall_performance_score=float(row["overall_performance_score"]) if row.get("overall_performance_score") is not None else None,
         detected_emotions=detected_emotions,
+        detected_emotions_vocal=detected_emotions_vocal,
+        script_alignment_details=script_alignment_details,
+        eye_expression_score=(
+            json.loads(row["eye_expression_score"])
+            if isinstance(row["eye_expression_score"], str)
+            else row["eye_expression_score"]
+        ) if row.get("eye_expression_score") is not None else None,
         ai_feedback=row.get("ai_feedback"),
         evaluation_status=row["evaluation_status"],
         error_message=row.get("error_message"),
@@ -160,7 +227,7 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
         )
 
         # Get video storage path from environment or use default
-        video_storage_dir = os.getenv('VIDEO_STORAGE_PATH', '/videos')
+        video_storage_dir = os.getenv('VIDEO_STORAGE_PATH', '/app/videos')
         video_path = os.path.join(video_storage_dir, f"{media_id}.mp4")
         
         # Check if video file exists
@@ -177,11 +244,28 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
         #   emotional_expression_score, vocal_tone_score, script_alignment_score,
         #   overall_performance_score, detected_emotions (dict), ai_feedback (str)
         scores = await pipeline.evaluate_video(video_path, script_text=script_text)
-
+        logger.info(f"Pipeline result keys: {list(scores.keys())}")
+        logger.info(f"eye_expression_score value: {scores.get('eye_expression_score')}")
+        logger.info(f"eye_expression value: {scores.get('eye_expression')}")
         # overall is already calculated inside evaluate_video() using the
         # correct 40/35/25 weights — no need to recalculate here.
         overall = scores["overall_performance_score"]
-
+        eye_expression_score = scores.get("eye_expression")
+        if isinstance(eye_expression_score, dict):
+            eye_expression_score = json.dumps(eye_expression_score)
+        elif eye_expression_score is not None:
+            eye_expression_score = json.dumps(eye_expression_score)
+        detected_emotions_vocal = scores.get("detected_emotions_vocal")
+        script_alignment_details = None
+        alignment_data = scores.get("script_alignment_data")  # you need to add this to evaluate_video's return
+        if alignment_data:
+            script_alignment_details = {
+                "transcript":       alignment_data.get("transcript", ""),
+                "comparison_rows":  alignment_data.get("comparison_rows", []),
+                "coverage":         alignment_data.get("coverage", 0.0),
+                "sentences_aligned": alignment_data.get("sentences_aligned", []),
+            }
+        
         await db.execute(
             """
             UPDATE evaluations
@@ -189,7 +273,10 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
                 vocal_tone_score           = %s,
                 script_alignment_score     = %s,
                 overall_performance_score  = %s,
+                eye_expression_score       = %s,
                 detected_emotions          = %s,
+                detected_emotions_vocal    = %s,
+                script_alignment_details   = %s,
                 ai_feedback                = %s,
                 evaluation_status          = 'completed',
                 completed_at               = NOW()
@@ -200,7 +287,10 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
                 scores["vocal_tone_score"],
                 scores["script_alignment_score"],
                 overall,
+                eye_expression_score,
                 json.dumps(scores.get("detected_emotions")),
+                json.dumps(detected_emotions_vocal) if detected_emotions_vocal else None,
+                json.dumps(script_alignment_details) if script_alignment_details else None,
                 scores.get("ai_feedback"),
                 evaluation_id,
             ),
@@ -263,7 +353,10 @@ async def create_evaluation(request: CreateEvaluationRequest, background_tasks: 
             vocal_tone_score=None,
             script_alignment_score=None,
             overall_performance_score=None,
+            eye_expression_score=None,
             detected_emotions=None,
+            detected_emotions_vocal=None,
+            script_alignment_details=None,
             ai_feedback=None,
             evaluation_status="pending",
             error_message=None,
@@ -374,6 +467,7 @@ async def process_mock_evaluation(evaluation_id: str):
                 script_alignment_score     = %s,
                 overall_performance_score  = %s,
                 detected_emotions          = %s,
+                eye_expression_score       = %s,
                 ai_feedback                = %s,
                 evaluation_status          = 'completed',
                 completed_at               = %s
