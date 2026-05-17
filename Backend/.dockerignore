@@ -10,13 +10,6 @@ __pycache__
 dist/
 build/
 wheels/
-
-# Virtual environments
-.venv
-venv/
-env/
-ENV/
-
 # Git
 .git
 .gitignore
@@ -55,3 +48,8 @@ Dockerfile*
 # Docs
 README.md
 docs/
+.next
+.eslintcache
+.prettierignore
+.postman
+postman

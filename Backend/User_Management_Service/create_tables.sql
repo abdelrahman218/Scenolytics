@@ -3,6 +3,7 @@ USE user_management_db;
 CREATE TABLE IF NOT EXISTS actor_profiles (
   id VARCHAR(36) PRIMARY KEY,
   user_id VARCHAR(36) NOT NULL UNIQUE,
+  display_name VARCHAR(255),
   bio TEXT,
   height_cm INT,
   age INT,
@@ -25,6 +26,7 @@ CREATE TABLE IF NOT EXISTS actor_profiles (
 CREATE TABLE IF NOT EXISTS director_profiles (
   id VARCHAR(36) PRIMARY KEY,
   user_id VARCHAR(36) NOT NULL UNIQUE,
+  display_name VARCHAR(255),
   company_name VARCHAR(255),
   company_bio TEXT,
   website VARCHAR(500),

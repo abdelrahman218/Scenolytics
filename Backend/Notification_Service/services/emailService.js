@@ -1,5 +1,6 @@
 import { NotificationPreference } from "../models/notification_preference.js";
 import { smtp } from "../config/nodemailer.js";
+import { generateEmailTemplate } from "../utils/emailTemplate.js";
 
 function wantsEmailForType(prefs, notificationType) {
     if (!prefs) return false;
@@ -20,7 +21,7 @@ export const sendEmailNotification = async(notification)=>{
         await smtp.sendMail({
             to: prefs.user_email,
             subject: notification.title,
-            text: notification.message
+            html: generateEmailTemplate(notification.title, notification.message)
         });
     } catch (error) {
         console.error(`Error while sending notification (${notification.id}) mail:`, err);

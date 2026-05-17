@@ -1,0 +1,7 @@
+$kind: http-request
+name: Get Actor Callbacks
+url: "{{base_url}}/api/v1/casting/actor/callbacks"
+method: GET
+headers:
+  Authorization: Bearer {{actor_token}}
+order: 6000

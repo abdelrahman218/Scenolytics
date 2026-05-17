@@ -16,7 +16,7 @@ export const EXCHANGES = {
 };
 
 export const QUEUES = {
-  USER_EVENTS: 'user_events_queue',
+  USER_EVENTS: 'user_management_user_events_queue',
   AUDITION_EVENTS: 'audition_events_queue',
   VIDEO_EVENTS: 'video_events_queue',
   EVALUATION_EVENTS: 'evaluation_events_queue',
@@ -147,15 +147,7 @@ export const consumeMessages = async (queueName, callback) => {
       if (msg) {
         try {
           const content = JSON.parse(msg.content.toString());
-          
-          // Execute callback without throwing
-          try {
-            await callback(content);
-          } catch (callbackError) {
-            console.error(`[RabbitMQ] Callback error processing message from ${queueName}:`, callbackError);
-            // Don't requeue on callback errors - acknowledge the message
-          }
-          
+          await callback(msg.fields.routingKey, content);
           ch.ack(msg);
         } catch (error) {
           console.error(`[RabbitMQ] Error processing message from ${queueName}:`, error);

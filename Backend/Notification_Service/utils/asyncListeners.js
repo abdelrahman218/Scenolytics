@@ -2,6 +2,7 @@ import { Notification } from "../models/notification.js";
 import { NotificationPreference } from "../models/notification_preference.js";
 import {
   handleAuditionSubmission,
+  handleCallbackEvents,
   handleEvaluationDone,
   handleInvitationEvents,
 } from "../services/asyncListeners.js";
@@ -51,6 +52,7 @@ const executeAsyncListeners = () => {
   consumeMessages(QUEUES.AUDITION_EVENTS, handleAuditionSubmission);
   consumeMessages(QUEUES.EVALUATION_EVENTS, handleEvaluationDone);
   consumeMessages(QUEUES.USER_EVENTS, handleUserEvents);
+  consumeMessages(QUEUES.CALLBACK_EVENTS, handleCallbackEvents);
 };
 
 export const setupAsyncListeners = async () => {

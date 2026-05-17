@@ -6,7 +6,8 @@ export class Sentence {
       .insert({
         audition_id: sentence.audition_id,
         emotion: sentence.emotion,
-        content: sentence.content
+        content: sentence.content,
+        sentence_order: sentence.sentence_order
       });
 
     const result = await knex('sentences').where({audition_id: sentence.audition_id}).first();
@@ -16,7 +17,7 @@ export class Sentence {
   static async findByAuditionId(audition_id) {
     const sentences = await knex('sentences')
       .where({ audition_id })
-      .orderBy('updated_at', 'asc');
+      .orderBy('sentence_order', 'asc');
     return sentences;
   }
 

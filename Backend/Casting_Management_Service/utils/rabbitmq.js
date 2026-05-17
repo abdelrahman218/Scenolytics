@@ -9,6 +9,7 @@ const RABBITMQ_URL = process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost:5
 export const EXCHANGES = {
   USERS: 'users_exchange',
   AUDITIONS: 'auditions_exchange',
+  CALLBACKS: 'callbacks_exchange',
   VIDEOS: 'videos_exchange',
   EVALUATIONS: 'evaluations_exchange',
   INVITATIONS: 'invitations_exchange'
@@ -17,16 +18,21 @@ export const EXCHANGES = {
 export const QUEUES = {
   USER_EVENTS: 'casting_management_user_events_queue',
   AUDITION_EVENTS: 'casting_management_audition_events_queue',
+  CALLBACK_EVENTS: 'casting_management_callback_events_queue',
   VIDEO_EVENTS: 'casting_management_video_events_queue',
   EVALUATION_EVENTS: 'casting_management_evaluation_events_queue',
   INVITATION_EVENTS: 'casting_management_invitation_events_queue'
 };
 
 export const ROUTING_KEYS = {
+  USER_CREATED: 'user.created',
   USER_DELETED: 'user.deleted',
   AUDITION_CREATED: 'audition.created',
   AUDITION_UPDATED: 'audition.updated',
   AUDITION_DELETED: 'audition.deleted',
+  CALLBACK_CREATED: 'callback.created',
+  CALLBACK_UPDATED: 'callback.updated',
+  CALLBACK_REVIEWED: 'callback.reviewed',
   AUDITION_SUBMITTED: 'audition.submitted',
   AUDITION_REVIEWED: 'audition.reviewed',
   VIDEO_UPLOADED: 'video.uploaded',

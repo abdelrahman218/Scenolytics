@@ -4,22 +4,35 @@ import { identityProviderService } from '../utils/serviceClient.js';
 
 export const createActorProfile = async (user_id, profileData) => {
   try {
-    // Validate user exists in Identity Provider
-    const userExists = await identityProviderService.checkUserExists(user_id);
-    if (!userExists) {
-      throw new Error('User not found in Identity Provider');
-    }
-
     const profileId = uuidv4();
     await ActorProfile.create({
       id: profileId,
       user_id,
-      ...profileData
+      display_name: profileData.name,
+      bio: profileData.bio || null,
+      height_cm: profileData.height_cm || null,
+      age: profileData.age,
+      gender: profileData.gender,
+      ethnicity: profileData.ethnicity || null,
+      body_type: profileData.body_type || null,
+      genres: profileData.genres || null,
+      experience_years: profileData.experience_years || null,
+      portfolio_url: profileData.portfolio_url || null
     });
+
     return {
       id: profileId,
       user_id,
-      ...profileData
+      display_name: profileData.name,
+      bio: profileData.bio || null,
+      height_cm: profileData.height_cm || null,
+      age: profileData.age,
+      gender: profileData.gender,
+      ethnicity: profileData.ethnicity || null,
+      body_type: profileData.body_type || null,
+      genres: profileData.genres || null,
+      experience_years: profileData.experience_years || null,
+      portfolio_url: profileData.portfolio_url || null
     };
   } catch (error) {
     throw new Error(`Failed to create actor profile: ${error.message}`);

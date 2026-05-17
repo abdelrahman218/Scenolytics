@@ -6,14 +6,17 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 export const signUp = async (req, res, next) => {
   try {
-    const { email, password, role } = req.body;
+    const { name, email, password, gender, age, role } = req.body;
 
     // Create user
     const newUser = await User.Create(email, password, role);
 
     const user = {
       user_id: newUser.user_id,
+      name,
       email: newUser.email,
+      gender,
+      age,
       role: newUser.role,
     }
 

@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import routes from './routes/index.js';
 import { connectRabbitMQ, closeRabbitMQ } from './utils/rabbitmq.js';
 import { initializeEventListeners } from './utils/eventListener.js';
+import { setupAsyncListeners } from './utils/asyncListeners.js';
 
 dotenv.config({filepath: `./.env`});
 
