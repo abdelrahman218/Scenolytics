@@ -4,14 +4,16 @@ CREATE TABLE IF NOT EXISTS evaluations (
     media_id VARCHAR(255) NOT NULL,
     submission_id VARCHAR(255),
 
-    emotional_expression_score DECIMAL(5,2),
+    emotional_expression_score DeCIMAL(5,2),
     vocal_tone_score DECIMAL(5,2),
     script_alignment_score DECIMAL(5,2),
     overall_performance_score DECIMAL(5,2),
 
     eye_expression_score JSON,
+    tone_analysis JSON,
     detected_emotions JSON,
     detected_emotions_vocal JSON,
+    detected_emotions_video JSON,
     script_alignment_details JSON,
     ai_feedback TEXT,
     evaluation_status VARCHAR(50) DEFAULT 'pending',

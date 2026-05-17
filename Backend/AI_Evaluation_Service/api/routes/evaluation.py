@@ -91,8 +91,10 @@ class EvaluationResponse(BaseModel):
     script_alignment_score: Optional[float]
     overall_performance_score: Optional[float]
     eye_expression_score: Optional[Dict[str, Any]]
+    tone_analysis: Optional[Dict[str, Any]]
     detected_emotions: Optional[Dict[str, Any]]
     detected_emotions_vocal: Optional[Dict[str, Any]]
+    detected_emotions_video: Optional[Dict[str, Any]]
     script_alignment_details: Optional[Dict[str, Any]]
     ai_feedback: Optional[str]
     evaluation_status: str
@@ -123,6 +125,23 @@ class EvaluationResponse(BaseModel):
                         "neutral": 0.07,
                         "sad": 0.05
                     }
+                },
+                "detected_emotions_video": {
+                    "primary": "happy",
+                    "confidence": 0.85,
+                    "score": 85.0,
+                    "accuracy": 0.9,
+                    "sentence_results": [
+                        {
+                            "sentence": "What did you do yesterday?",
+                            "expected_emotion": "curious",
+                            "detected_emotion": "curious",
+                            "confidence": 0.92,
+                            "score": 92.0,
+                            "time_range": "5.2s-7.5s",
+                            "status": "ok"
+                        }
+                    ]
                 },
                 "eye_expression_score": 88.0,
                 "ai_feedback": "Excellent performance!",
@@ -160,7 +179,16 @@ def _row_to_response(row: dict) -> EvaluationResponse:
             )
         except Exception:
             detected_emotions_vocal = None
-    
+    detected_emotions_video = None
+    if row.get("detected_emotions_video"):
+        try:
+            detected_emotions_video = (
+                json.loads(row["detected_emotions_video"])
+                if isinstance(row["detected_emotions_video"], str)
+                else row["detected_emotions_video"]
+            )
+        except Exception:
+            detected_emotions_video = None
     script_alignment_details = None
     if row.get("script_alignment_details"):
         try:
@@ -185,8 +213,13 @@ def _row_to_response(row: dict) -> EvaluationResponse:
         vocal_tone_score=float(row["vocal_tone_score"]) if row.get("vocal_tone_score") is not None else None,
         script_alignment_score=float(row["script_alignment_score"]) if row.get("script_alignment_score") is not None else None,
         overall_performance_score=float(row["overall_performance_score"]) if row.get("overall_performance_score") is not None else None,
+        tone_analysis=(
+            json.loads(row["tone_analysis"])            if isinstance(row["tone_analysis"], str) 
+            else row["tone_analysis"]
+        ) if row.get("tone_analysis") is not None else None,
         detected_emotions=detected_emotions,
         detected_emotions_vocal=detected_emotions_vocal,
+        detected_emotions_video=detected_emotions_video,
         script_alignment_details=script_alignment_details,
         eye_expression_score=(
             json.loads(row["eye_expression_score"])
@@ -244,9 +277,6 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
         #   emotional_expression_score, vocal_tone_score, script_alignment_score,
         #   overall_performance_score, detected_emotions (dict), ai_feedback (str)
         scores = await pipeline.evaluate_video(video_path, script_text=script_text)
-        logger.info(f"Pipeline result keys: {list(scores.keys())}")
-        logger.info(f"eye_expression_score value: {scores.get('eye_expression_score')}")
-        logger.info(f"eye_expression value: {scores.get('eye_expression')}")
         # overall is already calculated inside evaluate_video() using the
         # correct 40/35/25 weights — no need to recalculate here.
         overall = scores["overall_performance_score"]
@@ -256,11 +286,22 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
         elif eye_expression_score is not None:
             eye_expression_score = json.dumps(eye_expression_score)
         detected_emotions_vocal = scores.get("detected_emotions_vocal")
+        if isinstance(tone_result := scores.get("tone_analysis"), dict):
+            tone_result = json.dumps(tone_result)
+        if isinstance(detected_emotions_vocal, dict):
+            detected_emotions_vocal = json.dumps(detected_emotions_vocal)
+        detected_emotions_video = scores.get("detected_emotions_video")
+        if isinstance(detected_emotions_video, dict):
+            detected_emotions_video = json.dumps(detected_emotions_video)      
         script_alignment_details = None
         alignment_data = scores.get("script_alignment_data")  # you need to add this to evaluate_video's return
         if alignment_data:
             script_alignment_details = {
                 "transcript":       alignment_data.get("transcript", ""),
+                "matched_words":     alignment_data.get("matched_words", []),
+                "added_words":       alignment_data.get("added_words", []),
+                "changed_words":     alignment_data.get("changed_words", []),
+                "skipped_words":     alignment_data.get("skipped_words", []),
                 "comparison_rows":  alignment_data.get("comparison_rows", []),
                 "coverage":         alignment_data.get("coverage", 0.0),
                 "sentences_aligned": alignment_data.get("sentences_aligned", []),
@@ -274,8 +315,10 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
                 script_alignment_score     = %s,
                 overall_performance_score  = %s,
                 eye_expression_score       = %s,
+                tone_analysis              = %s,
                 detected_emotions          = %s,
                 detected_emotions_vocal    = %s,
+                detected_emotions_video    = %s,
                 script_alignment_details   = %s,
                 ai_feedback                = %s,
                 evaluation_status          = 'completed',
@@ -288,8 +331,10 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
                 scores["script_alignment_score"],
                 overall,
                 eye_expression_score,
+                tone_result,
                 json.dumps(scores.get("detected_emotions")),
-                json.dumps(detected_emotions_vocal) if detected_emotions_vocal else None,
+                detected_emotions_vocal if detected_emotions_vocal else None,
+                detected_emotions_video if detected_emotions_video else None,
                 json.dumps(script_alignment_details) if script_alignment_details else None,
                 scores.get("ai_feedback"),
                 evaluation_id,
@@ -354,8 +399,10 @@ async def create_evaluation(request: CreateEvaluationRequest, background_tasks: 
             script_alignment_score=None,
             overall_performance_score=None,
             eye_expression_score=None,
+            tone_analysis=None,
             detected_emotions=None,
             detected_emotions_vocal=None,
+            detected_emotions_video=None,
             script_alignment_details=None,
             ai_feedback=None,
             evaluation_status="pending",

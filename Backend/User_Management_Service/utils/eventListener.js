@@ -73,3 +73,21 @@ const handleUserDeletedEvent = async (message) => {
     console.error('[USER_DELETED] Error processing event:', error);
   }
 };
+const handleUserRegisteredEvent = async (message) => {
+  try {
+    const { user_id } = message;
+    // Optionally, create default profiles for new users
+    try {
+      await ActorProfile.create({ user_id, name: 'New Actor' });
+    } catch (error) {
+      console.error(`[USER_REGISTERED] Failed to create actor profile for user ${user_id}:`, error);
+    }
+    try {
+      await DirectorProfile.create({ user_id, name: 'New Director' });
+    } catch (error) {
+      console.error(`[USER_REGISTERED] Failed to create director profile for user ${user_id}:`, error);
+    }
+  } catch (error) {
+    console.error('[USER_REGISTERED] Error processing event:', error);
+  }
+};

@@ -830,6 +830,7 @@ class MLPipeline:
         # 4. Transcribe audio and align with script (if provided)
         sentences_aligned = None
         script_score = 0.0
+        alignment_data = None
 
         if script_text and tmp_audio:
             script_score, alignment_data = await self._score_script_alignment_with_sentences(
@@ -858,11 +859,50 @@ class MLPipeline:
             detected_emotions_vocal["sentence_results"] = audio_result["sentence_results"]
             detected_emotions_vocal["accuracy"]         = audio_result.get("accuracy", 0.0)
 
+        # 5b. Score video emotion per sentence (if script was provided)
+        detected_emotions_video = None
+        if sentences_aligned:
+            video_emotion_result = await self._score_video_emotion_per_sentence(
+                video_path,
+                sentences_aligned,
+            )
+            detected_emotions_video = {
+                "primary": video_emotion_result["detected_emotion"],
+                "confidence": video_emotion_result["confidence"],
+                "score": video_emotion_result["score"],
+                "accuracy": video_emotion_result["accuracy"],
+            }
+            if "sentence_results" in video_emotion_result:
+                detected_emotions_video["sentence_results"] = video_emotion_result["sentence_results"]
+            logger.info(
+                "Video emotion per-sentence: score=%.2f, dominant=%s, accuracy=%.1f%%",
+                video_emotion_result["score"],
+                video_emotion_result["detected_emotion"],
+                video_emotion_result["accuracy"] * 100,
+            )
+
         # 6. Emotion transition analysis (replaces eye contact score)
         eye_expression_data = await self._analyze_emotion_transitions(
             frames, video_path, sentences_aligned=sentences_aligned
         )
+        from core.tone import analyze_tone  # or wherever you put it
 
+        # After tmp_audio is extracted, add:
+        tone_result = None
+        if tmp_audio:
+            try:
+                tone_result = analyze_tone(
+                audio_path=tmp_audio,
+                sentences_aligned=sentences_aligned,
+                )
+                logger.info(
+                    "Tone analysis complete: %d segments, avg_pitch=%.1f Hz, avg_loudness=%.1f dB",
+                    len(tone_result["segments"]),
+                    tone_result["overall_pitch_variation"],
+                    tone_result["overall_loudness_variation"],
+                )
+            except Exception as e:
+                logger.error("Tone analysis failed: %s", e)
         # 7. Weighted overall score (using only emotional, vocal, and script)
         overall = round(
             emotional_score * self.weights["emotional_expression_score"]
@@ -894,8 +934,10 @@ class MLPipeline:
             "script_alignment_score":     round(script_score, 2),
             "overall_performance_score":  overall,
             "eye_expression":             eye_expression_data,
+            "tone_analysis":              tone_result, 
             "detected_emotions":          emotions_detail,
             "detected_emotions_vocal":    detected_emotions_vocal,
+            "detected_emotions_video":    detected_emotions_video,
             "script_alignment_data":      alignment_data,
             "ai_feedback":                feedback,
         }
@@ -1034,6 +1076,112 @@ class MLPipeline:
             resized    = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
             normalized = resized.astype(np.float32) / 255.0
             last_good  = normalized
+            frames.append(normalized)
+
+        cap.release()
+        return np.array(frames, dtype=np.float32)
+
+    def _extract_frames_for_time_range(
+        self,
+        video_path: str,
+        t_start: float,
+        t_end: float,
+        num_frames: int = FRAMES_PER_VIDEO,
+    ) -> np.ndarray:
+        """
+        Extract a fixed number of frames evenly sampled from a specific time range.
+        
+        Parameters
+        ----------
+        video_path : str
+            Path to the video file
+        t_start : float
+            Start time in seconds
+        t_end : float
+            End time in seconds
+        num_frames : int
+            Number of frames to extract (default: FRAMES_PER_VIDEO)
+        
+        Returns
+        -------
+        np.ndarray
+            Array of shape (num_frames, IMG_SIZE, IMG_SIZE, 3) with float32 values in [0, 1]
+        """
+        if self._face_cascade is None:
+            cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+            self._face_cascade = cv2.CascadeClassifier(cascade_path)
+
+        HAAR_PADDING = 20
+
+        cap = cv2.VideoCapture(str(video_path))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        
+        if fps <= 0 or total_frames <= 0:
+            cap.release()
+            return np.array([], dtype=np.float32)
+
+        # Convert time range to frame indices
+        start_frame = int(t_start * fps)
+        end_frame = int(t_end * fps)
+        
+        # Clamp to valid range
+        start_frame = max(0, start_frame)
+        end_frame = min(total_frames - 1, end_frame)
+        
+        if start_frame >= end_frame:
+            cap.release()
+            return np.array([], dtype=np.float32)
+
+        # Extract num_frames evenly spaced frames from this range
+        indices = np.linspace(start_frame, end_frame, num_frames, dtype=int)
+        
+        frames = []
+        last_good = None
+
+        for idx in indices:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, int(idx))
+            ret, frame = cap.read()
+
+            if not ret:
+                frames.append(
+                    last_good.copy() if last_good is not None
+                    else np.zeros((IMG_SIZE, IMG_SIZE, 3), dtype=np.float32)
+                )
+                continue
+
+            h, w = frame.shape[:2]
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            faces = self._face_cascade.detectMultiScale(
+                gray, scaleFactor=1.1, minNeighbors=4, minSize=(30, 30)
+            )
+
+            face_crop = None
+            if len(faces) > 0:
+                fx, fy, fw, fh = faces[0]
+                x1 = max(0, fx - HAAR_PADDING)
+                y1 = max(0, fy - HAAR_PADDING)
+                x2 = min(w, fx + fw + HAAR_PADDING)
+                y2 = min(h, fy + fh + HAAR_PADDING)
+                if x2 > x1 and y2 > y1:
+                    face_crop = frame[y1:y2, x1:x2]
+
+            if face_crop is None or face_crop.size == 0:
+                if last_good is not None:
+                    logger.debug("Frame %d: no face -- reusing last good crop.", idx)
+                    frames.append(last_good.copy())
+                    continue
+                else:
+                    logger.debug("Frame %d: no face and no prior crop -- using full frame.", idx)
+                    size = min(h, w)
+                    y_off = (h - size) // 2
+                    x_off = (w - size) // 2
+                    face_crop = frame[y_off : y_off + size, x_off : x_off + size]
+
+            resized = cv2.resize(face_crop, (IMG_SIZE, IMG_SIZE))
+            resized = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
+            normalized = resized.astype(np.float32) / 255.0
+            last_good = normalized
             frames.append(normalized)
 
         cap.release()
@@ -1354,6 +1502,227 @@ class MLPipeline:
         except Exception as e:
             logger.error("Sentence-level emotion scoring failed: %s", e, exc_info=True)
             return await self._score_audio_emotion(audio_path)
+    
+    async def _score_video_emotion_per_sentence(
+        self,
+        video_path: str,
+        sentences_aligned: List[Dict],
+    ) -> Dict:
+        """
+        Score video emotion per sentence using alignment data.
+        
+        Parameters
+        ----------
+        video_path : str
+            Path to the video file
+        sentences_aligned : List[Dict]
+            List of sentences with timing information from script alignment
+            Each dict has: content, emotion, t_start, t_end, coverage, status
+        
+        Returns
+        -------
+        Dict with keys:
+            - score: float (0-100) - average score across valid sentences
+            - detected_emotion: str - dominant emotion across sentences
+            - confidence: float - average confidence across valid sentences
+            - sentence_results: list - per-sentence emotion detections
+            - accuracy: float - percentage of sentences matching expected emotion
+            - all_emotions: dict - placeholder for consistency with audio function
+        """
+        if self.emotion_model is None:
+            logger.warning("Video emotion model not loaded -- cannot score per sentence")
+            return {
+                "score": 0.0,
+                "detected_emotion": "unknown",
+                "confidence": 0.0,
+                "sentence_results": [],
+                "accuracy": 0.0,
+                "all_emotions": {},
+            }
+        
+        try:
+            from tensorflow.keras.applications.efficientnet import preprocess_input
+            
+            sentence_results = []
+            
+            logger.info(
+                "Starting video emotion scoring for %d sentences", len(sentences_aligned)
+            )
+            
+            for sent_idx, sent in enumerate(sentences_aligned):
+                if sent["status"] == "missing" or sent["t_start"] is None:
+                    logger.debug("Skipping missing sentence %d: %s...", sent_idx, sent["content"][:50])
+                    sentence_results.append({
+                        "sentence": sent["content"],
+                        "expected_emotion": sent.get("emotion"),
+                        "detected_emotion": None,
+                        "confidence": 0.0,
+                        "score": 0.0,
+                        "time_range": "N/A",
+                        "coverage": sent.get("coverage", 0.0),
+                        "status": "missing",
+                    })
+                    continue
+                
+                # Extract frames for this sentence's time range
+                t_start = sent["t_start"]
+                t_end = sent["t_end"]
+                duration = t_end - t_start
+                
+                if duration < 0.2:  # Too short (< 200ms)
+                    logger.warning(
+                        "Sentence %d too short (%.2fs): '%s...'",
+                        sent_idx, duration, sent["content"][:40]
+                    )
+                    sentence_results.append({
+                        "sentence": sent["content"],
+                        "expected_emotion": sent.get("emotion"),
+                        "detected_emotion": None,
+                        "confidence": 0.0,
+                        "score": 0.0,
+                        "time_range": f"{t_start:.1f}s-{t_end:.1f}s",
+                        "coverage": sent.get("coverage", 1.0),
+                        "status": "too_short",
+                    })
+                    continue
+                
+                # Extract frames for this time range
+                frames = self._extract_frames_for_time_range(
+                    video_path, t_start, t_end, num_frames=FRAMES_PER_VIDEO
+                )
+                
+                if len(frames) == 0:
+                    logger.warning(
+                        "Sentence %d: no frames extracted for time range %.1f-%.1f",
+                        sent_idx, t_start, t_end
+                    )
+                    sentence_results.append({
+                        "sentence": sent["content"],
+                        "expected_emotion": sent.get("emotion"),
+                        "detected_emotion": None,
+                        "confidence": 0.0,
+                        "score": 0.0,
+                        "time_range": f"{t_start:.1f}s-{t_end:.1f}s",
+                        "coverage": sent.get("coverage", 1.0),
+                        "status": "no_frames",
+                    })
+                    continue
+                
+                # Run emotion model on extracted frames
+                try:
+                    frames_norm = preprocess_input(frames * 255.0)
+                    
+                    # Pad or trim to FRAMES_PER_VIDEO
+                    if len(frames_norm) < FRAMES_PER_VIDEO:
+                        pad = np.zeros(
+                            (FRAMES_PER_VIDEO - len(frames_norm), IMG_SIZE, IMG_SIZE, 3),
+                            dtype=np.float32,
+                        )
+                        frames_norm = np.concatenate([frames_norm, pad], axis=0)
+                    else:
+                        frames_norm = frames_norm[:FRAMES_PER_VIDEO]
+                    
+                    input_batch = frames_norm[np.newaxis, ...]
+                    probabilities = self.emotion_model.predict(input_batch, verbose=0)[0]
+                    probabilities = np.array(probabilities, dtype=np.float64)
+                    probabilities = probabilities / probabilities.sum()
+                    
+                    primary_idx = int(np.argmax(probabilities))
+                    detected_emotion = EMOTION_NAMES[primary_idx]
+                    confidence = float(probabilities[primary_idx])
+                    score = round(confidence * 100, 2)
+                    
+                    logger.debug(
+                        "Sentence %d emotion: %s (conf=%.2f%%), time=%.1f-%.1f",
+                        sent_idx, detected_emotion, confidence * 100, t_start, t_end
+                    )
+                    
+                    sentence_results.append({
+                        "sentence": sent["content"],
+                        "expected_emotion": sent.get("emotion"),
+                        "detected_emotion": detected_emotion,
+                        "confidence": round(confidence, 4),
+                        "score": score,
+                        "time_range": f"{t_start:.1f}s-{t_end:.1f}s",
+                        "coverage": sent.get("coverage", 1.0),
+                        "status": sent.get("status", "ok"),
+                    })
+                    
+                except Exception as e:
+                    logger.error(
+                        "Failed to score video emotion for sentence %d: %s", sent_idx, e
+                    )
+                    sentence_results.append({
+                        "sentence": sent["content"],
+                        "expected_emotion": sent.get("emotion"),
+                        "detected_emotion": None,
+                        "confidence": 0.0,
+                        "score": 0.0,
+                        "time_range": f"{t_start:.1f}s-{t_end:.1f}s",
+                        "coverage": sent.get("coverage", 1.0),
+                        "status": "error",
+                    })
+                    continue
+            
+            # Compute aggregate metrics
+            if not sentence_results:
+                logger.warning("No valid sentences for video emotion analysis")
+                return {
+                    "score": 0.0,
+                    "detected_emotion": "unknown",
+                    "confidence": 0.0,
+                    "sentence_results": [],
+                    "accuracy": 0.0,
+                    "all_emotions": {},
+                }
+            
+            valid_results = [r for r in sentence_results if r["detected_emotion"] is not None]
+            
+            if valid_results:
+                avg_score = sum(r["score"] for r in valid_results) / len(valid_results)
+                emotions = [r["detected_emotion"] for r in valid_results]
+                dominant_emotion = Counter(emotions).most_common(1)[0][0]
+                avg_confidence = sum(r["confidence"] for r in valid_results) / len(valid_results)
+            else:
+                avg_score = 0.0
+                dominant_emotion = "neutral"
+                avg_confidence = 0.0
+            
+            # Calculate accuracy (percentage matching expected emotion)
+            matches = sum(
+                1 for r in sentence_results
+                if r["detected_emotion"] is not None
+                and r["detected_emotion"].lower() == (r["expected_emotion"] or "").lower()
+            )
+            accuracy = matches / len(sentence_results) if sentence_results else 0.0
+            
+            logger.info(
+                "Video emotion per-sentence analysis complete: %d sentences (%d valid), "
+                "accuracy=%.1f%%, dominant=%s, avg_score=%.2f",
+                len(sentence_results), len(valid_results), accuracy * 100,
+                dominant_emotion, avg_score,
+            )
+            
+            return {
+                "score": round(avg_score, 2),
+                "detected_emotion": dominant_emotion,
+                "confidence": round(avg_confidence, 4),
+                "sentence_results": sentence_results,
+                "accuracy": round(accuracy, 4),
+                "all_emotions": {},
+            }
+        
+        except Exception as e:
+            logger.error("Video emotion per-sentence scoring failed: %s", e, exc_info=True)
+            return {
+                "score": 0.0,
+                "detected_emotion": "unknown",
+                "confidence": 0.0,
+                "sentence_results": [],
+                "accuracy": 0.0,
+                "all_emotions": {},
+                "error": str(e),
+            }
 
     # -----------------------------------------------------------------------
     # 3 -- Script alignment scoring (SeamlessM4T)
@@ -1456,6 +1825,10 @@ class MLPipeline:
                         sentence_coverage[word_to_sentence[i]] += 1
             # Add this loop after the existing matcher.get_opcodes() sentence_coverage loop:
             comparison_rows = []
+            Matched_words=0
+            Changed_words=0
+            Skipped_words=0
+            Added_words=0
             for tag, i1, i2, j1, j2 in matcher.get_opcodes():
                 if tag == "equal":
                     for k in range(i2 - i1):
@@ -1464,6 +1837,7 @@ class MLPipeline:
                             "script_word": script_words[i1 + k],
                             "transcript_word": transcript_clean[j1 + k],
                         })
+                        Matched_words+=1
                 elif tag == "replace":
                     for k in range(max(i2 - i1, j2 - j1)):
                         s_w = script_words[i1 + k] if i1 + k < i2 else ""
@@ -1473,6 +1847,7 @@ class MLPipeline:
                             "script_word": s_w or "-",
                             "transcript_word": t_w or "-",
                         })
+                        Changed_words+=1
                 elif tag == "delete":
                     for k in range(i2 - i1):
                         comparison_rows.append({
@@ -1480,6 +1855,7 @@ class MLPipeline:
                             "script_word": script_words[i1 + k],
                             "transcript_word": "-",
                         })
+                        Skipped_words+=1    
                 elif tag == "insert":
                     for k in range(j2 - j1):
                         comparison_rows.append({
@@ -1487,7 +1863,7 @@ class MLPipeline:
                         "script_word": "-",
                         "transcript_word": transcript_clean[j1 + k],
                     })
-
+                    Added_words+=1
             # Fix the matched_words bug while you're here:
             matched_words = sum(size for _, _, size in matcher.get_matching_blocks())
             overall_coverage = matched_words / len(script_words) if script_words else 0
@@ -1555,6 +1931,10 @@ class MLPipeline:
                 "sentences_aligned": sentences_aligned,
                 "transcript":        full_transcript,
                 "coverage":          overall_coverage,
+                "matched_words":     matched_words,
+                "added_words":       Added_words,
+                "changed_words":     Changed_words,
+                "skipped_words":     Skipped_words,
                 "comparison_rows": comparison_rows,
             }
 
