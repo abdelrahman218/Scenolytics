@@ -3,6 +3,8 @@ import {
   createAudition,
   getAllDirectorAuditions,
   getDirectorPendingInvitations,
+  connectGoogleMeet,
+  connectGoogleMeetCallBack,
 } from "../services/director.js";
 import {
   checkDirectorOwnershipOfAudition,
@@ -44,5 +46,9 @@ router.use(
 
 // Get director's pending invitations
 router.get("/invitations/pending", getDirectorPendingInvitations);
+
+// ==================== GOOGLE CALENDAR ENDPOINTS ====================
+
+router.get("/google/connect", connectGoogleMeet);
 
 export default router;

@@ -14,6 +14,9 @@ import {
 } from "../services/director.js";
 import {
   checkCallbackExists,
+  checkCallbackIsScheduled,
+  checkDateTimeExistsWhenSubmissionAccepted,
+  checkDirectorConnectedToGoogle,
   checkRequiredFieldsRescheduleCallback,
   checkRequiredFieldsReviewCallback,
   checkRequiredFieldsReviewSubmission,
@@ -28,34 +31,19 @@ const router = express.Router({ mergeParams: true });
 // ==================== AUDITION ENDPOINTS ====================
 
 // Update audition
-const updateAudtionValidators = [
-  checkValidValuesAuditionData,
-];
-router.patch(
-  "/",
-  updateAudtionValidators,
-  updateAudition,
-);
+const updateAudtionValidators = [checkValidValuesAuditionData];
+router.patch("/", updateAudtionValidators, updateAudition);
 
 // Delete audition
-router.delete(
-  "/",
-  deleteAudition,
-);
+router.delete("/", deleteAudition);
 
 // ==================== INVITATION ENDPOINTS ====================
 
 // Invite actors to audition
-router.post(
-  "/invite_actors",
-  inviteActorsToAudition,
-);
+router.post("/invite_actors", inviteActorsToAudition);
 
 // Get director's pending invitations for specific audition
-router.get(
-  "/invitations/pending",
-  getAuditionPendingInvitations,
-);
+router.get("/invitations/pending", getAuditionPendingInvitations);
 
 // Get list of actors for audition
 router.get("/actors", getActorsForAudition);
@@ -70,6 +58,7 @@ const reviewSubmissionValidators = [
   checkRequiredFieldsReviewSubmission,
   checkValidValuesReviewSubmission,
   checkSubmissionExists,
+  checkDateTimeExistsWhenSubmissionAccepted,
 ];
 router.patch(
   "/submissions/:submission_id/review",
@@ -94,7 +83,10 @@ router.patch(
 );
 
 // Create new callback meeting
-const createNewCallbackMeetingValidators = [checkCallbackExists];
+const createNewCallbackMeetingValidators = [
+  checkCallbackExists,
+  checkDirectorConnectedToGoogle,
+];
 router.patch(
   "/callbacks/:callback_id/new_meeting",
   createNewCallbackMeetingValidators,
@@ -106,6 +98,7 @@ const reviewCallbackValidators = [
   checkCallbackExists,
   checkRequiredFieldsReviewCallback,
   checkValidValuesReviewCallback,
+  checkCallbackIsScheduled,
 ];
 router.patch(
   "/callbacks/:callback_id/review",

@@ -8,6 +8,7 @@ export class Callback {
       actor_id: callback.actor_id,
       callback_datetime: callback.callback_datetime,
       link: callback.link,
+      event_id: callback.event_id,
     });
 
     const result = await knex("callbacks")

@@ -53,8 +53,11 @@ export const getActorProfile = async (user_id) => {
 
 export const updateActorProfile = async (profile_id, updates) => {
   try {
+     const profile = await ActorProfile.findByUserId(user_id);
+    if (!profile) {
+      throw new Error('Actor profile not found');
+    }
     await ActorProfile.update(profile_id, updates);
-    const profile = await ActorProfile.findById(profile_id);
     return profile;
   } catch (error) {
     throw new Error(`Failed to update actor profile: ${error.message}`);

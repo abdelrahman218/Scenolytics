@@ -45,7 +45,6 @@ export const ROUTING_KEYS = {
 export const connectRabbitMQ = async () => {
   try {
     if (connection) {
-      console.log('RabbitMQ already connected');
       return channel;
     }
 
@@ -54,21 +53,19 @@ export const connectRabbitMQ = async () => {
 
     // Handle connection errors
     connection.on('error', (err) => {
-      console.error('RabbitMQ connection error:', err);
+      console.error('[RabbitMQ] Connection error:', err);
       connection = null;
       channel = null;
     });
 
     connection.on('close', () => {
-      console.log('RabbitMQ connection closed');
       connection = null;
       channel = null;
     });
 
-    console.log('Connected to RabbitMQ');
     return channel;
   } catch (error) {
-    console.error('Failed to connect to RabbitMQ:', error);
+    console.error('[RabbitMQ] Failed to connect:', error);
     throw error;
   }
 };
@@ -77,7 +74,7 @@ export const connectRabbitMQ = async () => {
  * Get or create channel
  */
 export const getChannel = async () => {
-  if (!channel) {
+  if (!channel || !connection) {
     await connectRabbitMQ();
   }
   return channel;
@@ -91,7 +88,7 @@ export const assertExchange = async (exchangeName, type = 'topic') => {
     const ch = await getChannel();
     await ch.assertExchange(exchangeName, type, { durable: true });
   } catch (error) {
-    console.error(`Failed to assert exchange ${exchangeName}:`, error);
+    console.error(`[RabbitMQ] Failed to assert exchange ${exchangeName}:`, error);
     throw error;
   }
 };
@@ -104,7 +101,7 @@ export const assertQueue = async (queueName) => {
     const ch = await getChannel();
     await ch.assertQueue(queueName, { durable: true });
   } catch (error) {
-    console.error(`Failed to assert queue ${queueName}:`, error);
+    console.error(`[RabbitMQ] Failed to assert queue ${queueName}:`, error);
     throw error;
   }
 };
@@ -117,7 +114,7 @@ export const bindQueue = async (queueName, exchangeName, routingKey) => {
     const ch = await getChannel();
     await ch.bindQueue(queueName, exchangeName, routingKey);
   } catch (error) {
-    console.error(`Failed to bind queue ${queueName} to exchange ${exchangeName}:`, error);
+    console.error(`[RabbitMQ] Failed to bind queue ${queueName} to exchange ${exchangeName}:`, error);
     throw error;
   }
 };
@@ -132,8 +129,6 @@ export const publishMessage = async (exchangeName, routingKey, message) => {
     
     const messageBuffer = Buffer.from(JSON.stringify(message));
     ch.publish(exchangeName, routingKey, messageBuffer, { persistent: true });
-    
-    console.log(`Message published to ${exchangeName} with routing key ${routingKey}`);
   } catch (error) {
     console.error('Failed to publish message:', error);
     throw error;
@@ -155,16 +150,14 @@ export const consumeMessages = async (queueName, callback) => {
           await callback(msg.fields.routingKey, content);
           ch.ack(msg);
         } catch (error) {
-          console.error('Error processing message:', error);
-          // Reject and requeue
+          console.error(`[RabbitMQ] Error processing message from ${queueName}:`, error);
+          // Reject and requeue only for message parsing errors
           ch.nack(msg, false, true);
         }
       }
     });
-    
-    console.log(`Started consuming messages from ${queueName}`);
   } catch (error) {
-    console.error(`Failed to consume messages from ${queueName}:`, error);
+    console.error(`[RabbitMQ] Failed to consume messages from ${queueName}:`, error);
     throw error;
   }
 };
@@ -180,7 +173,6 @@ export const closeRabbitMQ = async () => {
     if (connection) {
       await connection.close();
     }
-    console.log('RabbitMQ connection closed');
   } catch (error) {
     console.error('Error closing RabbitMQ connection:', error);
   }

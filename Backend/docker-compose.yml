@@ -117,11 +117,13 @@ services:
       USER_MANAGEMENT_SERVICE_DATABASE_HOST: ${USER_MANAGEMENT_SERVICE_DATABASE_HOST}
       USER_MANAGEMENT_SERVICE_URL: ${USER_MANAGEMENT_SERVICE_URL}
       IDENTITY_PROVIDER_SERVICE_URL: ${IDENTITY_PROVIDER_SERVICE_URL}
+      VIDEO_PROCESSING_SERVICE_URL: ${VIDEO_PROCESSING_SERVICE_URL}
       DATABASE_PORT: ${DATABASE_PORT}
       DATABASE_USER: ${DATABASE_USER}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
       USER_MANAGEMENT_SERVICE_DATABASE_NAME: ${USER_MANAGEMENT_SERVICE_DATABASE_NAME}
       RABBITMQ_URL: ${RABBITMQ_URL}
+      JWT_SECRET: ${JWT_SECRET}
     deploy:
       replicas: 3
     ports:
@@ -142,6 +144,8 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${ROOT_PASSWORD}
       MYSQL_DATABASE: ${AUDITION_TRAINING_SERVICE_DATABASE_NAME}
+      MYSQL_USER: ${DATABASE_USER}
+      MYSQL_PASSWORD: ${DATABASE_PASSWORD}
     ports:
       - "${AUDITION_TRAINING_SERVICE_DATABASE_PORT}:3306"
     volumes:
@@ -190,6 +194,8 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${ROOT_PASSWORD}
       MYSQL_DATABASE: ${AI_EVALUATION_SERVICE_DATABASE_NAME}
+      MYSQL_USER: ${DATABASE_USER}
+      MYSQL_PASSWORD: ${DATABASE_PASSWORD}
     ports:
       - "${AI_EVALUATION_SERVICE_DATABASE_PORT}:3306"
     volumes:
@@ -197,10 +203,11 @@ services:
       - ./AI_Evaluation_Service/create_tables.sql:/docker-entrypoint-initdb.d/02_create_tables.sql
       - ai_evaluation_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      timeout: 20s
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 5s
+      timeout: 5s
       retries: 10
-      interval: 10s
+      start_period: 30s
     networks:
       - scenolytics-network
     restart: unless-stopped
@@ -213,15 +220,21 @@ services:
       AI_EVALUATION_SERVICE_DATABASE_HOST: ${AI_EVALUATION_SERVICE_DATABASE_HOST}
       AI_EVALUATION_SERVICE_URL: ${AI_EVALUATION_SERVICE_URL}
       IDENTITY_PROVIDER_SERVICE_URL: ${IDENTITY_PROVIDER_SERVICE_URL}
+      VIDEO_PROCESSING_SERVICE_URL: ${VIDEO_PROCESSING_SERVICE_URL}
       DATABASE_PORT: ${DATABASE_PORT}
       DATABASE_USER: ${DATABASE_USER}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
       AI_EVALUATION_SERVICE_DATABASE_NAME: ${AI_EVALUATION_SERVICE_DATABASE_NAME}
       RABBITMQ_URL: ${RABBITMQ_URL}
+      VIDEO_STORAGE_PATH: ${VIDEO_STORAGE_PATH}
     deploy:
-      replicas: 3
+      replicas: 1
     ports:
       - "${AI_EVALUATION_SERVICE_PORT}-${AI_EVALUATION_SERVICE_END_PORT}:${AI_EVALUATION_SERVICE_PORT}"
+    volumes:
+      - ./AI_Evaluation_Service:/app
+      - ./AI_Evaluation_Service/videos:/app/videos
+      - ./AI_Evaluation_Service/models:/app/models
     depends_on:
       ai-evaluation-mysql:
         condition: service_healthy
@@ -255,6 +268,7 @@ services:
       - scenolytics-network
     restart: unless-stopped
 
+  # ================= MINIO =================
   minio:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
@@ -314,6 +328,10 @@ services:
       S3_BUCKET_VIDEOS: ${S3_BUCKET_VIDEOS}
       S3_BUCKET_RESULTS: ${S3_BUCKET_RESULTS}
       S3_PUBLIC_URL: ${S3_PUBLIC_URL}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
+      FRONTEND_LINK: ${FRONTEND_LINK}
     deploy:
       replicas: 3
     ports:
@@ -337,7 +355,7 @@ services:
       MYSQL_ROOT_PASSWORD: ${ROOT_PASSWORD}
       MYSQL_DATABASE: ${NOTIFICATION_SERVICE_DATABASE_NAME}
       MYSQL_USER: ${DATABASE_USER}
-      MYSQL_PASSWORD: ${DATABASE_PASSWORD}      
+      MYSQL_PASSWORD: ${DATABASE_PASSWORD}
     ports:
       - "${NOTIFICATION_SERVICE_DATABASE_PORT}:3306"
     volumes:
