@@ -1,0 +1,15 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/directors/profile/:profile_id"
+method: PATCH
+headers:
+  Content-Type: application/json
+pathVariables:
+  profile_id: 660e8400-e29b-41d4-a716-446655440011
+body:
+  type: text
+  content: |-
+    {
+      "company_bio": "Updated bio",
+      "location": "New York, NY"
+    }
+order: 3000

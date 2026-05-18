@@ -6,4 +6,11 @@ preprocessed_data_actors_24_to_47/
 preprocessed_data_first_24_actors/
 models/
 emotion-recognition-final/
-__pycache__/
+RAF-DB/
+CREMA-D/
+Video/
+ML Models/ML Models/
+preprocessed_data_actors/
+tmp_gui_uploads/
+.vscode/
+__pycache__

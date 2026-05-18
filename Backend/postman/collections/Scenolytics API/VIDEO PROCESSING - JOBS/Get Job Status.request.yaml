@@ -1,0 +1,6 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/jobs/:job_id"
+method: GET
+pathVariables:
+  job_id: 880e8400-e29b-41d4-a716-446655440030
+order: 2000

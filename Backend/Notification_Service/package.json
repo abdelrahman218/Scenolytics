@@ -1,21 +1,21 @@
 {
   "name": "notification-service",
   "version": "1.0.0",
-  "description": "Sends email, push, and in-app notifications for auditions, evaluations, callbacks, and casting decisions in the scenolytics system",
+  "description": "Sends email, and in-app notifications for auditions, evaluations, and casting decisions in the scenolytics system",
   "main": "index.js",
   "type": "module",
   "author": "",
   "license": "",
   "dependencies": {
+    "amqplib": "^0.10.3",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "knex": "^3.1.0",
     "mysql2": "^3.16.1",
-    "mongodb": "^5.8.1",
-    "mongoose": "^7.5.0",
-    "uuid": "^9.0.0",
-    "axios": "^1.6.0",
-    "amqplib": "^0.10.3",
-    "nodemailer": "^6.9.6"
+    "nodemailer": "^6.9.6",
+    "socket.io": "^4.8.3",
+    "uuid": "^9.0.0"
   }
 }

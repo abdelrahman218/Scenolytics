@@ -1,19 +1,55 @@
-node_modules
-npm-debug.log
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.pdb
+*.egg-info
+*.egg
+.eggs/
+dist/
+build/
+wheels/
+# Git
 .git
 .gitignore
-README.md
+.gitattributes
+
+# Environment files
 .env
-.env.local
-.env.*.local
-.DS_Store
-dist
-build
+.env.*
+
+# IDE
 .vscode
 .idea
 *.swp
 *.swo
 *~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Test / coverage
+.pytest_cache
+.coverage
+htmlcov/
+.tox/
+
+# Docker
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+
+# Docs
+README.md
+docs/
 .next
 .eslintcache
 .prettierignore
+.postman
+postman

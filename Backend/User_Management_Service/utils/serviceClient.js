@@ -8,7 +8,6 @@ const getServiceUrl = (serviceName) => {
   const serviceUrls = {
     identityProvider: process.env.IDENTITY_PROVIDER_SERVICE_URL || 'http://identity-provider-service-1:5000',
     userManagement: process.env.USER_MANAGEMENT_SERVICE_URL || 'http://user-management-service-1:5009',
-    videoProcessing: process.env.VIDEO_PROCESSING_SERVICE_URL || 'http://video-processing-service-1:5002',
     aiEvaluation: process.env.AI_EVALUATION_SERVICE_URL || 'http://ai-evaluation-service-1:5003',
     castingManagement: process.env.CASTING_MANAGEMENT_SERVICE_URL || 'http://casting-management-service-1:5004',
     notification: process.env.NOTIFICATION_SERVICE_URL || 'http://notification-service-1:5005',
@@ -22,7 +21,6 @@ export const identityProviderService = {
   checkUserExists: async (user_id) => {
     try {
       const url = `${getServiceUrl('identityProvider')}/auth/validate/${user_id}`;
-      console.log(`[identityProviderService] Calling: ${url}`);
       const response = await fetch(url);
       return response.status === 200;
     } catch (error) {
@@ -37,7 +35,6 @@ export const userManagementService = {
   getActorProfile: async (user_id) => {
     try {
       const url = `${getServiceUrl('userManagement')}/actors/${user_id}/profile`;
-      console.log(`[userManagementService] Calling: ${url}`);
       const response = await fetch(url);
       if (response.status === 404) return null;
       return await response.json();
@@ -50,7 +47,6 @@ export const userManagementService = {
   getDirectorProfile: async (user_id) => {
     try {
       const url = `${getServiceUrl('userManagement')}/directors/${user_id}/profile`;
-      console.log(`[userManagementService] Calling: ${url}`);
       const response = await fetch(url);
       if (response.status === 404) return null;
       return await response.json();
@@ -66,7 +62,6 @@ export const videoProcessingService = {
   getMedia: async (media_id) => {
     try {
       const url = `${getServiceUrl('videoProcessing')}/media/${media_id}`;
-      console.log(`[videoProcessingService] Calling: ${url}`);
       const response = await fetch(url);
       if (response.status === 404) return null;
       return await response.json();
@@ -79,7 +74,6 @@ export const videoProcessingService = {
   createProcessingJob: async (media_id, job_type, priority = 5) => {
     try {
       const url = `${getServiceUrl('videoProcessing')}/jobs`;
-      console.log(`[videoProcessingService] Creating job: ${url}`);
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -101,7 +95,6 @@ export const aiEvaluationService = {
   getEvaluation: async (evaluation_id) => {
     try {
       const url = `${getServiceUrl('aiEvaluation')}/evaluations/${evaluation_id}`;
-      console.log(`[aiEvaluationService] Calling: ${url}`);
       const response = await fetch(url);
       if (response.status === 404) return null;
       return await response.json();
@@ -114,7 +107,6 @@ export const aiEvaluationService = {
   createEvaluation: async (media_id, submission_id = null) => {
     try {
       const url = `${getServiceUrl('aiEvaluation')}/evaluations`;
-      console.log(`[aiEvaluationService] Creating evaluation: ${url}`);
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -133,7 +125,6 @@ export const aiEvaluationService = {
   updateEvaluationScores: async (evaluation_id, scores) => {
     try {
       const url = `${getServiceUrl('aiEvaluation')}/evaluations/${evaluation_id}/scores`;
-      console.log(`[aiEvaluationService] Updating scores: ${url}`);
       const response = await fetch(url, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -155,7 +146,6 @@ export const castingManagementService = {
   getCallback: async (callback_id) => {
     try {
       const url = `${getServiceUrl('castingManagement')}/callbacks/${callback_id}`;
-      console.log(`[castingManagementService] Calling: ${url}`);
       const response = await fetch(url);
       if (response.status === 404) return null;
       return await response.json();
@@ -168,7 +158,6 @@ export const castingManagementService = {
   sendCallback: async (audition_id, director_id, actor_id, script_content, script_url) => {
     try {
       const url = `${getServiceUrl('castingManagement')}/callbacks`;
-      console.log(`[castingManagementService] Sending callback: ${url}`);
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -190,7 +179,6 @@ export const notificationService = {
   sendNotification: async (user_id, notificationType, title, message, relatedId = null) => {
     try {
       const url = `${getServiceUrl('notification')}/notifications`;
-      console.log(`[notificationService] Sending notification: ${url}`);
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -216,7 +204,6 @@ export const notificationService = {
   getNotifications: async (user_id) => {
     try {
       const url = `${getServiceUrl('notification')}/notifications/users/${user_id}/notifications`;
-      console.log(`[notificationService] Getting notifications: ${url}`);
       const response = await fetch(url);
       if (response.status === 404) return [];
       return await response.json();
@@ -232,7 +219,6 @@ export const auditionTrainingService = {
   getSession: async (session_id) => {
     try {
       const url = `${getServiceUrl('auditionTraining')}/sessions/${session_id}`;
-      console.log(`[auditionTrainingService] Calling: ${url}`);
       const response = await fetch(url);
       if (response.status === 404) return null;
       return await response.json();
@@ -245,7 +231,6 @@ export const auditionTrainingService = {
   startTrainingSession: async (actor_id, media_id) => {
     try {
       const url = `${getServiceUrl('auditionTraining')}/sessions`;
-      console.log(`[auditionTrainingService] Starting session: ${url}`);
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

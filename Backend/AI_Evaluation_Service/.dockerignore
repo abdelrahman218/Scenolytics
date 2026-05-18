@@ -1,6 +1,73 @@
-node_modules
-npm-debug.log
+# =============================
+# Python / Node artifacts
+# =============================
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# =============================
+# Environment
+# =============================
 .env
-.git
-.gitignore
-README.md
+.env.local
+.env.*.local
+
+# =============================
+# Development / OS files
+# =============================
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# =============================
+# Jupyter / notebooks
+# =============================
+*.ipynb_checkpoints
+
+# =============================
+# MEDIA FILES (IMPORTANT)
+# =============================
+videos/
+
+# =============================
+# MODELS (CRITICAL)
+# =============================
+models/
+*.pt
+*.pth
+*.onnx
+*.h5
+*.ckpt
+
+# =============================
+# HuggingFace / cache
+# =============================
+.cache/
+.cache/huggingface/
+.cache/torch/
+
+# =============================
+# IDEs
+# =============================
+.vscode/
+.idea/
+*.code-workspace
+
+# =============================
+# Testing
+# =============================
+.pytest_cache/
+.coverage
+htmlcov/
+
+# =============================
+# Build artifacts
+# =============================
+build/
+dist/
+*.egg-info/

@@ -1,0 +1,14 @@
+$kind: http-request
+name: Reschedule Callback
+url: "{{base_url}}/api/v1/casting/director/auditions/{{audition_id}}/callbacks/{{callback_id}}/reschedule"
+method: PATCH
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{director_token}}
+body:
+  type: json
+  content: |-
+    {
+      "callback_datetime": "2026-06-20T10:00:00"
+    }
+order: 13000

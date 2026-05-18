@@ -1,0 +1,7 @@
+$kind: http-request
+name: Submit Audition Submission
+url: "{{base_url}}/api/v1/casting/actor/auditions/{{audition_id}}/submissions"
+method: POST
+headers:
+  Authorization: Bearer {{actor_token}}
+order: 5000

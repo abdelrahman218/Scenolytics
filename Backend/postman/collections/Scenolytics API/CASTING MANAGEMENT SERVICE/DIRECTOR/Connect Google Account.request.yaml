@@ -1,0 +1,11 @@
+$kind: http-request
+name: Connect Google Account
+url: "{{base_url}}/api/v1/casting/director/google/connect"
+method: GET
+headers:
+  Authorization: Bearer {{director_token}}
+auth:
+  type: noauth
+settings:
+  followRedirects: true
+order: 2438493696432861

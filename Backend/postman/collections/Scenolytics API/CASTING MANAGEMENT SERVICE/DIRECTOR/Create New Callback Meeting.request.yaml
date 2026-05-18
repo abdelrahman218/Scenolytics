@@ -1,0 +1,7 @@
+$kind: http-request
+name: Create New Callback Meeting
+url: "{{base_url}}/api/v1/casting/director/auditions/{{audition_id}}/callbacks/{{callback_id}}/new_meeting"
+method: PATCH
+headers:
+  Authorization: Bearer {{director_token}}
+order: 14000
