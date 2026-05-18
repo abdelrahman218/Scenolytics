@@ -3,10 +3,9 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import routes from './routes/index.js';
 import { connectRabbitMQ, closeRabbitMQ } from './utils/rabbitmq.js';
-import { initializeEventListeners } from './utils/eventListener.js';
 import { setupAsyncListeners } from './utils/asyncListeners.js';
 
-dotenv.config({filepath: `./.env`});
+dotenv.config({path: `./.env`});
 
 const app = express();
 const PORT = process.env.USER_MANAGEMENT_SERVICE_PORT || 5002;
@@ -28,33 +27,17 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-const server = app.listen(PORT, () => {
-  
-  // Connect to RabbitMQ asynchronously with retry logic (non-blocking)
-  const connectWithRetry = async (retries = 10, delay = 3000) => {
-    for (let attempt = 1; attempt <= retries; attempt++) {
-      try {
-        await connectRabbitMQ();
-        
-        await initializeEventListeners();
-        
-        return;
-      } catch (error) {
-        
-        if (attempt < retries) {
-          
-          await new Promise(resolve => setTimeout(resolve, delay));
-        } else {
-          console.error('[STARTUP] Failed to connect to RabbitMQ after all retries.');
-        }
-      }
-    }
-  };
-  
-  // Start retry process in background (non-blocking)
-  connectWithRetry().catch(err => {
-    console.error('[STARTUP] Unexpected error in connectWithRetry:', err);
-  });
+const server = app.listen(PORT, async() => {
+  console.log(`User Management Service running on port: ${PORT}`);
+  // Connect to RabbitMQ
+  try {
+    await connectRabbitMQ();
+    await setupAsyncListeners();
+    console.log('[RabbitMQ] Connected successfully'); 
+    console.log('[App] RabbitMQ connected and listeners ready');
+  } catch (error) {
+    console.error('Failed to connect to RabbitMQ:', error);
+  }
 });
 
 // Graceful shutdown
