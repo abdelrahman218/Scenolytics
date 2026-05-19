@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -58,11 +60,62 @@ class _AuditionVideoSubmissionPageState
   String _actorDisplayName = '';
   int? _actorAge;
 
+  /// Resolved from [AuditionVideoSubmissionPage.auditionId], casting API, then
+  /// optional compile-time [AppEnv.auditionId].
+  String _effectiveAuditionId = '';
+
+  bool _isResolvingAuditionId = false;
+
   @override
   void initState() {
     super.initState();
-    _checkExistingSubmission();
-    _loadAuditionAndActorFromBackend();
+    _effectiveAuditionId = widget.auditionId.trim();
+    final needsResolve =
+        _effectiveAuditionId.isEmpty && widget.actorToken.trim().isNotEmpty;
+    _isResolvingAuditionId = needsResolve;
+    if (needsResolve) {
+      _resolveAuditionThenContinue();
+      return;
+    }
+    _applyCompileTimeAuditionFallbackIfNeeded();
+    _afterAuditionIdReady();
+  }
+
+  /// When the shell had no audition id yet, casting supplies one (invite → catalog → submissions).
+  Future<void> _resolveAuditionThenContinue() async {
+    try {
+      final id = await widget.auditionsRepository.resolveDefaultActorAuditionId(
+        actorToken: widget.actorToken,
+      );
+      if (!mounted) return;
+      final trimmed = id?.trim() ?? '';
+      if (trimmed.isNotEmpty) {
+        _effectiveAuditionId = trimmed;
+      } else {
+        _applyCompileTimeAuditionFallbackIfNeeded();
+      }
+    } catch (_) {
+      if (!mounted) return;
+      _applyCompileTimeAuditionFallbackIfNeeded();
+    }
+    if (!mounted) return;
+    setState(() => _isResolvingAuditionId = false);
+    await _afterAuditionIdReady();
+  }
+
+  void _applyCompileTimeAuditionFallbackIfNeeded() {
+    if (_effectiveAuditionId.isNotEmpty) return;
+    final envId = AppEnv.auditionId.trim();
+    if (envId.isNotEmpty) {
+      _effectiveAuditionId = envId;
+    }
+  }
+
+  Future<void> _afterAuditionIdReady() async {
+    await Future.wait([
+      _checkExistingSubmission(),
+      _loadAuditionAndActorFromBackend(),
+    ]);
   }
 
   Future<void> _loadAuditionAndActorFromBackend() async {
@@ -72,12 +125,13 @@ class _AuditionVideoSubmissionPageState
   Future<void> _loadAuditionUi() async {
     final configError = AppEnv.validateActorSubmissionFor(
       actorToken: widget.actorToken,
+      auditionId: _effectiveAuditionId,
     );
     if (configError != null) return;
     try {
       final ui = await widget.auditionsRepository.loadActorSubmissionAuditionUi(
         actorToken: widget.actorToken,
-        auditionId: widget.auditionId,
+        auditionId: _effectiveAuditionId,
       );
       if (!mounted) return;
       setState(() {
@@ -109,6 +163,7 @@ class _AuditionVideoSubmissionPageState
   Future<void> _checkExistingSubmission() async {
     final configError = AppEnv.validateActorSubmissionFor(
       actorToken: widget.actorToken,
+      auditionId: _effectiveAuditionId,
     );
     if (configError != null) {
       if (!mounted) return;
@@ -121,7 +176,7 @@ class _AuditionVideoSubmissionPageState
       final alreadySubmitted = await widget.auditionsRepository
           .hasActorSubmittedForAudition(
             actorToken: widget.actorToken,
-            auditionId: widget.auditionId,
+            auditionId: _effectiveAuditionId,
           );
       if (!mounted) return;
       setState(() {
@@ -511,7 +566,7 @@ class _AuditionVideoSubmissionPageState
     final title = _auditionTitle.trim().isEmpty
         ? 'Audition script'
         : _auditionTitle.trim();
-    final header = '$title\nID: ${widget.auditionId}';
+    final header = '$title\nID: $_effectiveAuditionId';
     await Clipboard.setData(ClipboardData(text: '$header\n\n$body'));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -538,6 +593,7 @@ class _AuditionVideoSubmissionPageState
     }
     final configError = AppEnv.validateActorSubmissionFor(
       actorToken: widget.actorToken,
+      auditionId: _effectiveAuditionId,
     );
     if (configError != null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -551,29 +607,75 @@ class _AuditionVideoSubmissionPageState
     setState(() => _isSubmitting = true);
     try {
       final bytes = await _recordedFile!.readAsBytes();
-      final submission = await widget.auditionsRepository
-          .submitRecordedAudition(
-            actorToken: widget.actorToken,
-            auditionId: widget.auditionId,
-            actorName: _actorDisplayName,
-            actorAge: _actorAge ?? 0,
-            auditionTitle: _auditionTitle,
-            videoBytes: bytes,
-          );
+      final outcome = await widget.auditionsRepository.submitRecordedAudition(
+        actorToken: widget.actorToken,
+        auditionId: _effectiveAuditionId,
+        actorName: _actorDisplayName,
+        actorAge: _actorAge ?? 0,
+        auditionTitle: _auditionTitle,
+        videoBytes: bytes,
+      );
 
       if (!mounted) return;
-      widget.onSubmitted(submission);
+      widget.onSubmitted(outcome.submission);
 
       if (!mounted) return;
       setState(() {
         _isSubmitting = false;
         _hasSubmittedForAudition = true;
-        _lastSubmission = submission;
+        _lastSubmission = outcome.submission;
         _isPreviewing = false;
         _recordedFile = null;
         _videoController?.dispose();
         _videoController = null;
       });
+
+      if (!mounted) return;
+      final payload = outcome.createSubmissionRawBody.trim().isEmpty
+          ? '(empty response body)'
+          : outcome.createSubmissionRawBody.trim();
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 30),
+          behavior: SnackBarBehavior.floating,
+          width: math.min(MediaQuery.sizeOf(context).width - 32, 520),
+          content: SizedBox(
+            height: 220,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'POST /casting/…/submissions response',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 10),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: SelectableText(
+                      payload,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontFamily: 'monospace',
+                        fontSize: 11,
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          action: SnackBarAction(
+            label: 'Dismiss',
+            onPressed: () {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            },
+          ),
+        ),
+      );
+
       await _loadAuditionUi();
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -581,14 +683,12 @@ class _AuditionVideoSubmissionPageState
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(e.message)));
-    } catch (_) {
+    } catch (s) {
       if (!mounted) return;
       setState(() => _isSubmitting = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to submit video. Please try again.'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(s.toString())));
     }
   }
 
@@ -684,10 +784,25 @@ class _AuditionVideoSubmissionPageState
                             actorAge: _actorAge,
                           ),
                           const SizedBox(height: 14),
-                          if (_isCheckingExistingSubmission)
+                          if (_isResolvingAuditionId ||
+                              _isCheckingExistingSubmission)
                             const Padding(
                               padding: EdgeInsets.symmetric(vertical: 16),
                               child: Center(child: CircularProgressIndicator()),
+                            )
+                          else if (_effectiveAuditionId.trim().isEmpty &&
+                              widget.actorToken.trim().isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              child: Text(
+                                'Could not resolve an audition from the server '
+                                '(no invitations or catalog rows). Pick one '
+                                'under Explore Auditions, or set compile-time '
+                                'SCENO_AUDITION_ID.',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: cs.onSurfaceVariant,
+                                ),
+                              ),
                             )
                           else
                             _RecordingCard(
@@ -703,7 +818,9 @@ class _AuditionVideoSubmissionPageState
                             ),
                           const SizedBox(height: 18),
                           if (!_hasSubmittedForAudition &&
-                              !_isCheckingExistingSubmission)
+                              !_isResolvingAuditionId &&
+                              !_isCheckingExistingSubmission &&
+                              _effectiveAuditionId.trim().isNotEmpty)
                             FilledButton.icon(
                               onPressed: _isSubmitting ? null : _submit,
                               icon: _isSubmitting

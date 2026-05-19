@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 
+import '../config/app_env.dart';
 import '../data/audition_rankings_sort.dart';
 import '../models/actor_audition_submission.dart';
 import '../pages/facial_emotion_score.dart';
@@ -13,6 +14,52 @@ import '../pages/script_alignemnt_score_page.dart';
 import '../pages/vocal_emotion_score.dart';
 import '../theme/scenolytics_colors.dart';
 import '../widgets/scenolytics_footer.dart';
+
+/// Playback fallbacks — gateway path may not have the object; MinIO `:9000` often does,
+/// persisting hints from PUT responses is handled in [AuditionsRepository].
+List<String> _directorTapePlaybackCandidates(ActorAuditionSubmission submission) {
+  final out = <String>[];
+  final seen = <String>{};
+  void add(String? raw) {
+    final u = raw?.trim();
+    if (u == null || u.isEmpty) return;
+    if (!seen.add(u)) return;
+    out.add(u);
+  }
+
+  add(submission.recordedVideoUrl);
+
+  final id = submission.mediaId?.trim();
+  if (id != null && id.isNotEmpty) {
+    String tapeAtPublicBase(String rawBase) {
+      var base = rawBase.trim();
+      if (base.isEmpty) return '';
+      if (base.endsWith('/')) {
+        base = base.substring(0, base.length - 1);
+      }
+      return '$base/uploads/$id.mp4';
+    }
+
+    add(tapeAtPublicBase(AppEnv.minioVideosBase));
+    add(tapeAtPublicBase(AppEnv.videoPublicBase));
+
+    Uri? api;
+    try {
+      api = Uri.parse(AppEnv.apiBaseUrl);
+    } catch (_) {
+      api = null;
+    }
+    if (api != null &&
+        (api.scheme == 'http' || api.scheme == 'https') &&
+        api.host.isNotEmpty &&
+        api.host.toLowerCase() != 'localhost' &&
+        api.host != '127.0.0.1') {
+      add('${api.scheme}://${api.host}:9000/videos/uploads/$id.mp4');
+    }
+  }
+
+  return out;
+}
 
 /// Which slice of the leaderboard is shown below the stats row.
 enum RankingsViewMode {
@@ -872,8 +919,8 @@ void _presentDirectorAuditionVideo(
   BuildContext context,
   ActorAuditionSubmission submission,
 ) {
-  final url = submission.recordedVideoUrl?.trim();
-  if (url == null || url.isEmpty) {
+  final candidates = _directorTapePlaybackCandidates(submission);
+  if (candidates.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Video is not available for this submission yet.'),
@@ -887,7 +934,7 @@ void _presentDirectorAuditionVideo(
     useSafeArea: true,
     backgroundColor: Colors.transparent,
     builder: (ctx) => _DirectorAuditionVideoSheet(
-      videoUrl: url,
+      playbackCandidates: candidates,
       actorName: submission.actorName,
       age: submission.age,
     ),
@@ -896,12 +943,12 @@ void _presentDirectorAuditionVideo(
 
 class _DirectorAuditionVideoSheet extends StatefulWidget {
   const _DirectorAuditionVideoSheet({
-    required this.videoUrl,
+    required this.playbackCandidates,
     required this.actorName,
     required this.age,
   });
 
-  final String videoUrl;
+  final List<String> playbackCandidates;
   final String actorName;
   final int age;
 
@@ -914,6 +961,7 @@ class _DirectorAuditionVideoSheetState
     extends State<_DirectorAuditionVideoSheet> {
   VideoPlayerController? _controller;
   String? _error;
+  String? _resolvedUrl;
 
   @override
   void initState() {
@@ -922,29 +970,40 @@ class _DirectorAuditionVideoSheetState
   }
 
   Future<void> _init() async {
-    try {
-      final c = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
-      await c.initialize();
-      if (!mounted) {
-        await c.dispose();
-        return;
-      }
-      setState(() => _controller = c);
-    } catch (e) {
-      if (mounted) {
+    Object? lastError;
+    final urls = widget.playbackCandidates;
+    for (final uriStr in urls) {
+      VideoPlayerController? c;
+      try {
+        c = VideoPlayerController.networkUrl(Uri.parse(uriStr));
+        await c.initialize();
+        if (!mounted) {
+          await c.dispose();
+          return;
+        }
         setState(() {
-          _error = kIsWeb
-              ? 'Could not load video in the browser.\n\n'
-                    'Check: (1) SCENO_VIDEO_PUBLIC_BASE — gateway example '
-                    'http://localhost/api/v1/storage/videos, or local MinIO path-style '
-                    'http://localhost:9000/videos (port must match AWS_PORT) — '
-                    '(2) api-gateway proxies storage if you use the gateway URL — '
-                    '(3) object exists at uploads/{media_id}.mp4 in bucket videos '
-                    '(anonymous read or CORS on MinIO if not using gateway).\n\n'
-                    'URL tried:\n${widget.videoUrl}'
-              : 'Could not load video.\n${widget.videoUrl}\n\n$e';
+          _controller = c;
+          _resolvedUrl = uriStr;
         });
+        return;
+      } catch (e, _) {
+        lastError = e;
+        await c?.dispose();
       }
+    }
+    if (mounted) {
+      final tried = urls.join('\n');
+      setState(() {
+        _error = kIsWeb
+            ? 'Could not load video in the browser.\n\n'
+                  'URLs tried:\n$tried\n\n'
+                  'Hint: the object URL must match where the PUT presign pointed '
+                  '(see casting logs). We also probe SCENO_MINIO_VIDEOS_BASE — '
+                  'pass --dart-define=SCENO_MINIO_VIDEOS_BASE=http://localhost:9000/videos '
+                  'if your MinIO differs. Confirm GET returns MP4 bytes, not MinIO '
+                  'XML NoSuchKey.'
+            : 'Could not load video.\n$tried\n\n${lastError ?? ''}';
+      });
     }
   }
 
@@ -1068,7 +1127,14 @@ class _DirectorAuditionVideoSheetState
                                 child: TextButton.icon(
                                   onPressed: () async {
                                     await Clipboard.setData(
-                                      ClipboardData(text: widget.videoUrl),
+                                      ClipboardData(
+                                        text: (_resolvedUrl != null &&
+                                                _resolvedUrl!.isNotEmpty)
+                                            ? _resolvedUrl!
+                                            : widget
+                                                .playbackCandidates
+                                                .first,
+                                      ),
                                     );
                                     if (context.mounted) {
                                       ScaffoldMessenger.of(
