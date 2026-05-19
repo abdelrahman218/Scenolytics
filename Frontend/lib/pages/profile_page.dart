@@ -125,7 +125,7 @@ class _ProfilePageState extends State<ProfilePage> {
     }
     try {
       final profile = user.isActor
-          ? await api.getActorProfile(user.userId)
+          ? await api.getActorProfile(user.userId, bearerToken: user.token)
           : user.isDirector
               ? await api.getDirectorProfile(user.userId)
               : null;

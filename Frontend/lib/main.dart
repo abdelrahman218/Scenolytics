@@ -13,9 +13,13 @@ import 'data/auth_session_store.dart';
 import 'data/repositories/auditions_repository.dart';
 import 'data/models/auth_user.dart';
 import 'models/actor_audition_submission.dart';
+import 'models/audition_listing.dart';
+import 'models/director_audition_card.dart';
 import 'pages/audition_rankings_page.dart';
 import 'pages/audition_video_submission_page.dart';
 import 'pages/director_audition_creation_page.dart';
+import 'pages/director_dashboard_page.dart';
+import 'pages/explore_auditions_page.dart';
 import 'pages/login_page.dart';
 import 'shell/main_shell.dart';
 import 'theme/app_theme.dart';
@@ -87,7 +91,13 @@ class ScenolyticsApp extends StatelessWidget {
   }
 }
 
-enum _ShellPage { actorSubmission, directorRankings, directorCreateAudition }
+enum _ShellPage {
+  actorExplore,
+  actorSubmission,
+  directorDashboard,
+  directorRankings,
+  directorCreateAudition,
+}
 
 class _ScenolyticsHome extends StatefulWidget {
   const _ScenolyticsHome({
@@ -103,7 +113,7 @@ class _ScenolyticsHome extends StatefulWidget {
 }
 
 class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
-  _ShellPage _page = _ShellPage.actorSubmission;
+  _ShellPage _page = _ShellPage.actorExplore;
   final List<ActorAuditionSubmission> _submissions =
       <ActorAuditionSubmission>[];
   late final AuditionsRepository _auditionsRepository;
@@ -111,18 +121,37 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
   String _rankingsAuditionSubtitle = '';
   String? _directorDisplayName;
 
+  /// Audition the actor most recently chose from Explore. Falls back to the
+  /// compile-time [AppEnv.auditionId] so legacy single-audition runs still work.
+  String? _selectedActorAuditionId;
+
+  /// Audition the director most recently picked from the dashboard. Falls
+  /// back to [AppEnv.auditionId] so the rankings page still has a target
+  /// when the director opens it directly (e.g. via the nav button).
+  String? _selectedDirectorAuditionId;
+
   AuthUser get _user => widget.auth.user!;
 
   String get _actorToken => _user.isActor ? _user.token : '';
   String get _directorToken => _user.isDirector ? _user.token : '';
 
+  String get _activeActorAuditionId =>
+      (_selectedActorAuditionId ?? '').isNotEmpty
+          ? _selectedActorAuditionId!
+          : AppEnv.auditionId;
+
+  String get _activeDirectorAuditionId =>
+      (_selectedDirectorAuditionId ?? '').isNotEmpty
+          ? _selectedDirectorAuditionId!
+          : AppEnv.auditionId;
+
   @override
   void initState() {
     super.initState();
     if (_user.isDirector) {
-      _page = _ShellPage.directorRankings;
+      _page = _ShellPage.directorDashboard;
     } else {
-      _page = _ShellPage.actorSubmission;
+      _page = _ShellPage.actorExplore;
     }
     _auditionsRepository = AuditionsRepository(
       castingApi: CastingApi(baseUrl: AppEnv.apiBaseUrl),
@@ -162,7 +191,13 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
 
   void _goTo(_ShellPage page) {
     if (_page == page) return;
+    if (page == _ShellPage.actorExplore && !_user.isActor) {
+      return;
+    }
     if (page == _ShellPage.actorSubmission && !_user.isActor) {
+      return;
+    }
+    if (page == _ShellPage.directorDashboard && !_user.isDirector) {
       return;
     }
     if (page == _ShellPage.directorRankings && !_user.isDirector) {
@@ -174,6 +209,21 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
     setState(() => _page = page);
   }
 
+  void _openSubmissionForAudition(AuditionListing audition) {
+    setState(() {
+      _selectedActorAuditionId = audition.id;
+      _page = _ShellPage.actorSubmission;
+    });
+  }
+
+  void _openRankingsForCard(DirectorAuditionCard card) {
+    setState(() {
+      _selectedDirectorAuditionId = card.id;
+      _page = _ShellPage.directorRankings;
+    });
+    _refreshDirectorRankings();
+  }
+
   void _handleSubmission(ActorAuditionSubmission submission) {
     setState(() {
       _submissions.add(submission);
@@ -182,17 +232,17 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
   }
 
   Future<void> _refreshDirectorRankings() async {
-    if (!_user.isDirector || _directorToken.isEmpty || AppEnv.auditionId.isEmpty) {
-      return;
-    }
+    if (!_user.isDirector || _directorToken.isEmpty) return;
+    final auditionId = _activeDirectorAuditionId;
+    if (auditionId.isEmpty) return;
     try {
       final header = await _auditionsRepository.loadRankingsAuditionHeader(
         directorToken: _directorToken,
-        auditionId: AppEnv.auditionId,
+        auditionId: auditionId,
       );
       final live = await _auditionsRepository.loadDirectorLeaderboard(
         directorToken: _directorToken,
-        auditionId: AppEnv.auditionId,
+        auditionId: auditionId,
       );
       if (!mounted) return;
       setState(() {
@@ -235,12 +285,27 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
   @override
   Widget build(BuildContext context) {
     final body = switch (_page) {
+      _ShellPage.actorExplore => ExploreAuditionsPage(
+        auditionsRepository: _auditionsRepository,
+        actorToken: _actorToken,
+        onApply: _openSubmissionForAudition,
+        extraAuditionIds: AppEnv.auditionId.isEmpty
+            ? const <String>[]
+            : <String>[AppEnv.auditionId],
+      ),
       _ShellPage.actorSubmission => AuditionVideoSubmissionPage(
         onSubmitted: _handleSubmission,
         auditionsRepository: _auditionsRepository,
         actorToken: _actorToken,
-        auditionId: AppEnv.auditionId,
+        auditionId: _activeActorAuditionId,
         accountEmail: _user.email,
+      ),
+      _ShellPage.directorDashboard => DirectorDashboardPage(
+        auditionsRepository: _auditionsRepository,
+        directorToken: _directorToken,
+        directorDisplayName: _directorDisplayName,
+        onOpenRankings: _openRankingsForCard,
+        onCreateAudition: () => _goTo(_ShellPage.directorCreateAudition),
       ),
       _ShellPage.directorRankings => AuditionRankingsPage(
         submissions: _submissions,
@@ -263,13 +328,17 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
     };
 
     final pageTitle = switch (_page) {
+      _ShellPage.actorExplore => 'Actor portal',
       _ShellPage.actorSubmission => 'Actor portal',
+      _ShellPage.directorDashboard => 'Director dashboard',
       _ShellPage.directorRankings => 'Director portal',
       _ShellPage.directorCreateAudition => 'Create audition',
     };
 
     final currentRouteName = switch (_page) {
+      _ShellPage.actorExplore => 'explore-auditions',
       _ShellPage.actorSubmission => 'submit-video',
+      _ShellPage.directorDashboard => 'director-dashboard',
       _ShellPage.directorRankings => 'rankings',
       _ShellPage.directorCreateAudition => 'create-audition',
     };
@@ -287,8 +356,13 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
       onLogout: () async {
         await widget.auth.signOut();
       },
+      onSelectExploreAuditions:
+          _user.isActor ? () => _goTo(_ShellPage.actorExplore) : null,
       onSelectHome: _user.isActor
           ? () => _goTo(_ShellPage.actorSubmission)
+          : null,
+      onSelectDirectorDashboard: _user.isDirector
+          ? () => _goTo(_ShellPage.directorDashboard)
           : null,
       onSelectRankings: _user.isDirector
           ? () {

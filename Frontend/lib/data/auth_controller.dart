@@ -108,7 +108,8 @@ class AuthController extends ChangeNotifier {
           await um.createActorProfile(
             userId: signedIn.userId,
             fields: <String, dynamic>{
-              'display_name': name.trim(),
+              // User Management `createActorProfile` maps `name` → `display_name`.
+              'name': name.trim(),
               if (age != null) 'age': age,
               if (gender != null && gender.trim().isNotEmpty)
                 'gender': gender.trim(),
@@ -118,7 +119,7 @@ class AuthController extends ChangeNotifier {
           await um.createDirectorProfile(
             userId: signedIn.userId,
             fields: <String, dynamic>{
-              'display_name': name.trim(),
+              'name': name.trim(),
             },
           );
         }
