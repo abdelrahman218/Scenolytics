@@ -1,6 +1,9 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:http/http.dart' show ClientException;
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../models/actor_audition_submission.dart';
 import '../../models/actor_profile_ui.dart';
 import '../../models/actor_submission_audition_ui.dart';
@@ -11,6 +14,20 @@ import '../../utils/json_map_read.dart';
 import '../../utils/jwt_user_id.dart';
 import '../api/casting_api.dart';
 import '../api/user_management_api.dart';
+
+/// Result of [AuditionsRepository.submitRecordedAudition]; includes raw casting
+/// `POST …/submissions` body for debug UX.
+class RecordedAuditionSubmitOutcome {
+  const RecordedAuditionSubmitOutcome({
+    required this.submission,
+    required this.createSubmissionRawBody,
+  });
+
+  final ActorAuditionSubmission submission;
+
+  /// Exact HTTP body from casting when the submission metadata row + presigned PUT URL was created.
+  final String createSubmissionRawBody;
+}
 
 /// Title + subtitle line for the director rankings hero (from audition API).
 class RankingsAuditionHeader {
@@ -36,7 +53,68 @@ class AuditionsRepository {
   final UserManagementApi _userManagementApi;
   final String _videoPublicBase;
 
-  Future<ActorAuditionSubmission> submitRecordedAudition({
+  /// Playback URLs saved from casting POST `uploadURL` (SigV4 stripped → GET URL).
+  /// Stored in SharedPreferences keyed by `submission.id` and `media_id` so GET-only
+  /// flows don't lose the PUT target.
+  final Map<String, String> _playbackUrlHintByMediaId = <String, String>{};
+  final Map<String, String> _playbackUrlHintBySubmissionId =
+      <String, String>{};
+
+  static String _persistKeyForPlayback(String mediaId) =>
+      'scenolytics_playback_url_mid_${mediaId.trim().toLowerCase()}';
+
+  static String _persistKeyForSubmission(String castingSubmissionId) =>
+      'scenolytics_playback_url_sub_${castingSubmissionId.trim().toLowerCase()}';
+
+  Future<void> _persistPostSubmissionPlaybackUrls({
+    required String strippedPlaybackUrl,
+    required String castingSubmissionId,
+    String? mediaId,
+  }) async {
+    final url = strippedPlaybackUrl.trim();
+    final sid = castingSubmissionId.trim();
+    if (url.isEmpty || sid.isEmpty) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_persistKeyForSubmission(sid), url);
+    _playbackUrlHintBySubmissionId[sid] = url;
+
+    final mid = mediaId?.trim() ?? '';
+    if (mid.isNotEmpty) {
+      await prefs.setString(_persistKeyForPlayback(mid), url);
+      _playbackUrlHintByMediaId[mid] = url;
+    }
+  }
+
+  Future<void> _hydratePlaybackHintsFromRows(
+    Iterable<Map<String, dynamic>> rows,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final row in rows) {
+      final mediaKey =
+          row['media_id']?.toString().trim() ?? row['mediaId']?.toString().trim();
+      if (mediaKey != null &&
+          mediaKey.isNotEmpty &&
+          !_playbackUrlHintByMediaId.containsKey(mediaKey)) {
+        final v = prefs.getString(_persistKeyForPlayback(mediaKey));
+        if (v != null && v.trim().isNotEmpty) {
+          _playbackUrlHintByMediaId[mediaKey] = v.trim();
+        }
+      }
+
+      final submissionKey = row['id']?.toString().trim();
+      if (submissionKey != null &&
+          submissionKey.isNotEmpty &&
+          !_playbackUrlHintBySubmissionId.containsKey(submissionKey)) {
+        final v = prefs.getString(_persistKeyForSubmission(submissionKey));
+        if (v != null && v.trim().isNotEmpty) {
+          _playbackUrlHintBySubmissionId[submissionKey] = v.trim();
+        }
+      }
+    }
+  }
+
+  Future<RecordedAuditionSubmitOutcome> submitRecordedAudition({
     required String actorToken,
     required String auditionId,
     required String actorName,
@@ -49,10 +127,33 @@ class AuditionsRepository {
       auditionId: auditionId,
     );
 
-    await _castingApi.uploadSubmissionVideo(
-      uploadUrl: init.uploadUrl,
-      bytes: videoBytes,
-    );
+    try {
+      // PUT destination is always init.uploadUrl from POST — verbatim (SigV4).
+      await _castingApi.uploadSubmissionVideo(
+        uploadUrl: init.uploadUrl,
+        bytes: videoBytes,
+      );
+    } on ClientException catch (e) {
+      final msgLower = e.message.toLowerCase();
+      final corsHint =
+          msgLower.contains('failed to fetch') ||
+              msgLower.contains('xmlhttprequest error');
+      throw ApiException(
+        corsHint
+            ? 'Video PUT failed before any HTTP status was received (${e.uri ?? init.uploadUrl}). '
+                'The app used uploadURL from the casting POST unchanged. '
+                'Flutter web sends OPTIONS before cross-origin PUT (required by browsers; cannot disable). '
+                'If OPTIONS succeeds but uploads still fail, fix CORS (Allow-Methods/Allow-Headers) on gateway/MinIO. '
+                'Or use `flutter run -d windows` to bypass browser CORS.'
+            : 'Video upload failed (${e.uri ?? init.uploadUrl}): ${e.message}',
+      );
+    }
+
+    final playbackFromBackend =
+        _playbackUrlStripPresignedQuery(init.uploadUrl);
+    final submissionMediaId = init.mediaId.trim().isNotEmpty
+        ? init.mediaId.trim()
+        : init.rawSubmission['media_id']?.toString().trim() ?? '';
 
     final mapped = _mapSubmission(
       source: init.rawSubmission,
@@ -61,9 +162,23 @@ class AuditionsRepository {
       fallbackAge: actorAge,
       fallbackAuditionTitle: auditionTitle,
       videoPublicBase: _videoPublicBase,
+      preferredPlaybackUrl: playbackFromBackend,
     );
 
-    return mapped.copyWith(id: init.submissionId);
+    final result = mapped.copyWith(id: init.submissionId);
+
+    if (playbackFromBackend != null && playbackFromBackend.isNotEmpty) {
+      await _persistPostSubmissionPlaybackUrls(
+        strippedPlaybackUrl: playbackFromBackend,
+        castingSubmissionId: init.submissionId,
+        mediaId: submissionMediaId.isNotEmpty ? submissionMediaId : null,
+      );
+    }
+
+    return RecordedAuditionSubmitOutcome(
+      submission: result,
+      createSubmissionRawBody: init.rawHttpBody,
+    );
   }
 
   Future<List<ActorAuditionSubmission>> loadDirectorLeaderboard({
@@ -74,6 +189,8 @@ class AuditionsRepository {
       directorToken: directorToken,
       auditionId: auditionId,
     );
+
+    await _hydratePlaybackHintsFromRows(submissions);
 
     final profilesByActorId = <String, Map<String, dynamic>>{};
     final actorIds = submissions
@@ -279,7 +396,10 @@ class AuditionsRepository {
     await Future.wait(
       uniqueDirectorIds.map((id) async {
         try {
-          final raw = await _userManagementApi.getDirectorProfile(id);
+          final raw = await _userManagementApi.getDirectorProfile(
+            id,
+            bearerToken: actorToken,
+          );
           if (raw == null) return;
           final ui = DirectorProfileUi.fromUserManagementJson(raw);
           final n = ui.displayName?.trim();
@@ -385,7 +505,10 @@ class AuditionsRepository {
     await Future.wait(
       uniqueDirectorIds.map((id) async {
         try {
-          final raw = await _userManagementApi.getDirectorProfile(id);
+          final raw = await _userManagementApi.getDirectorProfile(
+            id,
+            bearerToken: actorToken,
+          );
           if (raw == null) return;
           final ui = DirectorProfileUi.fromUserManagementJson(raw);
           final n = ui.displayName?.trim();
@@ -426,6 +549,42 @@ class AuditionsRepository {
     return submissions.any(
       (submission) => submission['audition_id']?.toString() == auditionId,
     );
+  }
+
+  /// Picks one audition UUID from casting when the UI has none: pending invite
+  /// first, then newest catalog row, then any past submission audition.
+  ///
+  /// Returns `null` if every actor call fails or yields no ids.
+  Future<String?> resolveDefaultActorAuditionId({
+    required String actorToken,
+  }) async {
+    if (actorToken.trim().isEmpty) return null;
+
+    final invitations = await _safeList(
+      () => _castingApi.getActorInvitations(actorToken: actorToken),
+    );
+    for (final row in invitations) {
+      final id = row['audition_id']?.toString().trim() ?? '';
+      if (id.isNotEmpty) return id;
+    }
+
+    final catalog = await _safeList(
+      () => _castingApi.getActorAuditionsCatalog(actorToken: actorToken),
+    );
+    for (final row in catalog) {
+      final id = row['id']?.toString().trim() ?? '';
+      if (id.isNotEmpty) return id;
+    }
+
+    final submissions = await _safeList(
+      () => _castingApi.getActorSubmissions(actorToken: actorToken),
+    );
+    for (final row in submissions) {
+      final id = row['audition_id']?.toString().trim() ?? '';
+      if (id.isNotEmpty) return id;
+    }
+
+    return null;
   }
 
   /// Raw casting POST shape — callers must send backend field names (`script` lines use `content` + `emotion`).
@@ -472,7 +631,10 @@ class AuditionsRepository {
       final directorId = _directorUserIdFromAudition(audition);
       if (directorId != null && directorId.isNotEmpty) {
         try {
-          final raw = await _userManagementApi.getDirectorProfile(directorId);
+          final raw = await _userManagementApi.getDirectorProfile(
+            directorId,
+            bearerToken: actorToken,
+          );
           if (raw != null) {
             directorDisplayName =
                 DirectorProfileUi.fromUserManagementJson(raw).displayName;
@@ -562,7 +724,10 @@ class AuditionsRepository {
   Future<DirectorProfileUi?> loadDirectorProfileUi(String directorJwt) async {
     final userId = userIdFromActorJwt(directorJwt);
     if (userId == null) return null;
-    final raw = await _userManagementApi.getDirectorProfile(userId);
+    final raw = await _userManagementApi.getDirectorProfile(
+      userId,
+      bearerToken: directorJwt,
+    );
     if (raw == null) return null;
     return DirectorProfileUi.fromUserManagementJson(raw);
   }
@@ -644,6 +809,7 @@ class AuditionsRepository {
     required int fallbackAge,
     required String fallbackAuditionTitle,
     required String videoPublicBase,
+    String? preferredPlaybackUrl,
   }) {
     final id = source['id']?.toString() ?? 'sub_${DateTime.now().millisecondsSinceEpoch}';
     final metrics = _metricsFromSeed(id);
@@ -701,6 +867,29 @@ class AuditionsRepository {
       fallbackActorName: fallbackActorName,
     );
 
+    final mediaIdRaw =
+        source['media_id']?.toString() ?? source['mediaId']?.toString();
+    final preferred = preferredPlaybackUrl?.trim() ?? '';
+
+    final mediaKey = mediaIdRaw?.trim() ?? '';
+    final hintMedia =
+        mediaKey.isNotEmpty ? _playbackUrlHintByMediaId[mediaKey] : null;
+    final submissionKey = id.trim();
+    final hintSubmission = submissionKey.isNotEmpty
+        ? _playbackUrlHintBySubmissionId[submissionKey]
+        : null;
+
+    String? playback;
+    if (preferred.isNotEmpty) {
+      playback = preferred;
+    } else if (hintMedia != null && hintMedia.trim().isNotEmpty) {
+      playback = hintMedia.trim();
+    } else if (hintSubmission != null && hintSubmission.trim().isNotEmpty) {
+      playback = hintSubmission.trim();
+    } else {
+      playback = _auditionPlaybackUrl(mediaIdRaw, videoPublicBase);
+    }
+
     return ActorAuditionSubmission(
       id: id,
       actorName: actorName,
@@ -715,10 +904,8 @@ class AuditionsRepository {
       scriptMatchScore: scriptMatchScore,
       eyesAnalysisScore: eyesAnalysisScore,
       toneAnalysisScore: toneAnalysisScore,
-      recordedVideoUrl: _auditionPlaybackUrl(
-        source['media_id']?.toString() ?? source['mediaId']?.toString(),
-        videoPublicBase,
-      ),
+      recordedVideoUrl: playback,
+      mediaId: mediaKey.isNotEmpty ? mediaKey : null,
     );
   }
 
@@ -825,6 +1012,33 @@ class AuditionsRepository {
     return '$base/uploads/$id.mp4';
   }
 
+  /// Backend returns a SigV4 presigned **PUT** URL; [uploadSubmissionVideo]
+  /// uploads to it unchanged. Playback should use the same origin + path with
+  /// query/fragment removed (GET), matching where the object landed.
+  String? _playbackUrlStripPresignedQuery(String presignedHttpUrl) {
+    final trimmed = presignedHttpUrl.trim();
+    if (trimmed.isEmpty) return null;
+    Uri u;
+    try {
+      u = Uri.parse(trimmed);
+    } on FormatException {
+      return null;
+    }
+    if (u.scheme.isEmpty || u.host.isEmpty || u.path.isEmpty) {
+      return null;
+    }
+    final omitPort =
+        (u.scheme == 'http' && u.port == 80) ||
+            (u.scheme == 'https' && u.port == 443);
+    final clean = Uri(
+      scheme: u.scheme,
+      host: u.host,
+      port: omitPort ? null : (u.hasPort ? u.port : null),
+      path: u.path,
+    );
+    return clean.toString();
+  }
+
   double? _firstDouble(Map<String, dynamic> source, List<String> keys) {
     for (final key in keys) {
       final value = source[key];
@@ -913,6 +1127,7 @@ extension on ActorAuditionSubmission {
       eyesAnalysisScore: eyesAnalysisScore,
       toneAnalysisScore: toneAnalysisScore,
       recordedVideoUrl: recordedVideoUrl,
+      mediaId: mediaId,
     );
   }
 }

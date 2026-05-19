@@ -23,7 +23,8 @@ class SignupPage extends StatefulWidget {
 }
 
 class _SignupPageState extends State<SignupPage> {
-  static const _genderOptions = <String>['Male', 'Female', 'Other', 'Prefer not to say'];
+  /// Identity `signUpValuesValidator` only accepts **Male** and **Female** for gender.
+  static const _genderOptions = <String>['Male', 'Female'];
 
   final _formKey = GlobalKey<FormState>();
   final _name = TextEditingController();
@@ -103,6 +104,15 @@ class _SignupPageState extends State<SignupPage> {
         age: age,
         gender: _isActor ? _gender : null,
       );
+      final profileMsg = widget.auth.consumeProfileBootstrapMessage();
+      if (mounted && profileMsg != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(profileMsg),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     } on AuthApiException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

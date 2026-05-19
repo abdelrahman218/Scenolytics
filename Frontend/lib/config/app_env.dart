@@ -44,6 +44,20 @@ class AppEnv {
     return t.isEmpty ? 'http://localhost/api/v1/storage/videos' : t;
   }
 
+  /// Path-style MinIO bucket root for tapes (no trailing slash). Used as a playback
+  /// fallback when gateway URLs 404 — default matches Docker Compose `AWS_PORT=9000`.
+  /// Override with `--dart-define=SCENO_MINIO_VIDEOS_BASE=http://YOUR_HOST:9000/videos`
+  /// on LAN / emulator.
+  static const String _minioVideosBaseEnv = String.fromEnvironment(
+    'SCENO_MINIO_VIDEOS_BASE',
+    defaultValue: 'http://localhost:9000/videos',
+  );
+
+  static String get minioVideosBase {
+    final t = _minioVideosBaseEnv.trim();
+    return t.isEmpty ? 'http://localhost:9000/videos' : t;
+  }
+
   /// Optional compile-time fallbacks. The app uses JWTs from in-app sign-in; these
   /// are only for legacy/tooling and are not required for in-app sign-in.
   static const String actorToken = String.fromEnvironment(
@@ -56,20 +70,30 @@ class AppEnv {
     defaultValue: '',
   );
 
+  /// Optional compile-time fallback when Explore did not pick an audition and casting
+  /// cannot infer one yet; normally IDs come from invitations or the actor catalog APIs.
   static const String auditionId = String.fromEnvironment(
     'SCENO_AUDITION_ID',
     defaultValue: '',
   );
 
-  /// Validates config for the actor submission flow using the resolved token (from auth or .env).
-  static String? validateActorSubmissionFor({required String actorToken}) {
+  /// Validates config for the actor submission flow.
+  ///
+  /// [auditionId] must be non-empty once resolved (typically from Explore, from
+  /// casting `GET /actor/invitations` + catalog, or from optional compile-time
+  /// `SCENO_AUDITION_ID`).
+  static String? validateActorSubmissionFor({
+    required String actorToken,
+    required String auditionId,
+  }) {
     if (actorToken.isEmpty) {
       return 'Sign in as an actor, or set SCENO_ACTOR_TOKEN in your run configuration '
           '(e.g. --dart-define-from-file=Frontend/.env).';
     }
-    if (auditionId.isEmpty) {
-      return 'Missing SCENO_AUDITION_ID. Use the same --dart-define-from-file or '
-          '--dart-define=SCENO_AUDITION_ID=…';
+    if (auditionId.trim().isEmpty) {
+      return 'No audition is selected yet. Pick one under Explore Auditions, or '
+          'ensure casting has invitations or catalog rows you can submit to '
+          '(optional dev fallback: SCENO_AUDITION_ID).';
     }
     return null;
   }

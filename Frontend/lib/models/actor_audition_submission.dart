@@ -13,6 +13,7 @@ class ActorAuditionSubmission {
     required this.eyesAnalysisScore,
     required this.toneAnalysisScore,
     this.recordedVideoUrl,
+    this.mediaId,
   });
 
   final String id;
@@ -30,6 +31,9 @@ class ActorAuditionSubmission {
   final int scriptMatchScore;
   final int eyesAnalysisScore;
   final int toneAnalysisScore;
+
+  /// Casting tape UUID — `uploads/{media_id}.mp4` (used when probing playback URLs).
+  final String? mediaId;
 
   /// HTTPS URL to the uploaded audition recording, when known (director playback).
   final String? recordedVideoUrl;

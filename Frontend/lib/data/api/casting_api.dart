@@ -20,12 +20,16 @@ class CastingSubmissionInitResponse {
     required this.mediaId,
     required this.uploadUrl,
     required this.rawSubmission,
+    required this.rawHttpBody,
   });
 
   final String submissionId;
   final String mediaId;
   final String uploadUrl;
   final Map<String, dynamic> rawSubmission;
+
+  /// Full JSON body from `POST …/submissions` (for debug UI).
+  final String rawHttpBody;
 }
 
 class CastingApi {
@@ -83,17 +87,29 @@ class CastingApi {
       mediaId: mediaId,
       uploadUrl: uploadUrl,
       rawSubmission: submission,
+      rawHttpBody: response.body,
     );
   }
 
+  /// Sends [bytes] to [uploadUrl] **exactly** as returned by casting
+  /// `POST …/submissions` (`uploadURL` / `upload_url`). Do not substitute
+  /// `SCENO_VIDEO_PUBLIC_BASE` or any other compile-time URL here — SigV4
+  /// binds host, path, and query together.
   Future<void> uploadSubmissionVideo({
     required String uploadUrl,
     required Uint8List bytes,
   }) async {
     // Presigned PUT from PutObjectCommand(Bucket, Key) is signed without
     // Content-Type. Sending Content-Type here often breaks SigV4 (403).
+    //
+    // On Flutter Web, uploads use the browser fetch stack. Cross-origin PUT is
+    // never "simple"; the browser will send OPTIONS first, then PUT. That is
+    // required by CORS—you cannot suppress OPTIONS from Dart while keeping a
+    // normal PUT upload. Same-origin uploads (matching scheme/host/port as the
+    // app), or dart:io (Windows/desktop/mobile), skip browser CORS.
+    final uri = Uri.parse(uploadUrl.trim());
     final response = await _client.put(
-      Uri.parse(uploadUrl),
+      uri,
       body: bytes,
     );
 

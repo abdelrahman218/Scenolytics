@@ -127,7 +127,10 @@ class _ProfilePageState extends State<ProfilePage> {
       final profile = user.isActor
           ? await api.getActorProfile(user.userId, bearerToken: user.token)
           : user.isDirector
-              ? await api.getDirectorProfile(user.userId)
+              ? await api.getDirectorProfile(
+                  user.userId,
+                  bearerToken: user.token,
+                )
               : null;
       if (!mounted) return;
       if (profile != null) {
@@ -273,14 +276,30 @@ class _ProfilePageState extends State<ProfilePage> {
       Map<String, dynamic> result;
       if (_profileId == null || _profileId!.isEmpty) {
         result = _isActor
-            ? await api.createActorProfile(userId: user.userId, fields: fields)
-            : await api.createDirectorProfile(userId: user.userId, fields: fields);
+            ? await api.createActorProfile(
+                userId: user.userId,
+                fields: fields,
+                bearerToken: user.token,
+              )
+            : await api.createDirectorProfile(
+                userId: user.userId,
+                fields: fields,
+                bearerToken: user.token,
+              );
         final newId = result['id']?.toString().trim();
         if (newId != null && newId.isNotEmpty) _profileId = newId;
       } else {
         result = _isActor
-            ? await api.updateActorProfile(profileId: _profileId!, fields: fields)
-            : await api.updateDirectorProfile(profileId: _profileId!, fields: fields);
+            ? await api.updateActorProfile(
+                profileId: _profileId!,
+                fields: fields,
+                bearerToken: user.token,
+              )
+            : await api.updateDirectorProfile(
+                profileId: _profileId!,
+                fields: fields,
+                bearerToken: user.token,
+              );
       }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

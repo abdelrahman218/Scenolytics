@@ -35,6 +35,15 @@ class AuthController extends ChangeNotifier {
     return v;
   }
 
+  /// Set when sign-up succeeded but User Management profile row could not be confirmed.
+  /// Use [consumeProfileBootstrapMessage] in UI (e.g. SnackBar) once per sign-up.
+  String? _profileBootstrapMessage;
+  String? consumeProfileBootstrapMessage() {
+    final m = _profileBootstrapMessage;
+    _profileBootstrapMessage = null;
+    return m;
+  }
+
   Future<void> hydrate() async {
     _user = await _store.load();
     notifyListeners();
@@ -100,20 +109,27 @@ class AuthController extends ChangeNotifier {
     );
     await signInWithPassword(email: email, password: password);
 
+    _profileBootstrapMessage = null;
     final signedIn = _user;
     final um = _userManagementApi;
     if (signedIn != null && um != null) {
       try {
         if (signedIn.isActor) {
+          final profileFields = <String, dynamic>{
+            // User Management `createActorProfile` maps `name` → `display_name`.
+            'name': name.trim(),
+            if (age != null) 'age': age,
+          };
+          final g = gender?.trim();
+          if (g != null &&
+              g.isNotEmpty &&
+              const {'Male', 'Female', 'Other'}.contains(g)) {
+            profileFields['gender'] = g;
+          }
           await um.createActorProfile(
             userId: signedIn.userId,
-            fields: <String, dynamic>{
-              // User Management `createActorProfile` maps `name` → `display_name`.
-              'name': name.trim(),
-              if (age != null) 'age': age,
-              if (gender != null && gender.trim().isNotEmpty)
-                'gender': gender.trim(),
-            },
+            fields: profileFields,
+            bearerToken: signedIn.token,
           );
         } else if (signedIn.isDirector) {
           await um.createDirectorProfile(
@@ -121,6 +137,7 @@ class AuthController extends ChangeNotifier {
             fields: <String, dynamic>{
               'name': name.trim(),
             },
+            bearerToken: signedIn.token,
           );
         }
       } catch (e, st) {
@@ -130,6 +147,29 @@ class AuthController extends ChangeNotifier {
           error: e,
           stackTrace: st,
         );
+        // Row may already exist (e.g. RabbitMQ `USER_CREATED` beat us) or duplicate INSERT.
+        var recovered = false;
+        if (signedIn.isActor) {
+          final row = await um.getActorProfile(
+            signedIn.userId,
+            bearerToken: signedIn.token,
+          );
+          recovered = row != null;
+        } else if (signedIn.isDirector) {
+          final row = await um.getDirectorProfile(
+            signedIn.userId,
+            bearerToken: signedIn.token,
+          );
+          recovered = row != null;
+        }
+        if (!recovered) {
+          final hint = e is UserManagementApiException
+              ? e.message
+              : e.toString();
+          _profileBootstrapMessage =
+              'Your account was created, but the profile row was not saved. '
+              'Open Profile to try again. ($hint)';
+        }
       }
     }
 

@@ -33,13 +33,23 @@ class UserManagementApi {
   };
 
   /// Returns profile JSON or null if missing / network error.
-  Future<Map<String, dynamic>?> getDirectorProfile(String userId) async {
+  ///
+  /// User Management requires `Authorization: Bearer` for this route.
+  Future<Map<String, dynamic>?> getDirectorProfile(
+    String userId, {
+    String? bearerToken,
+  }) async {
     final trimmed = userId.trim();
     if (trimmed.isEmpty) return null;
+    final headers = <String, String>{
+      'Accept': 'application/json',
+      if (bearerToken != null && bearerToken.trim().isNotEmpty)
+        'Authorization': 'Bearer ${bearerToken.trim()}',
+    };
     try {
       final response = await _client.get(
         _uri('/api/v1/directors/$trimmed/profile'),
-        headers: const {'Accept': 'application/json'},
+        headers: headers,
       );
       if (response.statusCode == 404) {
         _logProfileFailure('getDirectorProfile', trimmed, response);
@@ -127,16 +137,19 @@ class UserManagementApi {
   }
 
   /// `POST /api/v1/actors/profile` — creates a new actor profile row.
-  /// Returns the created row (or the request body merged with server fields) on success.
+  /// User Management maps **`name`** → `display_name` (not `display_name` alone).
   Future<Map<String, dynamic>> createActorProfile({
     required String userId,
     required Map<String, dynamic> fields,
+    required String bearerToken,
   }) async {
+    final body = _actorCreateBody(userId, fields);
     return _writeProfile(
       method: 'POST',
       path: '/api/v1/actors/profile',
-      body: <String, dynamic>{'user_id': userId.trim(), ...fields},
+      body: body,
       op: 'createActorProfile',
+      bearerToken: bearerToken,
     );
   }
 
@@ -144,25 +157,31 @@ class UserManagementApi {
   Future<Map<String, dynamic>> updateActorProfile({
     required String profileId,
     required Map<String, dynamic> fields,
+    required String bearerToken,
   }) async {
     return _writeProfile(
       method: 'PATCH',
       path: '/api/v1/actors/profile/${profileId.trim()}',
       body: fields,
       op: 'updateActorProfile',
+      bearerToken: bearerToken,
     );
   }
 
   /// `POST /api/v1/directors/profile` — creates a new director profile row.
+  /// User Management maps **`name`** → `display_name`.
   Future<Map<String, dynamic>> createDirectorProfile({
     required String userId,
     required Map<String, dynamic> fields,
+    required String bearerToken,
   }) async {
+    final body = _directorCreateBody(userId, fields);
     return _writeProfile(
       method: 'POST',
       path: '/api/v1/directors/profile',
-      body: <String, dynamic>{'user_id': userId.trim(), ...fields},
+      body: body,
       op: 'createDirectorProfile',
+      bearerToken: bearerToken,
     );
   }
 
@@ -170,12 +189,14 @@ class UserManagementApi {
   Future<Map<String, dynamic>> updateDirectorProfile({
     required String profileId,
     required Map<String, dynamic> fields,
+    required String bearerToken,
   }) async {
     return _writeProfile(
       method: 'PATCH',
       path: '/api/v1/directors/profile/${profileId.trim()}',
       body: fields,
       op: 'updateDirectorProfile',
+      bearerToken: bearerToken,
     );
   }
 
@@ -184,14 +205,19 @@ class UserManagementApi {
     required String path,
     required Map<String, dynamic> body,
     required String op,
+    required String bearerToken,
   }) async {
     http.Response response;
     final encoded = jsonEncode(body);
     final uri = _uri(path);
+    final headers = <String, String>{
+      ..._jsonHeaders,
+      'Authorization': 'Bearer ${bearerToken.trim()}',
+    };
     if (method == 'POST') {
-      response = await _client.post(uri, headers: _jsonHeaders, body: encoded);
+      response = await _client.post(uri, headers: headers, body: encoded);
     } else {
-      response = await _client.patch(uri, headers: _jsonHeaders, body: encoded);
+      response = await _client.patch(uri, headers: headers, body: encoded);
     }
     if (response.statusCode >= 200 && response.statusCode < 300) {
       try {
@@ -219,10 +245,51 @@ class UserManagementApi {
         if (m != null && m.trim().isNotEmpty) return m.trim();
         final errs = decoded['errors'];
         if (errs is List && errs.isNotEmpty) {
-          return errs.map((e) => e.toString()).join('; ');
+          return errs.map((e) {
+            if (e is String) return e;
+            if (e is Map) {
+              final msg = e['msg'] ?? e['message'];
+              if (msg != null) return msg.toString();
+            }
+            return e.toString();
+          }).join('; ');
         }
       }
     } catch (_) {}
     return null;
   }
+}
+
+/// Builds actor POST body: service reads **`name`** for display name.
+Map<String, dynamic> _actorCreateBody(
+  String userId,
+  Map<String, dynamic> fields,
+) {
+  final out = <String, dynamic>{
+    'user_id': userId.trim(),
+    ...fields,
+  };
+  if ((out['name'] == null || (out['name'] is String && (out['name'] as String).trim().isEmpty)) &&
+      out['display_name'] != null) {
+    final dn = out['display_name'];
+    out['name'] = dn is String ? dn.trim() : dn.toString().trim();
+  }
+  return out;
+}
+
+/// Builds director POST body: service reads **`name`** for display name.
+Map<String, dynamic> _directorCreateBody(
+  String userId,
+  Map<String, dynamic> fields,
+) {
+  final out = <String, dynamic>{
+    'user_id': userId.trim(),
+    ...fields,
+  };
+  if ((out['name'] == null || (out['name'] is String && (out['name'] as String).trim().isEmpty)) &&
+      out['display_name'] != null) {
+    final dn = out['display_name'];
+    out['name'] = dn is String ? dn.trim() : dn.toString().trim();
+  }
+  return out;
 }
