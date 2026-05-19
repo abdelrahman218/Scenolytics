@@ -14,7 +14,9 @@ import json
 import random
 from datetime import datetime
 from typing import Optional, Dict, Any, List
-
+import os
+import tempfile
+from core.storage import get_s3_client
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel, Field
 
@@ -251,7 +253,7 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
     from pathlib import Path
     
     db = Database()
-
+    video_path = None
     try:
         # Let callers distinguish "queued" from "actively running"
         await db.execute(
@@ -259,19 +261,24 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
             (evaluation_id,),
         )
 
-        # Get video storage path from environment or use default
-        video_storage_dir = os.getenv('VIDEO_STORAGE_PATH', '/app/videos')
-        video_path = os.path.join(video_storage_dir, f"{media_id}.mp4")
-        
-        # Check if video file exists
-        if not Path(video_path).exists():
-            error_msg = f"Video file not found: {video_path}. Configure VIDEO_STORAGE_PATH environment variable or place videos in /videos directory."
+        s3 = get_s3_client()
+        bucket = os.getenv('S3_BUCKET_VIDEOS', 'videos')
+        s3_key = f"{media_id}.mp4"
+
+        with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as tmp:
+            video_path = tmp.name
+
+        try:
+            s3.download_file(bucket, s3_key, video_path)
+        except Exception as e:
+            error_msg = f"Failed to download video '{s3_key}' from MinIO bucket '{bucket}': {e}"
             logger.error(error_msg)
             await db.execute(
                 "UPDATE evaluations SET evaluation_status = 'failed', error_message = %s WHERE evaluation_id = %s",
                 (error_msg, evaluation_id),
             )
             return
+
 
         # evaluate_video() returns:
         #   emotional_expression_score, vocal_tone_score, script_alignment_score,
@@ -352,7 +359,13 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
         except Exception as db_err:
             logger.error(f"Could not update failure status for {evaluation_id}: {db_err}", exc_info=True)
 
-
+    finally:
+        # Always clean up the temp file regardless of success or failure
+        if video_path:
+            try:
+                os.unlink(video_path)
+            except Exception:
+                pass
 # ==================== Endpoints ====================
 
 @router.post("/process")

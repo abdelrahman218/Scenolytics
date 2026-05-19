@@ -1,0 +1,7 @@
+# Use this workspace to collaborate
+workspace:
+  id: 12343422-72cf-43db-8346-97c3c0310c67
+
+localResources:
+  environments:
+    - ..\environments\Scenolytics Development Enviroment.environment.yaml
