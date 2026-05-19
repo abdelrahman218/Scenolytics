@@ -469,7 +469,6 @@ async def get_evaluation(evaluation_id: str):
 
         if not result:
             raise HTTPException(status_code=404, detail="Evaluation not found")
-
         return _row_to_response(result)
 
     except HTTPException:

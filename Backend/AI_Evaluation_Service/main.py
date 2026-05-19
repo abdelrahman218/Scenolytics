@@ -13,11 +13,13 @@ from contextlib import asynccontextmanager
 import os
 from dotenv import load_dotenv
 import logging
+import asyncio
 
 from api.routes import evaluation, health
 from core.database import init_db
 from core.rabbitmq_manager import RabbitMQManager
 from core.ml_pipeline import MLPipeline
+from core.service import handle_audition_event
 
 
 # Configure logging
@@ -29,6 +31,29 @@ logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
+
+
+async def start_event_consumers(rabbitmq_manager: RabbitMQManager, pipeline=None):
+    """
+    Start consuming RabbitMQ events in background
+    
+    This function runs indefinitely, consuming events from:
+    - Audition events (create, update, submit)
+    
+    Args:
+        rabbitmq_manager: RabbitMQManager instance
+        pipeline: MLPipeline instance for background processing
+    """
+    try:
+        logger.info("Starting event consumers...")
+        
+        # Create a wrapper callback that includes the pipeline
+        async def audition_event_callback(routing_key, event_data):
+            await handle_audition_event(routing_key, event_data, pipeline)
+        
+        await rabbitmq_manager.consume_audition_events(audition_event_callback)
+    except Exception as e:
+        logger.error(f"Event consumer error: {str(e)}")
 
 
 @asynccontextmanager
@@ -59,15 +84,30 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"RabbitMQ connection attempt {attempt}/{retries} failed: {str(e)}")
             if attempt < retries:
-                import asyncio
                 await asyncio.sleep(3)
             else:
                 logger.error("Failed to connect to RabbitMQ after all retries")
+    
+    # Start event consumers as background task
+    if hasattr(app.state, 'rabbitmq_manager') and app.state.rabbitmq_manager:
+        app.state.event_consumer_task = asyncio.create_task(
+            start_event_consumers(app.state.rabbitmq_manager, app.state.ml_pipeline)
+        )
+        logger.info("Event consumer task started")
 
     yield
 
     # Shutdown
     logger.info("Shutting down AI Evaluation Service...")
+    
+    # Cancel event consumer task
+    if hasattr(app.state, 'event_consumer_task'):
+        app.state.event_consumer_task.cancel()
+        try:
+            await app.state.event_consumer_task
+        except asyncio.CancelledError:
+            logger.info("Event consumer task cancelled")
+    
     if app.state.rabbitmq_manager:
         await app.state.rabbitmq_manager.close()
     logger.info("Service shutdown complete")

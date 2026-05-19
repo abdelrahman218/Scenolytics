@@ -54,9 +54,9 @@ export const validateActorProfileRequiredFields = checkRequiredFields(['user_id'
 
 // Actor enum validations
 export const validateActorProfileValues = checkValidValues({
-  gender: ['Male', 'Female', 'Other'],
+  gender: ['Male', 'Female'],
   ethnicity: ['White', 'Black', 'Asian', 'Arab', 'Any'],
-  bodyType: ['Slim', 'Athletic', 'Average', 'Heavyset']
+  bodyType: ['Slim', 'Athletic', 'Average', 'Heavyset','Any']
 });
 
 /**
