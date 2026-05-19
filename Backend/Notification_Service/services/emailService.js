@@ -21,7 +21,12 @@ export const sendEmailNotification = async(notification)=>{
         await smtp.sendMail({
             to: prefs.user_email,
             subject: notification.title,
-            html: generateEmailTemplate(notification.title, notification.message)
+            html: generateEmailTemplate(notification.title, notification.message),
+            attachments: [{
+                filename: 'logo_opaque.png',
+                path: 'assets/logo_opaque.png',
+                cid: 'logo'
+            }]
         });
     } catch (error) {
         console.error(`Error while sending notification (${notification.id}) mail:`, err);
