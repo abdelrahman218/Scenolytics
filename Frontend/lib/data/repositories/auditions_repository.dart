@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import '../../models/actor_audition_submission.dart';
 import '../../models/actor_profile_ui.dart';
 import '../../models/actor_submission_audition_ui.dart';
+import '../../models/audition_listing.dart';
+import '../../models/director_audition_card.dart';
 import '../../models/director_profile_ui.dart';
 import '../../utils/json_map_read.dart';
 import '../../utils/jwt_user_id.dart';
@@ -75,14 +77,17 @@ class AuditionsRepository {
 
     final profilesByActorId = <String, Map<String, dynamic>>{};
     final actorIds = submissions
-        .map((r) => r['actor_id']?.toString().trim())
+        .map(_actorUserIdFromSubmission)
         .whereType<String>()
         .where((id) => id.isNotEmpty)
         .toSet();
 
     await Future.wait(
       actorIds.map((id) async {
-        final profile = await _userManagementApi.getActorProfile(id);
+        final profile = await _userManagementApi.getActorProfile(
+          id,
+          bearerToken: directorToken,
+        );
         if (profile != null) {
           profilesByActorId[id] = profile;
         }
@@ -92,7 +97,7 @@ class AuditionsRepository {
     return submissions
         .map(
           (raw) {
-            final aid = raw['actor_id']?.toString().trim();
+            final aid = _actorUserIdFromSubmission(raw);
             final profile =
                 aid != null ? profilesByActorId[aid] : null;
             return _mapSubmission(
@@ -106,6 +111,309 @@ class AuditionsRepository {
           },
         )
         .toList();
+  }
+
+  /// Loads every audition the signed-in director owns, then fans out three
+  /// per-audition queries in parallel (submissions / pending invitations /
+  /// callbacks) so the dashboard can render counts + a top score without
+  /// extra round-trips on the page side.
+  ///
+  /// Individual per-audition failures are swallowed — one bad row never
+  /// breaks the dashboard.
+  Future<List<DirectorAuditionCard>> loadDirectorDashboard({
+    required String directorToken,
+  }) async {
+    final rows = await _castingApi.getDirectorAuditions(
+      directorToken: directorToken,
+    );
+    if (rows.isEmpty) return const <DirectorAuditionCard>[];
+
+    final auditions = rows.map(AuditionListing.fromJson).toList();
+
+    final cards = await Future.wait(
+      auditions.map((a) async {
+        if (a.id.isEmpty) {
+          return DirectorAuditionCard(
+            audition: a,
+            submissionsCount: 0,
+            pendingInvitationsCount: 0,
+            callbacksCount: 0,
+          );
+        }
+        final results = await Future.wait<List<Map<String, dynamic>>>([
+          _safeList(
+            () => _castingApi.getDirectorAuditionSubmissions(
+              directorToken: directorToken,
+              auditionId: a.id,
+            ),
+          ),
+          _safeList(
+            () => _castingApi.getDirectorAuditionPendingInvitations(
+              directorToken: directorToken,
+              auditionId: a.id,
+            ),
+          ),
+          _safeList(
+            () => _castingApi.getDirectorAuditionCallbacks(
+              directorToken: directorToken,
+              auditionId: a.id,
+            ),
+          ),
+        ]);
+        final submissions = results[0];
+        final pending = results[1];
+        final callbacks = results[2];
+
+        double? topScore;
+        for (final row in submissions) {
+          final v = _firstDouble(row, const <String>[
+            'overall_performance_score',
+            'overall_score',
+            'score',
+          ]);
+          if (v == null) continue;
+          if (topScore == null || v > topScore) topScore = v;
+        }
+
+        return DirectorAuditionCard(
+          audition: a,
+          submissionsCount: submissions.length,
+          pendingInvitationsCount: pending.length,
+          callbacksCount: callbacks.length,
+          topSubmissionScore: topScore,
+        );
+      }),
+    );
+
+    return cards;
+  }
+
+  /// `DELETE /api/v1/casting/director/auditions/:id`. Throws ApiException on
+  /// non-2xx so the caller can show an error message.
+  Future<void> deleteDirectorAudition({
+    required String directorToken,
+    required String auditionId,
+  }) {
+    return _castingApi.deleteDirectorAudition(
+      directorToken: directorToken,
+      auditionId: auditionId,
+    );
+  }
+
+  /// Discovers auditions the signed-in actor cares about, with no admin /
+  /// catalog endpoint required. Combines three actor-allowed sources:
+  ///
+  /// 1. `GET /api/v1/casting/actor/invitations`            — pending invites
+  /// 2. `GET /api/v1/casting/actor/auditions/submissions`  — past submissions
+  /// 3. Optional [extraAuditionIds] (e.g. compile-time `SCENO_AUDITION_ID`)
+  ///
+  /// Each unique `audition_id` is hydrated via
+  /// `GET /api/v1/casting/auditions/:id` (which any signed-in user can call),
+  /// then enriched with the director display name in parallel. Failures on
+  /// a single id are swallowed so one bad row never breaks the page.
+  Future<List<AuditionListing>> loadAuditionsForActor({
+    required String actorToken,
+    List<String> extraAuditionIds = const <String>[],
+  }) async {
+    final invitations = await _safeList(
+      () => _castingApi.getActorInvitations(actorToken: actorToken),
+    );
+    final submissions = await _safeList(
+      () => _castingApi.getActorSubmissions(actorToken: actorToken),
+    );
+
+    final invitedIds = <String>{
+      for (final row in invitations)
+        if ((row['audition_id']?.toString().trim() ?? '').isNotEmpty)
+          row['audition_id'].toString().trim(),
+    };
+    final submittedIds = <String>{
+      for (final row in submissions)
+        if ((row['audition_id']?.toString().trim() ?? '').isNotEmpty)
+          row['audition_id'].toString().trim(),
+    };
+
+    final orderedIds = <String>[
+      ...invitedIds,
+      ...submittedIds.where((id) => !invitedIds.contains(id)),
+      ...extraAuditionIds
+          .map((id) => id.trim())
+          .where((id) =>
+              id.isNotEmpty &&
+              !invitedIds.contains(id) &&
+              !submittedIds.contains(id)),
+    ];
+
+    if (orderedIds.isEmpty) return const <AuditionListing>[];
+
+    final fetched = await Future.wait(
+      orderedIds.map((id) async {
+        try {
+          final raw = await _castingApi.getAuditionDetails(
+            token: actorToken,
+            auditionId: id,
+          );
+          if (raw.isEmpty) return null;
+          final listing = AuditionListing.fromJson(raw);
+          if (listing.id.isEmpty) {
+            return AuditionListing.fromJson({...raw, 'id': id});
+          }
+          return listing;
+        } catch (_) {
+          return null;
+        }
+      }),
+    );
+
+    final hydrated = <AuditionListing>[
+      for (final l in fetched)
+        if (l != null) l,
+    ];
+    if (hydrated.isEmpty) return hydrated;
+
+    final directorNames = <String, String>{};
+    final uniqueDirectorIds = hydrated
+        .map((a) => a.directorId)
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    await Future.wait(
+      uniqueDirectorIds.map((id) async {
+        try {
+          final raw = await _userManagementApi.getDirectorProfile(id);
+          if (raw == null) return;
+          final ui = DirectorProfileUi.fromUserManagementJson(raw);
+          final n = ui.displayName?.trim();
+          if (n != null && n.isNotEmpty) {
+            directorNames[id] = n;
+          }
+        } catch (_) {}
+      }),
+    );
+
+    AuditionRelationship? relationshipFor(String id) {
+      if (submittedIds.contains(id)) return AuditionRelationship.submitted;
+      if (invitedIds.contains(id)) return AuditionRelationship.invited;
+      return null;
+    }
+
+    return hydrated
+        .map(
+          (a) => a.copyWith(
+            directorDisplayName: directorNames[a.directorId],
+            relationship: relationshipFor(a.id),
+          ),
+        )
+        .toList();
+  }
+
+  /// Loads the full catalog from `GET /api/v1/casting/actor/auditions`, enriches
+  /// director display names, and the signed-in actor's invitation / submission
+  /// relationship when known.
+  ///
+  /// Optional [extraAuditionIds] still hydrates any id missing from the catalog
+  /// via `GET /api/v1/casting/auditions/:id` (e.g. deep-link / env overrides).
+  Future<List<AuditionListing>> loadExploreAuditions({
+    required String actorToken,
+    List<String> extraAuditionIds = const <String>[],
+  }) async {
+    final results = await Future.wait([
+      _castingApi.getActorAuditionsCatalog(actorToken: actorToken),
+      _safeList(() => _castingApi.getActorInvitations(actorToken: actorToken)),
+      _safeList(() => _castingApi.getActorSubmissions(actorToken: actorToken)),
+    ]);
+
+    final catalogRows = results[0];
+    final invitations = results[1];
+    final submissions = results[2];
+
+    final invitedIds = <String>{
+      for (final row in invitations)
+        if ((row['audition_id']?.toString().trim() ?? '').isNotEmpty)
+          row['audition_id'].toString().trim(),
+    };
+    final submittedIds = <String>{
+      for (final row in submissions)
+        if ((row['audition_id']?.toString().trim() ?? '').isNotEmpty)
+          row['audition_id'].toString().trim(),
+    };
+
+    AuditionRelationship? relationshipFor(String id) {
+      if (submittedIds.contains(id)) return AuditionRelationship.submitted;
+      if (invitedIds.contains(id)) return AuditionRelationship.invited;
+      return null;
+    }
+
+    final byId = <String, AuditionListing>{};
+    for (final row in catalogRows) {
+      final id = row['id']?.toString().trim() ?? '';
+      if (id.isEmpty) continue;
+      byId[id] = AuditionListing.fromJson(row);
+    }
+
+    for (final rawId in extraAuditionIds) {
+      final id = rawId.trim();
+      if (id.isEmpty || byId.containsKey(id)) continue;
+      try {
+        final raw = await _castingApi.getAuditionDetails(
+          token: actorToken,
+          auditionId: id,
+        );
+        if (raw.isEmpty) continue;
+        var listing = AuditionListing.fromJson(raw);
+        if (listing.id.isEmpty) {
+          listing = AuditionListing.fromJson({...raw, 'id': id});
+        }
+        byId[listing.id] = listing;
+      } catch (_) {}
+    }
+
+    final merged = byId.values.toList();
+    merged.sort((a, b) {
+      final ca = a.createdAt;
+      final cb = b.createdAt;
+      if (ca == null && cb == null) return 0;
+      if (ca == null) return 1;
+      if (cb == null) return -1;
+      return cb.compareTo(ca);
+    });
+
+    if (merged.isEmpty) return merged;
+
+    final directorNames = <String, String>{};
+    final uniqueDirectorIds =
+        merged.map((a) => a.directorId).where((id) => id.isNotEmpty).toSet();
+    await Future.wait(
+      uniqueDirectorIds.map((id) async {
+        try {
+          final raw = await _userManagementApi.getDirectorProfile(id);
+          if (raw == null) return;
+          final ui = DirectorProfileUi.fromUserManagementJson(raw);
+          final n = ui.displayName?.trim();
+          if (n != null && n.isNotEmpty) {
+            directorNames[id] = n;
+          }
+        } catch (_) {}
+      }),
+    );
+
+    return merged
+        .map(
+          (a) => a.copyWith(
+            directorDisplayName: directorNames[a.directorId],
+            relationship: relationshipFor(a.id),
+          ),
+        )
+        .toList();
+  }
+
+  Future<List<Map<String, dynamic>>> _safeList(
+    Future<List<Map<String, dynamic>>> Function() op,
+  ) async {
+    try {
+      return await op();
+    } catch (_) {
+      return const <Map<String, dynamic>>[];
+    }
   }
 
   Future<bool> hasActorSubmittedForAudition({
@@ -242,7 +550,10 @@ class AuditionsRepository {
   Future<ActorProfileUi?> loadActorProfileUi(String actorJwt) async {
     final userId = userIdFromActorJwt(actorJwt);
     if (userId == null) return null;
-    final raw = await _userManagementApi.getActorProfile(userId);
+    final raw = await _userManagementApi.getActorProfile(
+      userId,
+      bearerToken: actorJwt,
+    );
     if (raw == null) return null;
     return ActorProfileUi.fromUserManagementJson(raw);
   }
@@ -384,19 +695,11 @@ class AuditionsRepository {
     final submittedAt =
         DateTime.tryParse(submittedAtRaw ?? '')?.toUtc() ?? DateTime.now().toUtc();
 
-    final rawActorName = _actorNameFromSubmissionRow(source);
-    final profileName = _displayNameFromActorProfile(profile);
-    var actorName = (rawActorName != null && rawActorName.isNotEmpty)
-        ? rawActorName
-        : (profileName ?? fallbackActorName).trim();
-    if (actorName.isEmpty) {
-      final idLabel = _shortActorIdLabel(source);
-      if (idLabel != null && idLabel.isNotEmpty) {
-        actorName = idLabel;
-      } else {
-        actorName = 'Unknown participant';
-      }
-    }
+    final actorName = _submissionActorDisplayName(
+      source: source,
+      profile: profile,
+      fallbackActorName: fallbackActorName,
+    );
 
     return ActorAuditionSubmission(
       id: id,
@@ -419,6 +722,46 @@ class AuditionsRepository {
     );
   }
 
+  /// Prefer User Management display name, then submission denormalized name
+  /// only if it is not the raw [actor_id] / UUID-shaped (casting rows often
+  /// only have [actor_id]; bad joins sometimes stuff an id into `name`).
+  String _submissionActorDisplayName({
+    required Map<String, dynamic> source,
+    Map<String, dynamic>? profile,
+    required String fallbackActorName,
+  }) {
+    final actorId = _actorUserIdFromSubmission(source) ?? '';
+
+    if (profile != null && profile.isNotEmpty) {
+      final fromProfile =
+          ActorProfileUi.fromUserManagementJson(profile).displayName?.trim();
+      if (fromProfile != null && fromProfile.isNotEmpty) {
+        return fromProfile;
+      }
+    }
+
+    final raw = _actorNameFromSubmissionRow(source);
+    if (raw != null &&
+        raw.isNotEmpty &&
+        raw != actorId &&
+        !_looksLikeUuid(raw)) {
+      return raw;
+    }
+
+    final fb = fallbackActorName.trim();
+    if (fb.isNotEmpty && fb != actorId && !_looksLikeUuid(fb)) {
+      return fb;
+    }
+
+    return _shortActorIdLabel(source) ?? 'Unknown participant';
+  }
+
+  static final RegExp _uuidLike = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
+
+  bool _looksLikeUuid(String value) => _uuidLike.hasMatch(value.trim());
+
   String? _actorNameFromSubmissionRow(Map<String, dynamic> source) {
     final s = stringFromMap(
       source,
@@ -428,7 +771,7 @@ class AuditionsRepository {
         'ActorName',
         'display_name',
         'displayName',
-        'name',
+        // Omit generic `name` — some pipelines echo user id there; profile wins.
       ],
     );
     if (s != null && s.isNotEmpty) {
@@ -437,51 +780,29 @@ class AuditionsRepository {
     return null;
   }
 
-  /// Casting rows only guarantee [actor_id]; used when User Management has no row.
-  String? _shortActorIdLabel(Map<String, dynamic> source) {
-    final id = stringFromMap(
+  /// Casting / evaluation payloads may use different keys for the actor's user id.
+  String? _actorUserIdFromSubmission(Map<String, dynamic> source) {
+    return stringFromMap(
       source,
-      const ['actor_id', 'actorId', 'user_id', 'userId'],
+      const [
+        'actor_id',
+        'actorId',
+        'ActorId',
+        'actorID',
+        'user_id',
+        'userId',
+      ],
     );
+  }
+
+  /// Casting rows only guarantee an actor user id; used when User Management has no row.
+  String? _shortActorIdLabel(Map<String, dynamic> source) {
+    final id = _actorUserIdFromSubmission(source);
     if (id == null || id.isEmpty) return null;
     if (id.length <= 10) {
       return 'Actor ($id)';
     }
     return 'Actor (${id.substring(0, 8)}…)';
-  }
-
-  String? _displayNameFromActorProfile(Map<String, dynamic>? profile) {
-    if (profile == null) return null;
-    final dn = stringFromMap(
-      profile,
-      const [
-        'display_name',
-        'displayName',
-        'full_name',
-        'fullName',
-        'name',
-      ],
-    );
-    if (dn != null && dn.isNotEmpty) {
-      return dn.length > 56 ? '${dn.substring(0, 53)}…' : dn;
-    }
-    final first = stringFromMap(profile, const ['first_name', 'firstName']);
-    final last = stringFromMap(profile, const ['last_name', 'lastName']);
-    final combined = [first, last]
-        .whereType<String>()
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .join(' ');
-    if (combined.isNotEmpty) {
-      return combined.length > 56
-          ? '${combined.substring(0, 53)}…'
-          : combined;
-    }
-    final bio = profile['bio']?.toString().trim();
-    if (bio == null || bio.isEmpty) return null;
-    final line = bio.split(RegExp(r'[\r\n]+')).first.trim();
-    if (line.isEmpty) return null;
-    return line.length > 56 ? '${line.substring(0, 53)}…' : line;
   }
 
   int? _ageFromActorProfile(Map<String, dynamic>? profile) {

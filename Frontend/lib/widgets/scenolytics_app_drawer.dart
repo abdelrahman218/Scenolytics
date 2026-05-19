@@ -12,6 +12,8 @@ class ScenolyticsAppDrawer extends StatelessWidget {
     this.onSelectRankings,
     this.onSelectCreateAudition,
     this.onSelectSubmitVideo,
+    this.onSelectExploreAuditions,
+    this.onSelectDirectorDashboard,
     this.showActorNav = true,
     this.showDirectorNav = true,
     this.onLogout,
@@ -22,6 +24,8 @@ class ScenolyticsAppDrawer extends StatelessWidget {
   final VoidCallback? onSelectRankings;
   final VoidCallback? onSelectCreateAudition;
   final VoidCallback? onSelectSubmitVideo;
+  final VoidCallback? onSelectExploreAuditions;
+  final VoidCallback? onSelectDirectorDashboard;
   final bool showActorNav;
   final bool showDirectorNav;
   final Future<void> Function()? onLogout;
@@ -31,8 +35,20 @@ class ScenolyticsAppDrawer extends StatelessWidget {
     final theme = Theme.of(context);
     final logo = ScenolyticsBranding.of(context).logo;
     final tapCreateAudition = onSelectCreateAudition;
+    final tapExplore = onSelectExploreAuditions;
+    final tapDashboard = onSelectDirectorDashboard;
 
     final navTiles = <Widget>[
+      if (showActorNav && tapExplore != null)
+        _DrawerTile(
+          icon: Icons.explore_outlined,
+          label: 'Explore auditions',
+          selected: currentRouteName == 'explore-auditions',
+          onTap: () {
+            Navigator.pop(context);
+            tapExplore();
+          },
+        ),
       if (showActorNav)
         _DrawerTile(
           icon: Icons.video_call_outlined,
@@ -41,6 +57,16 @@ class ScenolyticsAppDrawer extends StatelessWidget {
           onTap: () {
             Navigator.pop(context);
             onSelectHome?.call();
+          },
+        ),
+      if (showDirectorNav && tapDashboard != null)
+        _DrawerTile(
+          icon: Icons.dashboard_customize_outlined,
+          label: 'Dashboard',
+          selected: currentRouteName == 'director-dashboard',
+          onTap: () {
+            Navigator.pop(context);
+            tapDashboard();
           },
         ),
       if (showDirectorNav)

@@ -17,6 +17,8 @@ class MainShell extends StatefulWidget {
     this.onSelectRankings,
     this.onSelectCreateAudition,
     this.onSelectSubmitVideo,
+    this.onSelectExploreAuditions,
+    this.onSelectDirectorDashboard,
     this.showActorNav = true,
     this.showDirectorNav = true,
     this.accountEmail,
@@ -33,6 +35,8 @@ class MainShell extends StatefulWidget {
   final VoidCallback? onSelectRankings;
   final VoidCallback? onSelectCreateAudition;
   final VoidCallback? onSelectSubmitVideo;
+  final VoidCallback? onSelectExploreAuditions;
+  final VoidCallback? onSelectDirectorDashboard;
   final bool showActorNav;
   final bool showDirectorNav;
   final String? accountEmail;
@@ -67,12 +71,14 @@ class _MainShellState extends State<MainShell> {
       resizeToAvoidBottomInset: !useDrawer,
       backgroundColor: theme.colorScheme.surface,
       drawer: useDrawer
-          ? ScenolyticsAppDrawer(
+          ?           ScenolyticsAppDrawer(
               currentRouteName: widget.currentRouteName,
               onSelectHome: widget.onSelectHome,
               onSelectRankings: widget.onSelectRankings,
               onSelectCreateAudition: widget.onSelectCreateAudition,
               onSelectSubmitVideo: widget.onSelectSubmitVideo,
+              onSelectExploreAuditions: widget.onSelectExploreAuditions,
+              onSelectDirectorDashboard: widget.onSelectDirectorDashboard,
               showActorNav: widget.showActorNav,
               showDirectorNav: widget.showDirectorNav,
               onLogout: widget.onLogout,
@@ -96,6 +102,8 @@ class _MainShellState extends State<MainShell> {
             onSelectRankings: widget.onSelectRankings,
             onSelectCreateAudition: widget.onSelectCreateAudition,
             onSelectSubmitVideo: widget.onSelectSubmitVideo,
+            onSelectExploreAuditions: widget.onSelectExploreAuditions,
+            onSelectDirectorDashboard: widget.onSelectDirectorDashboard,
             showActorNav: widget.showActorNav,
             showDirectorNav: widget.showDirectorNav,
             accountEmail: widget.accountEmail,
@@ -121,6 +129,8 @@ class _HeaderBar extends StatelessWidget {
     this.onSelectRankings,
     this.onSelectCreateAudition,
     this.onSelectSubmitVideo,
+    this.onSelectExploreAuditions,
+    this.onSelectDirectorDashboard,
     this.pageTitle,
     this.showActorNav = true,
     this.showDirectorNav = true,
@@ -139,6 +149,8 @@ class _HeaderBar extends StatelessWidget {
   final VoidCallback? onSelectRankings;
   final VoidCallback? onSelectCreateAudition;
   final VoidCallback? onSelectSubmitVideo;
+  final VoidCallback? onSelectExploreAuditions;
+  final VoidCallback? onSelectDirectorDashboard;
   final String? pageTitle;
   final bool showActorNav;
   final bool showDirectorNav;
@@ -154,6 +166,8 @@ class _HeaderBar extends StatelessWidget {
     final width = MediaQuery.sizeOf(context).width;
     final showInlineNav = width >= MainShell.drawerBreakpoint;
     final tapCreateAudition = onSelectCreateAudition;
+    final tapExplore = onSelectExploreAuditions;
+    final tapDashboard = onSelectDirectorDashboard;
 
     return Material(
       elevation: 2,
@@ -211,12 +225,30 @@ class _HeaderBar extends StatelessWidget {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   const SizedBox(width: 16),
+                                  if (showActorNav && tapExplore != null)
+                                    _NavButton(
+                                      icon: Icons.explore_outlined,
+                                      label: 'Explore auditions',
+                                      filled: currentRouteName ==
+                                          'explore-auditions',
+                                      onPressed: tapExplore,
+                                    ),
                                   if (showActorNav)
                                     _NavButton(
                                       icon: Icons.video_call_outlined,
                                       label: 'Actor submission',
                                       filled: currentRouteName == 'submit-video',
                                       onPressed: onSelectHome ?? () {},
+                                    ),
+                                  if (showDirectorNav &&
+                                      tapDashboard != null)
+                                    _NavButton(
+                                      icon:
+                                          Icons.dashboard_customize_outlined,
+                                      label: 'Dashboard',
+                                      filled: currentRouteName ==
+                                          'director-dashboard',
+                                      onPressed: tapDashboard,
                                     ),
                                   if (showDirectorNav)
                                     _NavButton(
