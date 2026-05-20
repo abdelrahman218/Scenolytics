@@ -3,6 +3,7 @@ Service layer for AI Evaluation Service
 Handles business logic for audition and evaluation management
 """
 
+import json
 import logging
 import uuid
 from datetime import datetime
@@ -41,7 +42,8 @@ class AuditionService:
                 actor_id = audition_data.get('actor_id')
                 director_id = audition_data.get('director_id')
                 script = audition_data.get('script')
-                
+                if isinstance(script, (dict, list)):
+                   script = json.dumps(script)
                 query = """
                     INSERT INTO auditions 
                     (audition_id, media_id, submission_id, actor_id, director_id, script, status)
@@ -210,7 +212,7 @@ class EvaluationService:
     """Service for managing evaluations"""
     
     @staticmethod
-    async def create_evaluation_for_submission(submission_data: Dict[str, Any], pipeline=None) -> Optional[str]:
+    async def create_evaluation_for_submission(submission_data: Dict[str, Any], pipeline=None,rabbitmq_manager=None) -> Optional[str]:
         """
         Create evaluation record when audition is submitted and queue ML pipeline processing
         
@@ -248,38 +250,35 @@ class EvaluationService:
                 """
                 
                 await cursor.execute(query, (evaluation_id, media_id, submission_id, now))
-                await conn.commit()
-                
-                # Queue ML pipeline if available with retry logic
-                if pipeline:
-                    from api.routes.evaluation import run_ml_pipeline
-                    import asyncio
+
+                from api.routes.evaluation import run_ml_pipeline
+                import asyncio
                     
-                    async def queue_pipeline_with_retry(eval_id, media_id, pipe, script_text):
-                        """Queue pipeline with exponential backoff retry"""
-                        max_retries = 5
-                        retry_delay = 30
-                        
-                        for attempt in range(max_retries):
-                            try:
-                                asyncio.create_task(run_ml_pipeline(eval_id, media_id, pipe, script_text))
-                                logger.debug(f"✓ ML pipeline task created for evaluation {eval_id}")
-                                return
-                            except Exception as e:
-                                if attempt < max_retries - 1:
-                                    logger.warning(
-                                        f"Failed to queue ML pipeline (attempt {attempt + 1}/{max_retries}): {str(e)}\n"
-                                        f"Retrying in {retry_delay}s..."
-                                    )
-                                    await asyncio.sleep(retry_delay)
-                                    retry_delay *= 2  
-                                else:
-                                    logger.error(
-                                        f"✗ Failed to queue ML pipeline after {max_retries} attempts: {str(e)}"
-                                    )
+                async def queue_pipeline_with_retry(eval_id, media_id, pipe, script_text):
+                    """Queue pipeline with exponential backoff retry"""
+                    max_retries = 5
+                    retry_delay = 3
                     
-                    asyncio.create_task(queue_pipeline_with_retry(evaluation_id, media_id, pipeline, script))
-                
+                    for attempt in range(max_retries):
+                        try:
+                            asyncio.create_task(run_ml_pipeline(eval_id, media_id, pipe, script_text, rabbitmq_manager))
+                            logger.debug(f"✓ ML pipeline task created for evaluation {eval_id}")
+                            return
+                        except Exception as e:
+                            if attempt < max_retries - 1:
+                                logger.warning(
+                                    f"Failed to queue ML pipeline (attempt {attempt + 1}/{max_retries}): {str(e)}\n"
+                                    f"Retrying in {retry_delay}s..."
+                                )
+                                await asyncio.sleep(retry_delay)
+                                retry_delay *= 2  
+                            else:
+                                logger.error( 
+                                    f"✗ Failed to queue ML pipeline after {max_retries} attempts: {str(e)}"
+                                )
+                    
+                asyncio.create_task(queue_pipeline_with_retry(evaluation_id, media_id, pipeline, script))
+                conn.commit()
                 logger.info(
                     f"✓ Evaluation created for submission {submission_id}: {evaluation_id}\n"
                     f"  Note: Video may still be uploading to storage. "
@@ -360,7 +359,7 @@ class EvaluationService:
             return None
 
 
-async def handle_audition_event(routing_key: str, event_data: Dict[str, Any], pipeline=None):
+async def handle_audition_event(routing_key: str, event_data: Dict[str, Any], pipeline=None,rabbitmq_manager=None):
     """
     Route and handle audition events based on routing key
     
@@ -397,7 +396,7 @@ async def handle_audition_event(routing_key: str, event_data: Dict[str, Any], pi
                     )
             
         elif routing_key == AUDITION_SUBMITTED_ROUTING_KEY:
-            evaluation_id = await EvaluationService.create_evaluation_for_submission(event_data, pipeline)
+            evaluation_id = await EvaluationService.create_evaluation_for_submission(event_data, pipeline,rabbitmq_manager)
             if evaluation_id:
                 logger.info(f"✓ Evaluation queued for processing: {evaluation_id}")
             

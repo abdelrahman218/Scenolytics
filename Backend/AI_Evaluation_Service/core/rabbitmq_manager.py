@@ -100,6 +100,43 @@ class RabbitMQManager:
         
         return False
     
+    async def publish_evaluation_completed(self, evaluation_id: str, **kwargs):
+        """
+        Publish evaluation completed event with flexible parameters
+        
+        Args:
+            evaluation_id: Unique evaluation identifier
+            **kwargs: Additional message fields (e.g., media_id, overall_score, submission_id, etc.)
+        """
+        logger.debug(f"publish_evaluation_completed called for {evaluation_id}")
+        logger.debug(f"evaluation_exchange: {self.evaluation_exchange}")
+        
+        if not self.evaluation_exchange:
+            logger.warning(f"RabbitMQ evaluation exchange not initialized. Cannot publish completion event for {evaluation_id}")
+            return
+        
+        try:
+            logger.debug(f"Building message body for evaluation {evaluation_id}")
+            message_body = {
+                'evaluation_id': evaluation_id,
+                'eventType': 'EVALUATION_COMPLETED',
+                'timestamp': __import__('datetime').datetime.utcnow().isoformat(),
+                **kwargs
+            }
+            
+            logger.debug(f"Creating aio_pika Message for {evaluation_id}")
+            message = aio_pika.Message(
+                body=json.dumps(message_body).encode(),
+                content_type='application/json',
+                delivery_mode=aio_pika.DeliveryMode.PERSISTENT
+            )
+            
+            logger.debug(f"Publishing message to exchange '{EVALUATION_EXCHANGE}' with routing key '{EVALUATION_ROUTING_KEY}'")
+            await self.evaluation_exchange.publish(message, routing_key=EVALUATION_ROUTING_KEY)
+            logger.info(f"Published evaluation completed event for {evaluation_id}")
+        except Exception as e:
+            logger.error(f"Failed to publish evaluation completed event: {str(e)}", exc_info=True)
+    
     async def publish_evaluation_result(
         self,
         evaluation_id: str,

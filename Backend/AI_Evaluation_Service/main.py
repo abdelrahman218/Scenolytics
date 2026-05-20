@@ -49,7 +49,7 @@ async def start_event_consumers(rabbitmq_manager: RabbitMQManager, pipeline=None
         
         # Create a wrapper callback that includes the pipeline
         async def audition_event_callback(routing_key, event_data):
-            await handle_audition_event(routing_key, event_data, pipeline)
+            await handle_audition_event(routing_key, event_data, pipeline,rabbitmq_manager)
         
         await rabbitmq_manager.consume_audition_events(audition_event_callback)
     except Exception as e:
@@ -75,25 +75,30 @@ async def lifespan(app: FastAPI):
 
     # Initialize RabbitMQ with retry logic
     app.state.rabbitmq_manager = RabbitMQManager()
+    rabbitmq_initialized = False
     retries = 10
     for attempt in range(1, retries + 1):
         try:
             await app.state.rabbitmq_manager.initialize()
             logger.info("RabbitMQ connected successfully")
+            rabbitmq_initialized = True
             break
         except Exception as e:
             logger.warning(f"RabbitMQ connection attempt {attempt}/{retries} failed: {str(e)}")
             if attempt < retries:
                 await asyncio.sleep(3)
             else:
-                logger.error("Failed to connect to RabbitMQ after all retries")
+                logger.error("Failed to connect to RabbitMQ after all retries - will continue without RabbitMQ")
+                app.state.rabbitmq_manager = None
     
-    # Start event consumers as background task
-    if hasattr(app.state, 'rabbitmq_manager') and app.state.rabbitmq_manager:
+    # Start event consumers as background task (only if RabbitMQ initialized successfully)
+    if rabbitmq_initialized and hasattr(app.state, 'rabbitmq_manager') and app.state.rabbitmq_manager:
         app.state.event_consumer_task = asyncio.create_task(
             start_event_consumers(app.state.rabbitmq_manager, app.state.ml_pipeline)
         )
         logger.info("Event consumer task started")
+    else:
+        logger.warning("RabbitMQ not initialized - event consumers will not be started")
 
     yield
 

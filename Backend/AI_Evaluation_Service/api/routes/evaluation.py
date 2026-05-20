@@ -17,6 +17,7 @@ from typing import Optional, Dict, Any, List
 import os
 import tempfile
 from core.storage import get_s3_client
+from core.rabbitmq_manager import RabbitMQManager
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel, Field
 
@@ -238,15 +239,18 @@ def _row_to_response(row: dict) -> EvaluationResponse:
 
 # ==================== Background ML Pipeline ====================
 
-async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_text: Optional[str] = None):
+async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_text: Optional[str] = None, rabbitmq_manager: Optional[RabbitMQManager] = None, submission_id: Optional[str] = None):
     """Runs all 3 ML models and writes scores back to DB.
 
     Parameters
     ----------
     evaluation_id : UUID of the evaluation row to update
     media_id      : used to locate the video file at VIDEO_STORAGE_PATH/<media_id>.mp4
+    pipeline      : MLPipeline instance for running evaluations
     script_text   : optional expected script — passed to WhisperX alignment.
                     If None, script_alignment_score will be 0.
+    rabbitmq_manager : RabbitMQManager instance for publishing evaluation completion events
+    submission_id : Optional submission ID for tracking audition submissions
     """
     from core.database import Database
     import os
@@ -263,7 +267,7 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
 
         s3 = get_s3_client()
         bucket = os.getenv('S3_BUCKET_VIDEOS', 'videos')
-        s3_key = f"{media_id}.mp4"
+        s3_key = f"uploads/{media_id}.mp4"
 
         with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as tmp:
             video_path = tmp.name
@@ -348,6 +352,26 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
             ),
         )
         logger.info(f"ML pipeline completed for evaluation {evaluation_id}")
+        
+        # Publish evaluation completed event to RabbitMQ
+        if rabbitmq_manager:
+            logger.info(f"Publishing evaluation completed event for {evaluation_id}...")
+            try:
+                await rabbitmq_manager.publish_evaluation_completed(
+                    evaluation_id=evaluation_id,
+                    media_id=media_id,
+                    submission_id=submission_id,
+                    emotional_expression_score=scores["emotional_expression_score"],
+                    vocal_tone_score=scores["vocal_tone_score"],
+                    script_alignment_score=scores["script_alignment_score"],
+                    overall_performance_score=overall,
+                    ai_feedback=scores.get("ai_feedback"),
+                    evaluation_status="completed"
+                )
+            except Exception as e:
+                logger.error(f"Failed to publish evaluation completed event: {e}", exc_info=True)
+        else:
+            logger.warning(f"rabbitmq_manager is None — skipping publish for {evaluation_id}")
 
     except Exception as e:
         logger.error(f"ML pipeline failed for evaluation {evaluation_id}: {e}", exc_info=True)
@@ -399,7 +423,7 @@ async def create_evaluation(request: CreateEvaluationRequest, background_tasks: 
 
         # Pass the pipeline instance directly — avoids any import-time resolution issues
         pipeline = http_request.app.state.ml_pipeline
-        background_tasks.add_task(run_ml_pipeline, evaluation_id, request.media_id, pipeline, request.script_text)
+        background_tasks.add_task(run_ml_pipeline, evaluation_id, request.media_id, pipeline, request.script_text, http_request.app.state.rabbitmq_manager, request.submission_id)
 
         logger.info(f"Created evaluation {evaluation_id} and queued ML pipeline")
 
