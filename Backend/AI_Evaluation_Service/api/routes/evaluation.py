@@ -14,7 +14,10 @@ import json
 import random
 from datetime import datetime
 from typing import Optional, Dict, Any, List
-
+import os
+import tempfile
+from core.storage import get_s3_client
+from core.rabbitmq_manager import RabbitMQManager
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel, Field
 
@@ -236,22 +239,25 @@ def _row_to_response(row: dict) -> EvaluationResponse:
 
 # ==================== Background ML Pipeline ====================
 
-async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_text: Optional[str] = None):
+async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_text: Optional[str] = None, rabbitmq_manager: Optional[RabbitMQManager] = None, submission_id: Optional[str] = None):
     """Runs all 3 ML models and writes scores back to DB.
 
     Parameters
     ----------
     evaluation_id : UUID of the evaluation row to update
     media_id      : used to locate the video file at VIDEO_STORAGE_PATH/<media_id>.mp4
+    pipeline      : MLPipeline instance for running evaluations
     script_text   : optional expected script — passed to WhisperX alignment.
                     If None, script_alignment_score will be 0.
+    rabbitmq_manager : RabbitMQManager instance for publishing evaluation completion events
+    submission_id : Optional submission ID for tracking audition submissions
     """
     from core.database import Database
     import os
     from pathlib import Path
     
     db = Database()
-
+    video_path = None
     try:
         # Let callers distinguish "queued" from "actively running"
         await db.execute(
@@ -259,19 +265,24 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
             (evaluation_id,),
         )
 
-        # Get video storage path from environment or use default
-        video_storage_dir = os.getenv('VIDEO_STORAGE_PATH', '/app/videos')
-        video_path = os.path.join(video_storage_dir, f"{media_id}.mp4")
-        
-        # Check if video file exists
-        if not Path(video_path).exists():
-            error_msg = f"Video file not found: {video_path}. Configure VIDEO_STORAGE_PATH environment variable or place videos in /videos directory."
+        s3 = get_s3_client()
+        bucket = os.getenv('S3_BUCKET_VIDEOS', 'videos')
+        s3_key = f"uploads/{media_id}.mp4"
+
+        with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as tmp:
+            video_path = tmp.name
+
+        try:
+            s3.download_file(bucket, s3_key, video_path)
+        except Exception as e:
+            error_msg = f"Failed to download video '{s3_key}' from MinIO bucket '{bucket}': {e}"
             logger.error(error_msg)
             await db.execute(
                 "UPDATE evaluations SET evaluation_status = 'failed', error_message = %s WHERE evaluation_id = %s",
                 (error_msg, evaluation_id),
             )
             return
+
 
         # evaluate_video() returns:
         #   emotional_expression_score, vocal_tone_score, script_alignment_score,
@@ -341,6 +352,26 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
             ),
         )
         logger.info(f"ML pipeline completed for evaluation {evaluation_id}")
+        
+        # Publish evaluation completed event to RabbitMQ
+        if rabbitmq_manager:
+            logger.info(f"Publishing evaluation completed event for {evaluation_id}...")
+            try:
+                await rabbitmq_manager.publish_evaluation_completed(
+                    evaluation_id=evaluation_id,
+                    media_id=media_id,
+                    submission_id=submission_id,
+                    emotional_expression_score=scores["emotional_expression_score"],
+                    vocal_tone_score=scores["vocal_tone_score"],
+                    script_alignment_score=scores["script_alignment_score"],
+                    overall_performance_score=overall,
+                    ai_feedback=scores.get("ai_feedback"),
+                    evaluation_status="completed"
+                )
+            except Exception as e:
+                logger.error(f"Failed to publish evaluation completed event: {e}", exc_info=True)
+        else:
+            logger.warning(f"rabbitmq_manager is None — skipping publish for {evaluation_id}")
 
     except Exception as e:
         logger.error(f"ML pipeline failed for evaluation {evaluation_id}: {e}", exc_info=True)
@@ -352,7 +383,13 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
         except Exception as db_err:
             logger.error(f"Could not update failure status for {evaluation_id}: {db_err}", exc_info=True)
 
-
+    finally:
+        # Always clean up the temp file regardless of success or failure
+        if video_path:
+            try:
+                os.unlink(video_path)
+            except Exception:
+                pass
 # ==================== Endpoints ====================
 
 @router.post("/process")
@@ -386,7 +423,7 @@ async def create_evaluation(request: CreateEvaluationRequest, background_tasks: 
 
         # Pass the pipeline instance directly — avoids any import-time resolution issues
         pipeline = http_request.app.state.ml_pipeline
-        background_tasks.add_task(run_ml_pipeline, evaluation_id, request.media_id, pipeline, request.script_text)
+        background_tasks.add_task(run_ml_pipeline, evaluation_id, request.media_id, pipeline, request.script_text, http_request.app.state.rabbitmq_manager, request.submission_id)
 
         logger.info(f"Created evaluation {evaluation_id} and queued ML pipeline")
 
@@ -456,7 +493,6 @@ async def get_evaluation(evaluation_id: str):
 
         if not result:
             raise HTTPException(status_code=404, detail="Evaluation not found")
-
         return _row_to_response(result)
 
     except HTTPException:

@@ -18,3 +18,4 @@ matplotlib
 retina-face==0.0.17
 mediapipe==0.10.5
 dlib-bin
+boto3

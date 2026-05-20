@@ -10,7 +10,7 @@ export const EXCHANGES = {
   USERS: 'users_exchange',
   AUDITIONS: 'auditions_exchange',
   VIDEOS: 'videos_exchange',
-  EVALUATIONS: 'evaluations_exchange',
+  EVALUATIONS: 'evaluation_events',
   CALLBACKS: 'callbacks_exchange',
   NOTIFICATIONS: 'notifications_exchange',
   INVITATIONS: 'invitations_exchange'

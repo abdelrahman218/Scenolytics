@@ -1456,6 +1456,7 @@ class MLPipeline:
                     "time_range":       f"{sent['t_start']:.1f}s-{sent['t_end']:.1f}s",
                     "coverage":         sent.get("coverage", 1.0),
                     "status":           sent["status"],
+                    "all_scores":       result.get("all_emotions", {}),
                 })
 
                 try:
@@ -1646,6 +1647,10 @@ class MLPipeline:
                         "time_range": f"{t_start:.1f}s-{t_end:.1f}s",
                         "coverage": sent.get("coverage", 1.0),
                         "status": sent.get("status", "ok"),
+                        "all_emotions":     {       # ← add this
+                            EMOTION_NAMES[i]: round(float(probabilities[i]), 4)
+                            for i in range(NUM_CLASSES)
+                        },
                     })
                     
                 except Exception as e:
@@ -1819,16 +1824,20 @@ class MLPipeline:
                 len(_normalize_text(s["content"]).split()) for s in sentences
             ]
 
-            for tag, i1, i2, j1, j2 in matcher.get_opcodes():
-                if tag == "equal":
-                    for i in range(i1, i2):
-                        sentence_coverage[word_to_sentence[i]] += 1
             # Add this loop after the existing matcher.get_opcodes() sentence_coverage loop:
             comparison_rows = []
             Matched_words=0
             Changed_words=0
             Skipped_words=0
             Added_words=0
+            Matched_words_array=[]
+            Changed_words_array=[]
+            Skipped_words_array=[]
+            Added_words_array=[]
+            for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+                if tag == "equal":
+                    for i in range(i1, i2):
+                        sentence_coverage[word_to_sentence[i]] += 1
             for tag, i1, i2, j1, j2 in matcher.get_opcodes():
                 if tag == "equal":
                     for k in range(i2 - i1):
@@ -1836,6 +1845,10 @@ class MLPipeline:
                             "status": "match",
                             "script_word": script_words[i1 + k],
                             "transcript_word": transcript_clean[j1 + k],
+                        })
+                        Matched_words_array.append({
+                           "script_word": script_words[i1 + k],
+                           "transcript_word": transcript_clean[j1 + k],
                         })
                         Matched_words+=1
                 elif tag == "replace":
@@ -1847,6 +1860,10 @@ class MLPipeline:
                             "script_word": s_w or "-",
                             "transcript_word": t_w or "-",
                         })
+                        Changed_words_array.append({
+                           "script_word": script_words[i1 + k],
+                           "transcript_word": transcript_clean[j1 + k],
+                        })
                         Changed_words+=1
                 elif tag == "delete":
                     for k in range(i2 - i1):
@@ -1854,6 +1871,10 @@ class MLPipeline:
                             "status": "skipped",
                             "script_word": script_words[i1 + k],
                             "transcript_word": "-",
+                        })
+                        Skipped_words_array.append({
+                           "script_word": script_words[i1 + k],
+                           "transcript_word": transcript_clean[j1 + k],
                         })
                         Skipped_words+=1    
                 elif tag == "insert":
@@ -1863,8 +1884,11 @@ class MLPipeline:
                         "script_word": "-",
                         "transcript_word": transcript_clean[j1 + k],
                     })
+                    Matched_words_array.append({
+                       "script_word": script_words[i1 + k],
+                       "transcript_word": transcript_clean[j1 + k],
+                    })    
                     Added_words+=1
-            # Fix the matched_words bug while you're here:
             matched_words = sum(size for _, _, size in matcher.get_matching_blocks())
             overall_coverage = matched_words / len(script_words) if script_words else 0
             score = round(min(overall_coverage, 1.0) * 100, 2)
