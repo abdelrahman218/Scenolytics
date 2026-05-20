@@ -50,8 +50,15 @@ export const setupAsyncListeners = () => {
 
   Object.entries(ROUTING_KEYS).forEach(async ([event, routingKey]) => {
     const groupName = routingKey.slice(0, routingKey.indexOf('.'));
+
+    if (groupName === 'evaluation') {
+      await bindQueue(QUEUES.EVALUATION_EVENTS, EXCHANGES.EVALUATIONS, routingKey);
+      return;
+    }
+
     await bindQueue(`casting_management_${groupName}_events_queue`, `${groupName}s_exchange`, routingKey);
   });
 
   executeAsyncListeners();
+  console.log("Event subscribers setup complete");
 }
