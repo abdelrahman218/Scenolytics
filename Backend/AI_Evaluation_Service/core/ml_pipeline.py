@@ -61,6 +61,7 @@ import subprocess
 import tempfile
 import cv2
 import tensorflow as tf
+import soundfile as sf
 
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -325,15 +326,19 @@ class MLPipeline:
             logger.error("Could not load audio emotion model: %s", e)
 
     async def _load_script_model(self):
-        """Use remote Colab SeamlessM4T GPU API."""
-        api_url ="https://dolly-reckless-celibacy.ngrok-free.dev/transcribe"
-        if api_url:
-            self.script_model     = api_url
-            self.script_processor = "remote"
-            logger.info("✓ Using remote SeamlessM4T API at %s", api_url)
-        else:
-            logger.warning("SEAMLESS_API_URL not set -- script alignment disabled")
-            self.script_model     = None
+        """
+        Load local SeamlessM4T + WhisperX pipeline.
+        """
+        try:
+            from core.script import load_script_model
+
+            self.script_processor, self.script_model = load_script_model()
+
+            logger.info("✓ Local SeamlessM4T model loaded")
+
+        except Exception as e:
+            logger.error("Could not load script model: %s", e, exc_info=True)
+            self.script_model = None
             self.script_processor = None
     # -----------------------------------------------------------------------
     # Eye contact scoring -- dlib 68-point EAR
@@ -1755,48 +1760,10 @@ class MLPipeline:
             return 0.0, None
 
         try:
-            import aiohttp
-            import soundfile as sf
-            import librosa
+            from core.script import transcribe_and_align
+            logger.info("Running local SeamlessM4T transcription...")
 
-            logger.info("Sending audio to remote SeamlessM4T API...")
-            # Guard: reject tiny/empty files before sending
-            audio_size = Path(audio_path).stat().st_size
-            if audio_size < 8000:
-                logger.warning("Audio file too small (%d bytes), skipping ASR", audio_size)
-                return 0.0, None
-            try:
-                async with aiohttp.ClientSession() as health_session:
-                    health_url = self.script_model.replace("/transcribe", "/health")
-                    async with health_session.get(
-                        health_url,
-                        timeout=aiohttp.ClientTimeout(connect=10, sock_read=10)
-                    ) as r:
-                        logger.info("SeamlessM4T health check: %s", await r.text())
-            except Exception as e:
-                logger.error("SeamlessM4T API unreachable: %s", e)
-                return 0.0, None
-            async with aiohttp.ClientSession() as session:
-                with open(audio_path, "rb") as f:
-                    form = aiohttp.FormData()
-                    form.add_field(
-                        "audio", f,
-                        filename="audio.wav",
-                        content_type="audio/wav",
-                    )
-                    async with session.post(
-                        self.script_model,
-                        data=form,
-                        timeout=aiohttp.ClientTimeout(
-                            connect=30,
-                            sock_read=1800,
-                            ),
-                    ) as resp:
-                        if resp.status != 200:
-                           logger.error("Remote ASR API error: %s", await resp.text())
-                           return 0.0, None
-                        api_result = await resp.json()
-
+            api_result = transcribe_and_align(audio_path)
             full_transcript = api_result.get("text", "")
             aligned_words   = api_result.get("aligned_words", [])
             if not full_transcript:
