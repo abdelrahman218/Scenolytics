@@ -61,7 +61,6 @@ import subprocess
 import tempfile
 import cv2
 import tensorflow as tf
-import soundfile as sf
 
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -326,19 +325,15 @@ class MLPipeline:
             logger.error("Could not load audio emotion model: %s", e)
 
     async def _load_script_model(self):
-        """
-        Load local SeamlessM4T + WhisperX pipeline.
-        """
-        try:
-            from core.script import load_script_model
-
-            self.script_processor, self.script_model = load_script_model()
-
-            logger.info("✓ Local SeamlessM4T model loaded")
-
-        except Exception as e:
-            logger.error("Could not load script model: %s", e, exc_info=True)
-            self.script_model = None
+        """Use remote Colab SeamlessM4T GPU API."""
+        api_url ="https://dolly-reckless-celibacy.ngrok-free.dev/transcribe"
+        if api_url:
+            self.script_model     = api_url
+            self.script_processor = "remote"
+            logger.info("✓ Using remote SeamlessM4T API at %s", api_url)
+        else:
+            logger.warning("SEAMLESS_API_URL not set -- script alignment disabled")
+            self.script_model     = None
             self.script_processor = None
     # -----------------------------------------------------------------------
     # Eye contact scoring -- dlib 68-point EAR
@@ -790,6 +785,7 @@ class MLPipeline:
         self,
         video_path: str,
         script_text: Optional[str] = None,
+        audio_only: bool = False,
     ) -> Dict:
         """
         Run the full evaluation pipeline on one audition video.
@@ -813,12 +809,8 @@ class MLPipeline:
             detected_emotions_vocal     dict
             ai_feedback                 str
         """
-        logger.info("Starting evaluation for video: %s", video_path)
+        logger.info("Starting evaluation. audio_only=%s, video=%s", audio_only, video_path)
 
-        # 1. Extract frames once -- reused by emotion scorer and eye contact scorer
-        frames = self._extract_video_frames(video_path)
-
-        # 2. Extract audio once -- reused by audio emotion and script alignment
         tmp_audio = None
         try:
             tmp_dir   = tempfile.mkdtemp()
@@ -829,27 +821,20 @@ class MLPipeline:
             logger.error("Audio extraction failed: %s", e)
             tmp_audio = None
 
-        # 3. Score video emotion
-        emotional_score, emotions_detail = await self._score_emotion_video(frames)
-
-        # 4. Transcribe audio and align with script (if provided)
+        # ── Script alignment ──────────────────────────────────────────────────
         sentences_aligned = None
-        script_score = 0.0
-        alignment_data = None
+        script_score      = 0.0
+        alignment_data    = None
 
         if script_text and tmp_audio:
             script_score, alignment_data = await self._score_script_alignment_with_sentences(
-                tmp_audio,
-                script_text,
+                tmp_audio, script_text,
             )
             sentences_aligned = alignment_data.get("sentences_aligned") if alignment_data else None
 
-        # 5. Score audio emotion (with sentence-level analysis if script was provided)
+        # ── Audio emotion ─────────────────────────────────────────────────────
         if sentences_aligned:
-            audio_result = await self._score_audio_emotion_per_sentence(
-                tmp_audio,
-                sentences_aligned,
-            )
+            audio_result = await self._score_audio_emotion_per_sentence(tmp_audio, sentences_aligned)
         else:
             audio_result = await self._score_audio_emotion(tmp_audio, expected_emotion=None)
 
@@ -859,56 +844,80 @@ class MLPipeline:
             "confidence":  audio_result["confidence"],
             "all_emotions": audio_result.get("all_emotions", {}),
         }
-
         if "sentence_results" in audio_result:
             detected_emotions_vocal["sentence_results"] = audio_result["sentence_results"]
             detected_emotions_vocal["accuracy"]         = audio_result.get("accuracy", 0.0)
 
-        # 5b. Score video emotion per sentence (if script was provided)
-        detected_emotions_video = None
-        if sentences_aligned:
-            video_emotion_result = await self._score_video_emotion_per_sentence(
-                video_path,
-                sentences_aligned,
-            )
-            detected_emotions_video = {
-                "primary": video_emotion_result["detected_emotion"],
-                "confidence": video_emotion_result["confidence"],
-                "score": video_emotion_result["score"],
-                "accuracy": video_emotion_result["accuracy"],
-            }
-            if "sentence_results" in video_emotion_result:
-                detected_emotions_video["sentence_results"] = video_emotion_result["sentence_results"]
-            logger.info(
-                "Video emotion per-sentence: score=%.2f, dominant=%s, accuracy=%.1f%%",
-                video_emotion_result["score"],
-                video_emotion_result["detected_emotion"],
-                video_emotion_result["accuracy"] * 100,
-            )
-
-        # 6. Emotion transition analysis (replaces eye contact score)
-        eye_expression_data = await self._analyze_emotion_transitions(
-            frames, video_path, sentences_aligned=sentences_aligned
-        )
-        from core.tone import analyze_tone  # or wherever you put it
-
-        # After tmp_audio is extracted, add:
+        # ── Tone analysis ─────────────────────────────────────────────────────
         tone_result = None
         if tmp_audio:
             try:
+                from core.tone import analyze_tone
                 tone_result = analyze_tone(
-                audio_path=tmp_audio,
-                sentences_aligned=sentences_aligned,
-                )
-                logger.info(
-                    "Tone analysis complete: %d segments, avg_pitch=%.1f Hz, avg_loudness=%.1f dB",
-                    len(tone_result["segments"]),
-                    tone_result["overall_pitch_variation"],
-                    tone_result["overall_loudness_variation"],
-                )
+                    audio_path=tmp_audio,
+                    sentences_aligned=sentences_aligned,
+                ) 
             except Exception as e:
                 logger.error("Tone analysis failed: %s", e)
-        # 7. Weighted overall score (using only emotional, vocal, and script)
+
+        # ── Audio-only path ───────────────────────────────────────────────────
+        if audio_only:
+            # Weights: vocal 50%, script 30%, tone 20%
+            tone_score = 0.0
+            if tone_result:
+                pitch_var    = min(tone_result.get("overall_pitch_variation", 0) / 100, 1.0)
+                loud_var     = min(tone_result.get("overall_loudness_variation", 0) / 20,  1.0)
+                tone_score   = round((pitch_var * 0.5 + loud_var * 0.5) * 100, 2)
+
+            overall = round(
+                vocal_score  * 0.50
+                + script_score * 0.30
+                + tone_score   * 0.20,
+                2,
+            )
+            overall = max(0.0, min(100.0, overall))
+            feedback = self._generate_feedback(overall, 0, vocal_score, script_score)
+
+            if tmp_audio and Path(tmp_audio).exists():
+                try:
+                    Path(tmp_audio).unlink()
+                except Exception:
+                    pass
+
+            return {
+                "mode":                      "audio_only",
+                "vocal_tone_score":          round(vocal_score, 2),
+                "script_alignment_score":    round(script_score, 2),
+                "tone_score":                tone_score,
+                "overall_performance_score": overall,
+                "tone_analysis":             tone_result,
+                "detected_emotions_vocal":   detected_emotions_vocal,
+                "script_alignment_data":     alignment_data,
+                "ai_feedback":               feedback,
+            }
+
+        # ── Full video path ───────────────────────────────────────────────────
+        frames = self._extract_video_frames(video_path)
+
+        emotional_score, emotions_detail = await self._score_emotion_video(frames)
+
+        detected_emotions_video = None
+        if sentences_aligned:
+            video_emotion_result = await self._score_video_emotion_per_sentence(
+                video_path, sentences_aligned,
+            )
+            detected_emotions_video = {
+                "primary":          video_emotion_result["detected_emotion"],
+                "confidence":       video_emotion_result["confidence"],
+                "score":            video_emotion_result["score"],
+                "accuracy":         video_emotion_result["accuracy"],
+                "sentence_results": video_emotion_result.get("sentence_results", []),
+            }
+
+        eye_expression_data = await self._analyze_emotion_transitions(
+            frames, video_path, sentences_aligned=sentences_aligned
+        )
+
         overall = round(
             emotional_score * self.weights["emotional_expression_score"]
             + vocal_score   * self.weights["vocal_tone_score"]
@@ -916,11 +925,8 @@ class MLPipeline:
             2,
         )
         overall = max(0.0, min(100.0, overall))
-
-        # 8. Human-readable feedback
         feedback = self._generate_feedback(overall, emotional_score, vocal_score, script_score)
 
-        # 9. Clean up temp audio
         if tmp_audio and Path(tmp_audio).exists():
             try:
                 Path(tmp_audio).unlink()
@@ -928,25 +934,24 @@ class MLPipeline:
                 pass
 
         logger.info(
-            "Evaluation complete -- overall=%.2f  emotion=%.2f  vocal=%.2f  "
-            "script=%.2f  transitions=%d",
-            overall, emotional_score, vocal_score, script_score, len(eye_expression_data.get("transitions", [])),
+            "Evaluation complete -- overall=%.2f  emotion=%.2f  vocal=%.2f  script=%.2f",
+            overall, emotional_score, vocal_score, script_score,
         )
 
         return {
-            "emotional_expression_score": round(emotional_score, 2),
-            "vocal_tone_score":           round(vocal_score, 2),
-            "script_alignment_score":     round(script_score, 2),
-            "overall_performance_score":  overall,
-            "eye_expression":             eye_expression_data,
-            "tone_analysis":              tone_result, 
-            "detected_emotions":          emotions_detail,
-            "detected_emotions_vocal":    detected_emotions_vocal,
-            "detected_emotions_video":    detected_emotions_video,
-            "script_alignment_data":      alignment_data,
-            "ai_feedback":                feedback,
+            "mode":                          "video",
+            "emotional_expression_score":    round(emotional_score, 2),
+            "vocal_tone_score":              round(vocal_score, 2),
+            "script_alignment_score":        round(script_score, 2),
+            "overall_performance_score":     overall,
+            "eye_expression":                eye_expression_data,
+            "tone_analysis":                 tone_result,
+            "detected_emotions":             emotions_detail,
+            "detected_emotions_vocal":       detected_emotions_vocal,
+            "detected_emotions_video":       detected_emotions_video,
+            "script_alignment_data":         alignment_data,
+            "ai_feedback":                   feedback,
         }
-
     # -----------------------------------------------------------------------
     # 1 -- Video emotion scoring
     # -----------------------------------------------------------------------
@@ -1760,10 +1765,48 @@ class MLPipeline:
             return 0.0, None
 
         try:
-            from core.script import transcribe_and_align
-            logger.info("Running local SeamlessM4T transcription...")
+            import aiohttp
+            import soundfile as sf
+            import librosa
 
-            api_result = transcribe_and_align(audio_path)
+            logger.info("Sending audio to remote SeamlessM4T API...")
+            # Guard: reject tiny/empty files before sending
+            audio_size = Path(audio_path).stat().st_size
+            if audio_size < 8000:
+                logger.warning("Audio file too small (%d bytes), skipping ASR", audio_size)
+                return 0.0, None
+            try:
+                async with aiohttp.ClientSession() as health_session:
+                    health_url = self.script_model.replace("/transcribe", "/health")
+                    async with health_session.get(
+                        health_url,
+                        timeout=aiohttp.ClientTimeout(connect=10, sock_read=10)
+                    ) as r:
+                        logger.info("SeamlessM4T health check: %s", await r.text())
+            except Exception as e:
+                logger.error("SeamlessM4T API unreachable: %s", e)
+                return 0.0, None
+            async with aiohttp.ClientSession() as session:
+                with open(audio_path, "rb") as f:
+                    form = aiohttp.FormData()
+                    form.add_field(
+                        "audio", f,
+                        filename="audio.wav",
+                        content_type="audio/wav",
+                    )
+                    async with session.post(
+                        self.script_model,
+                        data=form,
+                        timeout=aiohttp.ClientTimeout(
+                            connect=30,
+                            sock_read=1800,
+                            ),
+                    ) as resp:
+                        if resp.status != 200:
+                           logger.error("Remote ASR API error: %s", await resp.text())
+                           return 0.0, None
+                        api_result = await resp.json()
+
             full_transcript = api_result.get("text", "")
             aligned_words   = api_result.get("aligned_words", [])
             if not full_transcript:

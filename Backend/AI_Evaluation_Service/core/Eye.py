@@ -88,8 +88,33 @@ face_mesh = mp_face_mesh.FaceMesh(
     min_detection_confidence=CONFIG["min_detection_confidence"],
     min_tracking_confidence=0.5,
 )
+from core.storage import get_s3_client
+import io
 
+MINIO_BUCKET = os.environ.get("MINIO_BUCKET", "eye-analysis")
+def _upload_png_to_minio(fig, object_name: str) -> str:
+    """
+    Save a matplotlib figure to S3/MinIO as PNG.
+    Returns the object path: bucket/object_name
+    """
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=130, bbox_inches="tight",
+                facecolor=fig.get_facecolor())
+    buf.seek(0)
+    data = buf.getvalue()
 
+    client = get_s3_client()
+    client.put_object(
+        Bucket=MINIO_BUCKET,
+        Key=object_name,
+        Body=data,
+        ContentType="image/png",
+    )
+    buf.close()
+
+    s3_path = f"{MINIO_BUCKET}/{object_name}"
+    logger.info(f"Uploaded → s3://{s3_path}")
+    return s3_path
 # ============================================================
 # STEP 1 — VIDEO QUALITY CHECK
 # ============================================================
@@ -877,7 +902,8 @@ def _safe_slug(text):
 
 def visualize_gaze_transitions(report, iris_series, results,
                                 center_h, center_v, h_tol, v_tol,
-                                video_path, window_sec=SHIFT_WINDOW_SEC):
+                                video_path, window_sec=SHIFT_WINDOW_SEC,
+                                evaluation_id=None):   # ← add evaluation_id
     valid = [r for r in results if r["displacement"] is not None]
     image_map = {}
     if not valid:
@@ -886,10 +912,12 @@ def visualize_gaze_transitions(report, iris_series, results,
         return image_map
 
     usable_ts_map = {fd["timestamp_ms"]: fd for fd in report["usable_frame_data"]}
-    timestamps   = np.array([f["timestamp_ms"] for f in iris_series])
-    h_vals       = np.array([f["h_ratio"]      for f in iris_series])
-    window_ms    = window_sec * 1000
-    cap          = cv2.VideoCapture(video_path)
+    timestamps    = np.array([f["timestamp_ms"] for f in iris_series])
+    window_ms     = window_sec * 1000
+    cap           = cv2.VideoCapture(video_path)
+
+    # Folder prefix inside the bucket: eye-analysis/<eval_id>/
+    prefix = f"{evaluation_id}/" if evaluation_id else ""
 
     for idx, r in enumerate(valid, start=1):
         t_ms  = r["time_ms"]
@@ -905,40 +933,38 @@ def visualize_gaze_transitions(report, iris_series, results,
         best_after  = after_idx [np.argmin(np.abs(timestamps[after_idx]  - (t_ms + window_ms)))]
 
         from_slug = _safe_slug(r.get("from_emotion", ""))
-        to_slug = _safe_slug(r.get("to_emotion", ""))
+        to_slug   = _safe_slug(r.get("to_emotion", ""))
         base_name = f"metric_gaze_shift_transition_{idx}_{int(r['time_sec'])}s"
         if from_slug and to_slug:
             base_name += f"_{from_slug}_to_{to_slug}"
 
+        # ── BEFORE frame ──────────────────────────────────────
         fig = plt.figure(figsize=(6.5, 6.5))
         fig.patch.set_facecolor("#0f172a")
-        ax_before = fig.add_subplot(1, 1, 1)
-        _draw_transition_frame(ax_before, cap, iris_series, usable_ts_map, best_before, color,
-                               f"BEFORE  ({r['from_emotion']})\n{timestamps[best_before]/1000:.1f}s",
-                               r["dir_before"])
-        out_before = f"{base_name}_before.png"
-        plt.savefig(out_before, dpi=130, bbox_inches="tight",
-                    facecolor=fig.get_facecolor())
+        ax = fig.add_subplot(1, 1, 1)
+        _draw_transition_frame(
+            ax, cap, iris_series, usable_ts_map, best_before, color,
+            f"BEFORE  ({r['from_emotion']})\n{timestamps[best_before]/1000:.1f}s",
+            r["dir_before"],
+        )
+        before_path = _upload_png_to_minio(fig, f"{prefix}{base_name}_before.png")
         plt.close(fig)
-        if VERBOSE:
-            logger.info(f"Saved → {out_before}")
 
+        # ── AFTER frame ───────────────────────────────────────
         fig = plt.figure(figsize=(6.5, 6.5))
         fig.patch.set_facecolor("#0f172a")
-        ax_after = fig.add_subplot(1, 1, 1)
-        _draw_transition_frame(ax_after, cap, iris_series, usable_ts_map, best_after, color,
-                               f"AFTER  ({r['to_emotion']})\n{timestamps[best_after]/1000:.1f}s",
-                               r["dir_after"])
-        out_after = f"{base_name}_after.png"
-        plt.savefig(out_after, dpi=130, bbox_inches="tight",
-                    facecolor=fig.get_facecolor())
+        ax = fig.add_subplot(1, 1, 1)
+        _draw_transition_frame(
+            ax, cap, iris_series, usable_ts_map, best_after, color,
+            f"AFTER  ({r['to_emotion']})\n{timestamps[best_after]/1000:.1f}s",
+            r["dir_after"],
+        )
+        after_path = _upload_png_to_minio(fig, f"{prefix}{base_name}_after.png")
         plt.close(fig)
-        if VERBOSE:
-            logger.info(f"Saved → {out_after}")
 
         image_map[r["time_ms"]] = {
-            "before_image": out_before,
-            "after_image": out_after,
+            "before_image": before_path,   # e.g. "eye-analysis/eval-123/metric_..._before.png"
+            "after_image":  after_path,
         }
 
     cap.release()
