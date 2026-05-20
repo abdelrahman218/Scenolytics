@@ -10,15 +10,6 @@ import '../utils/director_profile_completion.dart';
 import '../utils/auth_validators.dart' show validateAgeField;
 import '../utils/profile_validators.dart';
 
-/// Profile page for the signed-in user.
-///
-/// Loads the existing actor/director profile row from the User Management
-/// service (`GET /api/v1/{actors|directors}/:user_id/profile`) and renders an
-/// editable form. **Required:** actors — display name, age, height, gender,
-/// body type, ethnicity; directors — display name, phone. All other fields are
-/// optional. Saving will:
-///   - `POST  /api/v1/{actors|directors}/profile`              if no row exists
-///   - `PATCH /api/v1/{actors|directors}/profile/:profile_id`  otherwise
 class ProfilePage extends StatefulWidget {
   const ProfilePage({
     super.key,
@@ -33,34 +24,22 @@ class ProfilePage extends StatefulWidget {
     this.onLogout,
   });
 
-  /// Signed-in identity. When null, the page falls back to the read-only header
-  /// shown previously (used for legacy callers that haven't been wired yet).
   final AuthUser? user;
 
-  /// Required for editing. When null the form is hidden and only the header
-  /// shows.
   final UserManagementApi? userManagementApi;
 
-  /// Optional override for the header email label (defaults to [user.email]).
   final String? userEmail;
 
-  /// Optional override for the role label (defaults to [user.role] capitalized).
   final String? accountRoleLabel;
 
-  /// When set (e.g. mandatory sign-up setup), drives which profile form to show.
   final String? profileSetupRole;
 
-  /// When true (first-time sign-up setup), back navigation is blocked until the
-  /// profile is saved with all required fields.
   final bool mandatorySetup;
 
-  /// When true, rendered inside [MainShell] (no duplicate app bar).
   final bool embeddedInShell;
 
-  /// Called after a successful save while [mandatorySetup] is active.
   final VoidCallback? onSetupComplete;
 
-  /// Optional sign-out while the setup gate is shown.
   final Future<void> Function()? onLogout;
 
   @override
@@ -73,7 +52,6 @@ class _ProfilePageState extends State<ProfilePage> {
 
   final _formKey = GlobalKey<FormState>();
 
-  // Actor controllers ---------------------------------------------------------
   final _displayName = TextEditingController();
   final _bio = TextEditingController();
   final _heightCm = TextEditingController();
@@ -86,14 +64,12 @@ class _ProfilePageState extends State<ProfilePage> {
   String? _bodyType;
   String? _ethnicity;
 
-  // Director controllers ------------------------------------------------------
   final _companyName = TextEditingController();
   final _companyBio = TextEditingController();
   final _website = TextEditingController();
   final _phone = TextEditingController();
   final _location = TextEditingController();
 
-  // State ---------------------------------------------------------------------
   bool _loading = true;
   bool _saving = false;
   String? _profileId;
@@ -303,8 +279,6 @@ class _ProfilePageState extends State<ProfilePage> {
     };
   }
 
-  /// Empty optional fields are sent as JSON `null` (not omitted) so the API
-  /// does not pass `undefined` into MySQL on PATCH.
   String? _optionalStringOrNull(String value) {
     final t = value.trim();
     return t.isEmpty ? null : t;
@@ -326,7 +300,6 @@ class _ProfilePageState extends State<ProfilePage> {
           fields: fields,
           bearerToken: user.token,
           existingProfileId: _profileId,
-          // Avoid PATCH on first-time setup (broken on older User Management builds).
           preferCreate: widget.mandatorySetup,
         );
         final newId = result['id']?.toString().trim();
@@ -406,7 +379,6 @@ class _ProfilePageState extends State<ProfilePage> {
     return 'Your profile';
   }
 
-  // UI ------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {

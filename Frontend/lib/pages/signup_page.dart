@@ -9,12 +9,6 @@ import '../utils/auth_validators.dart';
 import '../utils/profile_validators.dart';
 import '../widgets/auth_flow_scaffold.dart';
 
-/// Sign-up form. Fields adapt to the selected role:
-///  - Director: name, email, password, confirm password.
-///  - Actor:    name, age, gender, email, password, confirm password.
-///
-/// On success the controller signs the user in and the app shell requires
-/// profile setup (mandatory fields) before the dashboard is available.
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key, required this.auth});
 

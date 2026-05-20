@@ -2,16 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../models/actor_audition_submission.dart';
 import '../theme/scenolytics_colors.dart';
+import 'director_actor_profile_details_page.dart';
 import 'eyes_analysis_page.dart';
 import 'facial_emotion_score.dart';
 import 'script_alignemnt_score_page.dart';
 import 'vocal_emotion_score.dart';
 
-/// Director drill-down: all AI evaluation detail views in one place.
-///
-/// Designed to render inside [MainShell] (the app header sits above this page),
-/// so it does NOT draw its own top app bar. It provides a compact in-page
-/// summary card and a sticky tab strip.
 class SubmissionEvaluationDetailsPage extends StatefulWidget {
   const SubmissionEvaluationDetailsPage({
     super.key,
@@ -19,25 +15,22 @@ class SubmissionEvaluationDetailsPage extends StatefulWidget {
     this.auditionTitle,
     this.auditionSubtitle,
     this.auditionType = '',
+    this.rank,
     this.onBack,
   });
 
   final ActorAuditionSubmission submission;
 
-  /// Audition title shown under the actor name (e.g. "Lead role · Drama").
+  final int? rank;
+
   final String? auditionTitle;
 
-  /// Optional second line for audition context.
   final String? auditionSubtitle;
 
-  /// Casting `auditions.type` (`Audio` / `Video`). Audio auditions hide facial
-  /// and eyes tabs because there is no video to analyze.
   final String auditionType;
 
   bool get isAudioOnly => auditionType.trim().toLowerCase() == 'audio';
 
-  /// Called when the user taps the in-page back arrow. When omitted the page
-  /// falls back to `Navigator.maybePop` so legacy push-based callers still work.
   final VoidCallback? onBack;
 
   @override
@@ -48,7 +41,14 @@ class SubmissionEvaluationDetailsPage extends StatefulWidget {
 class _SubmissionEvaluationDetailsPageState
     extends State<SubmissionEvaluationDetailsPage>
     with SingleTickerProviderStateMixin {
+  static const _actorProfileTab = _DetailTab(
+    kind: _EvaluationTabKind.actorProfile,
+    label: 'Actor profile',
+    icon: Icons.person_outline_rounded,
+  );
+
   static const _videoTabs = <_DetailTab>[
+    _actorProfileTab,
     _DetailTab(
       kind: _EvaluationTabKind.facial,
       label: 'Facial',
@@ -77,6 +77,7 @@ class _SubmissionEvaluationDetailsPageState
   ];
 
   static const _audioTabs = <_DetailTab>[
+    _actorProfileTab,
     _DetailTab(
       kind: _EvaluationTabKind.vocal,
       label: 'Vocal',
@@ -125,6 +126,11 @@ class _SubmissionEvaluationDetailsPageState
   Widget _tabBody(_EvaluationTabKind kind) {
     final submission = widget.submission;
     switch (kind) {
+      case _EvaluationTabKind.actorProfile:
+        return ActorProfileTabBody(
+          submission: submission,
+          isAudioOnly: widget.isAudioOnly,
+        );
       case _EvaluationTabKind.facial:
         return FacialEmotionScorePage(submission: submission, nested: true);
       case _EvaluationTabKind.vocal:
@@ -160,6 +166,7 @@ class _SubmissionEvaluationDetailsPageState
             auditionTitle: widget.auditionTitle,
             auditionSubtitle: widget.auditionSubtitle,
             isAudioOnly: widget.isAudioOnly,
+            rank: widget.rank,
             onBack: _handleBack,
           ),
           _DetailTabBar(controller: _tabController, tabs: _tabs),
@@ -178,12 +185,10 @@ class _SubmissionEvaluationDetailsPageState
   }
 }
 
-enum _EvaluationTabKind { facial, vocal, script, eyes, tone }
+enum _EvaluationTabKind { actorProfile, facial, vocal, script, eyes, tone }
 
-/// Backwards-compatible alias for older imports.
 typedef RankingEyesToneDetailsPage = SubmissionEvaluationDetailsPage;
 
-/// Tab descriptor for the sticky pill strip below the summary header.
 class _DetailTab {
   const _DetailTab({
     required this.kind,
@@ -196,7 +201,6 @@ class _DetailTab {
   final IconData icon;
 }
 
-/// Clean in-page header: back arrow, actor name + audition info, score chip.
 class _SubmissionSummaryHeader extends StatelessWidget {
   const _SubmissionSummaryHeader({
     required this.submission,
@@ -204,12 +208,14 @@ class _SubmissionSummaryHeader extends StatelessWidget {
     this.auditionTitle,
     this.auditionSubtitle,
     this.isAudioOnly = false,
+    this.rank,
   });
 
   final ActorAuditionSubmission submission;
   final String? auditionTitle;
   final String? auditionSubtitle;
   final bool isAudioOnly;
+  final int? rank;
   final VoidCallback onBack;
 
   String get _displayName {
@@ -240,6 +246,7 @@ class _SubmissionSummaryHeader extends StatelessWidget {
     final brightness = theme.brightness;
     final gradient = ScenolyticsColors.heroBarGradientFor(brightness);
     final overallScore = submission.score.round();
+    final evaluationReady = submission.evaluationCompleted;
     final context2 = _contextLine;
     final sub = _subContextLine;
 
@@ -249,7 +256,9 @@ class _SubmissionSummaryHeader extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, c) {
           final compact = c.maxWidth < 520;
-          final scoreChip = _OverallScoreChip(score: overallScore);
+          final scoreChip = evaluationReady
+              ? _OverallScoreChip(score: overallScore)
+              : const _OverallScorePendingChip();
           return Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -356,6 +365,41 @@ class _SubmissionSummaryHeader extends StatelessWidget {
                         ),
                       ),
                     ],
+                    if (rank != null) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.emoji_events_outlined,
+                              size: 14,
+                              color: Colors.white.withValues(alpha: 0.95),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Rank #$rank',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.95),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -397,6 +441,63 @@ class _HeaderCircleButton extends StatelessWidget {
     );
     if (tooltip == null) return btn;
     return Tooltip(message: tooltip!, child: btn);
+  }
+}
+
+class _OverallScorePendingChip extends StatelessWidget {
+  const _OverallScorePendingChip();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.35),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            'Overall',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.85),
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.7,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white.withValues(alpha: 0.95),
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Pending',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  height: 1,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
 

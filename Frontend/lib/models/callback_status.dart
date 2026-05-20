@@ -64,8 +64,6 @@ class CallbackStatusCounts {
 
   int get total => scheduled + accepted + rejected + unknown;
 
-  /// One callback per submission — reschedules and link regeneration must not
-  /// inflate the dashboard total (API may return duplicate rows historically).
   static CallbackStatusCounts fromCallbackRows(
     Iterable<Map<String, dynamic>> rows,
   ) {

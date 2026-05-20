@@ -129,8 +129,6 @@ class _ScenolyticsHome extends StatefulWidget {
 }
 
 class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
-  /// Keeps async page state when the shell calls [setState] (profile load,
-  /// rankings refresh, etc.) so the director dashboard does not reload and flash blank.
   final GlobalKey<DirectorDashboardPageState> _directorDashboardKey =
       GlobalKey<DirectorDashboardPageState>();
   final GlobalKey _actorDashboardKey = GlobalKey();
@@ -138,7 +136,7 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
 
   _ShellPage _page = _ShellPage.actorExplore;
   String? _editingAuditionId;
-  ActorAuditionSubmission? _rankingsDetailsSubmission;
+  RankedAuditionSubmission? _rankingsDetailsEntry;
   final List<ActorAuditionSubmission> _submissions =
       <ActorAuditionSubmission>[];
   late final AuditionsRepository _auditionsRepository;
@@ -150,17 +148,10 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
   String? _directorDisplayName;
   String? _actorDisplayName;
 
-  /// Blocks the main shell until the user saves a complete profile (sign-up only).
   bool _profileSetupRequired = false;
   bool _checkingProfileSetup = false;
 
-  /// Audition the actor most recently chose from Explore. Falls back to the
-  /// compile-time [AppEnv.auditionId] so legacy single-audition runs still work.
   String? _selectedActorAuditionId;
-
-  /// Audition the director most recently picked from the dashboard. Falls
-  /// back to [AppEnv.auditionId] so the rankings page still has a target
-  /// when the director opens it directly (e.g. via the nav button).
   String? _selectedDirectorAuditionId;
 
   AuthUser get _user => widget.auth.user!;
@@ -357,21 +348,22 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
   void _openRankingsForCard(DirectorAuditionCard card) {
     setState(() {
       _selectedDirectorAuditionId = card.id;
-      _rankingsDetailsSubmission = null;
+      _rankingsDetailsEntry = null;
       _page = _ShellPage.directorRankings;
     });
     _refreshDirectorRankings();
   }
 
-  void _openSubmissionDetails(ActorAuditionSubmission submission) {
+  void _openSubmissionDetails(RankedAuditionSubmission entry) {
     setState(() {
-      _rankingsDetailsSubmission = submission;
+      _rankingsDetailsEntry = entry;
       _page = _ShellPage.directorRankingsDetails;
     });
   }
 
   void _closeSubmissionDetails() {
     setState(() {
+      _rankingsDetailsEntry = null;
       _page = _ShellPage.directorRankings;
     });
   }
@@ -585,7 +577,7 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
             : null,
         onOpenSubmissionDetails: _openSubmissionDetails,
       ),
-      _ShellPage.directorRankingsDetails => _rankingsDetailsSubmission == null
+      _ShellPage.directorRankingsDetails => _rankingsDetailsEntry == null
           ? AuditionRankingsPage(
               submissions: _submissions,
               auditionTitle: _rankingsAuditionTitle,
@@ -608,7 +600,8 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
               onOpenSubmissionDetails: _openSubmissionDetails,
             )
           : SubmissionEvaluationDetailsPage(
-              submission: _rankingsDetailsSubmission!,
+              submission: _rankingsDetailsEntry!.submission,
+              rank: _rankingsDetailsEntry!.rank,
               auditionTitle: _rankingsAuditionTitle,
               auditionSubtitle: _rankingsAuditionSubtitle,
               auditionType: _rankingsAuditionType,

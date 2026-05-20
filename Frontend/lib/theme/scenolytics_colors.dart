@@ -1,14 +1,5 @@
 import 'package:flutter/material.dart';
 
-/// Scenolytics design tokens — cyan / blue family.
-///
-/// Use these names anywhere so the app stays consistent:
-/// ```dart
-/// import 'package:scenolytics_frontend/theme/scenolytics_colors.dart';
-///
-/// color: ScenolyticsColors.primary,
-/// decoration: BoxDecoration(gradient: ScenolyticsColors.heroBarGradient),
-/// ```
 abstract final class ScenolyticsColors {
   // —— Brand (primary ramp) ——
   static const Color primary = Color(0xFF006884);

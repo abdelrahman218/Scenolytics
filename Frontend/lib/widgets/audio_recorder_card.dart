@@ -9,14 +9,7 @@ import 'package:record/record.dart';
 
 import '../theme/scenolytics_colors.dart';
 
-/// Audio-only recording experience for audio auditions.
-///
-/// Owns its own mic state, amplitude history, waveform animation and preview
-/// player. When the actor finishes recording, [onRecordingReady] receives the
-/// raw bytes plus a playback URL/path the widget can also use internally.
-///
-/// Disabled while [enabled] is false (e.g. the audition is closed) — the card
-/// still renders so the page can show a status banner above it.
+
 class AudioRecorderCard extends StatefulWidget {
   const AudioRecorderCard({
     super.key,
@@ -25,14 +18,9 @@ class AudioRecorderCard extends StatefulWidget {
     this.lockedReasonLabel,
   });
 
-  /// When false the card shows a locked state with [lockedReasonLabel].
   final bool enabled;
-
-  /// Called once the actor stops recording. Bytes are ready to submit.
   final ValueChanged<Uint8List> onRecordingReady;
 
-  /// Optional copy explaining why recording is locked (e.g. existing pending
-  /// review). Rendered as a small label when [enabled] is false.
   final String? lockedReasonLabel;
 
   @override
@@ -107,10 +95,6 @@ class _AudioRecorderCardState extends State<AudioRecorderCard>
     super.dispose();
   }
 
-  // ---------------------------------------------------------------------------
-  // Recording control
-  // ---------------------------------------------------------------------------
-
   Future<void> _startRecording() async {
     if (_isRecording || _isPreparing) return;
     setState(() {
@@ -133,7 +117,6 @@ class _AudioRecorderCardState extends State<AudioRecorderCard>
         sampleRate: 44100,
         numChannels: 1,
       );
-      // Web ignores `path`; native writes a temp file at that path.
       await _recorder.start(config, path: _generateTempPath());
 
       _amplitudeSub?.cancel();
@@ -221,7 +204,6 @@ class _AudioRecorderCardState extends State<AudioRecorderCard>
         }
         return;
       }
-      // Web returns a blob:/ URL; native returns a file path.
       if (path.startsWith('blob:') ||
           path.startsWith('http:') ||
           path.startsWith('https:')) {
@@ -235,18 +217,12 @@ class _AudioRecorderCardState extends State<AudioRecorderCard>
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Helpers
-  // ---------------------------------------------------------------------------
-
   String _generateTempPath() {
-    // Native: a path under temp; web ignores the value.
     final stamp = DateTime.now().millisecondsSinceEpoch;
     return 'scenolytics_audition_$stamp.m4a';
   }
 
   void _pushAmplitude(double db) {
-    // `record` reports amplitude in dB (negative). -45 ≈ silence, 0 ≈ max.
     final norm = ((db + 45) / 45).clamp(0.0, 1.0);
     setState(() {
       for (var i = 0; i < _amplitudes.length - 1; i++) {
@@ -261,10 +237,6 @@ class _AudioRecorderCardState extends State<AudioRecorderCard>
     final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '$m:$s';
   }
-
-  // ---------------------------------------------------------------------------
-  // UI
-  // ---------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -518,10 +490,6 @@ class _AudioRecorderCardState extends State<AudioRecorderCard>
     );
   }
 }
-
-// ---------------------------------------------------------------------------
-// Internal pieces
-// ---------------------------------------------------------------------------
 
 class _CardTitle extends StatelessWidget {
   const _CardTitle({

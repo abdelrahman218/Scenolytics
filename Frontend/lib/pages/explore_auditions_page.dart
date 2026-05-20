@@ -7,9 +7,6 @@ import '../models/audition_listing.dart';
 import '../theme/scenolytics_colors.dart';
 import '../widgets/scenolytics_footer.dart';
 
-/// Actor-facing discovery page. Loads every audition from
-/// `GET /api/v1/casting/actor/auditions` (casting `Audition.findAll`), enriches
-/// director names and invitation/submission state, then search & filter locally.
 class ExploreAuditionsPage extends StatefulWidget {
   const ExploreAuditionsPage({
     super.key,
@@ -22,12 +19,8 @@ class ExploreAuditionsPage extends StatefulWidget {
   final AuditionsRepository auditionsRepository;
   final String actorToken;
 
-  /// Compile-time / shell-provided audition ids to include even when the actor
-  /// has no invitation or submission for them (e.g. `SCENO_AUDITION_ID`).
   final List<String> extraAuditionIds;
 
-  /// Invoked when the actor taps "Apply" — receives the audition row so the
-  /// parent shell can route to [AuditionVideoSubmissionPage] for that id.
   final ValueChanged<AuditionListing> onApply;
 
   @override
@@ -35,8 +28,6 @@ class ExploreAuditionsPage extends StatefulWidget {
 }
 
 class _ExploreAuditionsPageState extends State<ExploreAuditionsPage> {
-  // Same breakpoint family as MainShell / DirectorAuditionCreationPage so the
-  // grid switches at the same place navigation/header layouts switch.
   static const double _wideBreakpoint = 900;
   static const double _xWideBreakpoint = 1280;
   static const double _maxContentWidth = 1240;
@@ -357,9 +348,6 @@ class _ExploreAuditionsPageState extends State<ExploreAuditionsPage> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Hero
-// ---------------------------------------------------------------------------
 
 class _ExploreHero extends StatelessWidget {
   const _ExploreHero({required this.total, required this.showing});
@@ -450,9 +438,6 @@ class _ExploreHero extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Search + toolbar (top row, both layouts)
-// ---------------------------------------------------------------------------
 
 class _SearchAndToolbar extends StatelessWidget {
   const _SearchAndToolbar({
@@ -654,11 +639,6 @@ class _FiltersToggle extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Filter bar (web: horizontal, phone: stacked)
-// ---------------------------------------------------------------------------
-
-/// Returns a list with exactly one 'Any' at the head, deduping case-insensitively.
 List<String> _withAny(List<String> source) {
   final seen = <String>{'any'};
   final out = <String>['Any'];
@@ -703,9 +683,6 @@ class _FilterBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    // `kAuditionEthnicities` and `kAuditionBodyTypes` already contain 'Any';
-    // [_withAny] guarantees a single 'Any' entry no matter the source list so
-    // `DropdownButtonFormField` never trips its "exactly one item" assertion.
     final mediaOptions = _withAny(kAuditionMediaTypes);
     final genderOptions = _withAny(const <String>['Male', 'Female', 'Both']);
     final ethnicityOptions = _withAny(kAuditionEthnicities);
@@ -916,9 +893,6 @@ class _AgeRangeField extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Card
-// ---------------------------------------------------------------------------
 
 class _AuditionCard extends StatelessWidget {
   const _AuditionCard({required this.audition, required this.onApply});
@@ -1239,10 +1213,6 @@ class _TagChip extends StatelessWidget {
     );
   }
 }
-
-// ---------------------------------------------------------------------------
-// Empty state
-// ---------------------------------------------------------------------------
 
 class _EmptyState extends StatelessWidget {
   const _EmptyState({

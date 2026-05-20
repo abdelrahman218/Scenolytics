@@ -4,13 +4,6 @@ import '../branding/app_logo_placeholder.dart';
 import '../branding/scenolytics_branding.dart';
 import '../theme/scenolytics_colors.dart';
 
-/// Shared layout for sign-in / sign-up.
-///
-/// On wide screens (>= 980 px) the layout becomes a brand panel on the left
-/// (gradient + logo + selling-points) and the form card on the right.
-///
-/// On narrow screens it collapses to a single centered card on top of the
-/// soft page backdrop gradient, scrollable to handle keyboards.
 class AuthFlowScaffold extends StatelessWidget {
   const AuthFlowScaffold({
     super.key,
@@ -23,9 +16,6 @@ class AuthFlowScaffold extends StatelessWidget {
   final String title;
   final String? subtitle;
   final Widget child;
-
-  /// Optional bullet copy shown inside the brand panel on wide screens.
-  /// Falls back to a sensible default when null/empty.
   final List<AuthBrandHighlight>? brandHighlights;
 
   static const double _wideBreakpoint = 980;

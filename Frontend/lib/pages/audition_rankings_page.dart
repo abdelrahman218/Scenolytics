@@ -15,13 +15,11 @@ import '../models/actor_callback.dart';
 import '../models/audition_submission_status.dart';
 import '../models/callback_status.dart';
 import '../widgets/callback_status_chips.dart';
-import '../pages/ranking_eyes_tone_details_page.dart';
+import 'ranking_eyes_tone_details_page.dart';
 import '../theme/scenolytics_colors.dart';
 import '../utils/mysql_datetime.dart';
 import '../widgets/scenolytics_footer.dart';
 
-/// Playback fallbacks — gateway path may not have the object; MinIO `:9000` often does,
-/// persisting hints from PUT responses is handled in [AuditionsRepository].
 List<String> _directorTapePlaybackCandidates(ActorAuditionSubmission submission) {
   final out = <String>[];
   final seen = <String>{};
@@ -117,9 +115,8 @@ class AuditionRankingsPage extends StatefulWidget {
   /// Returns to the director dashboard (shell navigation).
   final VoidCallback? onBackToDashboard;
 
-  /// Opens the full AI-evaluation drill-down within the app shell, so the page
-  /// inherits the top header instead of pushing a bare route.
-  final ValueChanged<ActorAuditionSubmission>? onOpenSubmissionDetails;
+  /// Opens the actor profile drill-down within the app shell (full profile row).
+  final ValueChanged<RankedAuditionSubmission>? onOpenSubmissionDetails;
 
   @override
   State<AuditionRankingsPage> createState() => _AuditionRankingsPageState();
@@ -2235,7 +2232,7 @@ class _CompactRankCard extends StatelessWidget {
   final Future<void> Function(DirectorAuditionCallback)? onCallbackDecline;
   final Future<void> Function(DirectorAuditionCallback)? onRescheduleCallback;
   final Future<void> Function(DirectorAuditionCallback)? onRegenerateMeetLink;
-  final ValueChanged<ActorAuditionSubmission>? onOpenSubmissionDetails;
+  final ValueChanged<RankedAuditionSubmission>? onOpenSubmissionDetails;
   final String auditionType;
   final String? busyReviewSubmissionId;
   final String? busyCallbackReviewId;
@@ -2434,6 +2431,9 @@ class _CompactRankCard extends StatelessWidget {
                     ),
                   ],
                   const SizedBox(height: 16),
+                  if (!s.evaluationCompleted)
+                    const _EvaluationPendingBanner()
+                  else
                   LayoutBuilder(
                     builder: (context, c) {
                       final narrow = c.maxWidth < 360;
@@ -2533,13 +2533,14 @@ class _CompactRankCard extends StatelessWidget {
                         onPressed: () {
                           final open = onOpenSubmissionDetails;
                           if (open != null) {
-                            open(s);
+                            open(entry);
                             return;
                           }
                           Navigator.of(context).push(
                             MaterialPageRoute<void>(
                               builder: (_) => SubmissionEvaluationDetailsPage(
                                 submission: s,
+                                rank: entry.rank,
                                 auditionType: auditionType,
                               ),
                             ),
@@ -2757,16 +2758,18 @@ class _RankingSortChip extends StatelessWidget {
             borderRadius: BorderRadius.circular(10),
           ),
           child: Text(
-            switch (sortBy) {
-              AuditionRankingsSortBy.overall =>
-                  submission.score.round().toString(),
-              AuditionRankingsSortBy.facialEmotion =>
-                  '${submission.emotionalScore}',
-              AuditionRankingsSortBy.vocalEmotion =>
-                  '${submission.vocalToneScore}',
-              AuditionRankingsSortBy.scriptMatch =>
-                  '${submission.scriptMatchScore}',
-            },
+            submission.evaluationCompleted
+                ? switch (sortBy) {
+                    AuditionRankingsSortBy.overall =>
+                        submission.score.round().toString(),
+                    AuditionRankingsSortBy.facialEmotion =>
+                        '${submission.emotionalScore}',
+                    AuditionRankingsSortBy.vocalEmotion =>
+                        '${submission.vocalToneScore}',
+                    AuditionRankingsSortBy.scriptMatch =>
+                        '${submission.scriptMatchScore}',
+                  }
+                : '—',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
               color: sortBy == AuditionRankingsSortBy.scriptMatch
                   ? const Color(0xFF1E293B)
@@ -2864,6 +2867,68 @@ class _ActorMetricBar extends StatelessWidget {
               minHeight: 6,
               backgroundColor: trackColor,
               color: barColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Card placeholder shown when the AI evaluation has not completed yet.
+class _EvaluationPendingBanner extends StatelessWidget {
+  const _EvaluationPendingBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final brightness = theme.brightness;
+    final tone = brightness == Brightness.dark
+        ? cs.surfaceContainerHigh
+        : cs.surfaceContainerLowest;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: tone,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: 0.6),
+        ),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.2,
+              color: cs.primary,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'AI evaluation pending',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: cs.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Scores will appear here once the analysis is complete.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: cs.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ),
           ),
         ],

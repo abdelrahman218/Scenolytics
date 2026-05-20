@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:http/http.dart' show ClientException;
@@ -1116,50 +1115,52 @@ class AuditionsRepository {
     String? preferredPlaybackUrl,
   }) {
     final id = source['id']?.toString() ?? 'sub_${DateTime.now().millisecondsSinceEpoch}';
-    final metrics = _metricsFromSeed(id);
 
-    final overallScore = _firstDouble(source, const <String>[
-          'overall_performance_score',
-          'overall_score',
-          'score',
-        ]) ??
-        metrics.overall;
+    final overallRaw = _firstDouble(source, const <String>[
+      'overall_performance_score',
+      'overall_score',
+      'score',
+    ]);
+    final emotionalRaw = _firstInt(source, const <String>[
+      'facial_emotion_score',
+      'facial_emotions_score',
+      'emotional_expression_score',
+      'emotional_score',
+    ]);
+    final vocalRaw = _firstInt(source, const <String>[
+      'vocal_emotion_score',
+      'vocal_tone_score',
+      'vocal_score',
+    ]);
+    final scriptRaw = _firstInt(source, const <String>[
+      'script_alignment_score',
+      'script_match_score',
+    ]);
+    final eyesRaw = _firstInt(source, const <String>[
+      'eyes_analysis_score',
+      'eye_analysis_score',
+      'gaze_analysis_score',
+      'eyes_score',
+    ]);
+    final toneRaw = _firstInt(source, const <String>[
+      'tone_analysis_score',
+      'speech_tone_score',
+      'prosody_score',
+    ]);
 
-    final emotionalScore = _firstInt(source, const <String>[
-          'facial_emotion_score',
-          'facial_emotions_score',
-          'emotional_expression_score',
-          'emotional_score',
-        ]) ??
-        metrics.emotional;
+    final evaluationCompleted = overallRaw != null ||
+        emotionalRaw != null ||
+        vocalRaw != null ||
+        scriptRaw != null ||
+        eyesRaw != null ||
+        toneRaw != null;
 
-    final vocalToneScore = _firstInt(source, const <String>[
-          'vocal_emotion_score',
-          'vocal_tone_score',
-          'vocal_score',
-        ]) ??
-        metrics.vocalTone;
-
-    final scriptMatchScore = _firstInt(source, const <String>[
-          'script_alignment_score',
-          'script_match_score',
-        ]) ??
-        metrics.scriptMatch;
-
-    final eyesAnalysisScore = _firstInt(source, const <String>[
-          'eyes_analysis_score',
-          'eye_analysis_score',
-          'gaze_analysis_score',
-          'eyes_score',
-        ]) ??
-        metrics.eyesAnalysis;
-
-    final toneAnalysisScore = _firstInt(source, const <String>[
-          'tone_analysis_score',
-          'speech_tone_score',
-          'prosody_score',
-        ]) ??
-        metrics.toneAnalysis;
+    final overallScore = overallRaw ?? 0.0;
+    final emotionalScore = emotionalRaw ?? 0;
+    final vocalToneScore = vocalRaw ?? 0;
+    final scriptMatchScore = scriptRaw ?? 0;
+    final eyesAnalysisScore = eyesRaw ?? 0;
+    final toneAnalysisScore = toneRaw ?? 0;
 
     final submittedAtRaw = source['submitted_at']?.toString();
     final submittedAt =
@@ -1194,8 +1195,14 @@ class AuditionsRepository {
       playback = _auditionPlaybackUrl(mediaIdRaw, videoPublicBase);
     }
 
+    final actorId = _actorUserIdFromSubmission(source);
+
     return ActorAuditionSubmission(
       id: id,
+      actorId: actorId,
+      actorProfile: profile != null && profile.isNotEmpty
+          ? Map<String, dynamic>.from(profile)
+          : null,
       actorName: actorName,
       auditionRole: source['audition_title']?.toString() ?? fallbackAuditionTitle,
       score: overallScore,
@@ -1213,6 +1220,7 @@ class AuditionsRepository {
       submissionStatus: parseAuditionSubmissionStatus(
         source['submission_status'] ?? source['submissionStatus'],
       ),
+      evaluationCompleted: evaluationCompleted,
     );
   }
 
@@ -1371,70 +1379,8 @@ class AuditionsRepository {
     return null;
   }
 
-  _SubmissionMetrics _metricsFromSeed(String seed) {
-    final seedValue = seed.codeUnits.fold<int>(0, (a, b) => a + b);
-    final random = math.Random(seedValue);
-    int nextMetric() => 65 + random.nextInt(31);
-    final emotional = nextMetric();
-    final vocalTone = nextMetric();
-    final scriptMatch = nextMetric();
-    final eyesAnalysis = nextMetric();
-    final toneAnalysis = nextMetric();
-    final overall =
-        (emotional + vocalTone + scriptMatch + eyesAnalysis + toneAnalysis) /
-            5.0;
-    return _SubmissionMetrics(
-      overall: overall,
-      emotional: emotional,
-      vocalTone: vocalTone,
-      scriptMatch: scriptMatch,
-      eyesAnalysis: eyesAnalysis,
-      toneAnalysis: toneAnalysis,
-    );
-  }
-
   String _toTitleCase(String raw) {
     if (raw.isEmpty) return raw;
     return raw[0].toUpperCase() + raw.substring(1).toLowerCase();
-  }
-}
-
-class _SubmissionMetrics {
-  const _SubmissionMetrics({
-    required this.overall,
-    required this.emotional,
-    required this.vocalTone,
-    required this.scriptMatch,
-    required this.eyesAnalysis,
-    required this.toneAnalysis,
-  });
-
-  final double overall;
-  final int emotional;
-  final int vocalTone;
-  final int scriptMatch;
-  final int eyesAnalysis;
-  final int toneAnalysis;
-}
-
-extension on ActorAuditionSubmission {
-  ActorAuditionSubmission copyWith({
-    String? id,
-  }) {
-    return ActorAuditionSubmission(
-      id: id ?? this.id,
-      actorName: actorName,
-      auditionRole: auditionRole,
-      score: score,
-      submittedAt: submittedAt,
-      age: age,
-      emotionalScore: emotionalScore,
-      vocalToneScore: vocalToneScore,
-      scriptMatchScore: scriptMatchScore,
-      eyesAnalysisScore: eyesAnalysisScore,
-      toneAnalysisScore: toneAnalysisScore,
-      recordedVideoUrl: recordedVideoUrl,
-      mediaId: mediaId,
-    );
   }
 }

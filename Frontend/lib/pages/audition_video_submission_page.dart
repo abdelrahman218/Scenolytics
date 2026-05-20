@@ -64,13 +64,9 @@ class _AuditionVideoSubmissionPageState
   VideoPlayerController? _videoController;
   XFile? _recordedFile;
 
-  /// Recording timer (active recording duration), shown in the video card.
   Duration _videoRecordElapsed = Duration.zero;
   Timer? _videoRecordTicker;
 
-  /// Audio bytes captured by [AudioRecorderCard]. Mutually exclusive with the
-  /// video flow — only one of the two is used per submission depending on
-  /// [_auditionType].
   Uint8List? _recordedAudioBytes;
 
   ActorAuditionSubmission? _lastSubmission;

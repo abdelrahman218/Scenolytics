@@ -9,18 +9,6 @@ import '../theme/scenolytics_colors.dart';
 import '../widgets/scenolytics_footer.dart';
 import '../utils/pdf_audition_script_extractor.dart';
 
-/// Director-facing form to publish a casting call. Mirrors the casting service
-/// `auditions` + `sentences` schema (no backend changes — same payload shape:
-/// `{ title, description, type, candidate_*, script: [{content, emotion}] }`).
-///
-/// Layout:
-///   * Wide (>=900px / web): 2-column grid for Basics + Candidate criteria,
-///     Script card spans full width below. Content is centered with a max
-///     width of 1100px so it reads well on desktops.
-///   * Narrow (phone): everything stacks in a single column, full-width.
-///
-/// Emotion picker uses emoji pill-chips coloured by the emotion's accent hue
-/// (see [kAuditionEmotionEmoji] + [kAuditionEmotionAccent]).
 class DirectorAuditionCreationPage extends StatefulWidget {
   const DirectorAuditionCreationPage({
     super.key,
@@ -34,7 +22,6 @@ class DirectorAuditionCreationPage extends StatefulWidget {
   final AuditionsRepository auditionsRepository;
   final String directorToken;
 
-  /// When set, the form loads this audition and PATCHes on save instead of POST.
   final String? editAuditionId;
 
   final ValueChanged<Map<String, dynamic>>? onAuditionCreated;
@@ -47,13 +34,6 @@ class DirectorAuditionCreationPage extends StatefulWidget {
 
 class _DirectorAuditionCreationPageState
     extends State<DirectorAuditionCreationPage> {
-  // Layout breakpoints for the create-audition surface.
-  //   < _wideBreakpoint           -> phone-style stacked column.
-  //   _wideBreakpoint .. _xWide   -> 2-column form with comfortable margins.
-  //   >= _xWide                   -> 2-column form, larger horizontal padding,
-  //                                  capped at _maxContentWidth so the form
-  //                                  never becomes uncomfortably wide on
-  //                                  ultrawide displays.
   static const double _wideBreakpoint = 900;
   static const double _xWide = 1280;
   static const double _maxContentWidth = 1240;
@@ -202,10 +182,6 @@ class _DirectorAuditionCreationPageState
     super.dispose();
   }
 
-  // ---------------------------------------------------------------------------
-  // Sentence list mutations
-  // ---------------------------------------------------------------------------
-
   void _addSentenceRow() {
     setState(() {
       _lines.add(_ScriptSentenceSlot());
@@ -238,11 +214,6 @@ class _DirectorAuditionCreationPageState
       }
     });
   }
-
-  // ---------------------------------------------------------------------------
-  // PDF / TXT import
-  // ---------------------------------------------------------------------------
-
   Future<void> _pickPdfAndMirrorScript() async {
     setState(() => _pdfBusy = true);
     try {
@@ -345,11 +316,6 @@ class _DirectorAuditionCreationPageState
     if (s.isEmpty) return null;
     return int.tryParse(s);
   }
-
-  // ---------------------------------------------------------------------------
-  // Submit
-  // ---------------------------------------------------------------------------
-
   Future<void> _submit() async {
     final messenger = ScaffoldMessenger.of(context);
     if (widget.directorToken.trim().isEmpty) {
@@ -481,15 +447,6 @@ class _DirectorAuditionCreationPageState
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Reusable bits
-  // ---------------------------------------------------------------------------
-
-  /// `InputDecorator` + `DropdownButton` (avoids the deprecated
-  /// `DropdownButtonFormField.value` in newer Flutter SDKs).
-  ///
-  /// When [isRequired] is true the label is rendered with a red asterisk to
-  /// match the rest of the required-field convention on this page.
   Widget _labeledStringDropdown({
     required String label,
     required String selected,
@@ -524,10 +481,6 @@ class _DirectorAuditionCreationPageState
       ),
     );
   }
-
-  /// Renders an `InputDecoration` label with a red `*` after required fields.
-  /// Pulls the surrounding label colour from the theme so it stays correct in
-  /// dark mode.
   Widget _fieldLabel(String text, {bool isRequired = false}) {
     final cs = Theme.of(context).colorScheme;
     return Text.rich(
@@ -547,11 +500,6 @@ class _DirectorAuditionCreationPageState
       ),
     );
   }
-
-  // ---------------------------------------------------------------------------
-  // Build
-  // ---------------------------------------------------------------------------
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -569,8 +517,6 @@ class _DirectorAuditionCreationPageState
               builder: (context, constraints) {
                 final w = constraints.maxWidth;
                 final isWide = w >= _wideBreakpoint;
-                // Smoothly scale horizontal padding: 16 on phone, 28 at the
-                // wide breakpoint, up to 56 on ultra-wide desktops.
                 final hPad = w >= _xWide
                     ? 56.0
                     : isWide
@@ -927,10 +873,6 @@ class _DirectorAuditionCreationPageState
   }
 }
 
-// ============================================================================
-// Sub-widgets
-// ============================================================================
-
 class _ScriptSentenceSlot {
   _ScriptSentenceSlot();
 
@@ -1034,9 +976,6 @@ class _HeroHeader extends StatelessWidget {
   }
 }
 
-/// Reusable card with an icon-led title (and optional subtitle). When
-/// [isRequired] is set, a small "Required" pill is shown next to the title so
-/// directors can see at a glance which sections must be filled in to publish.
 class _SectionCard extends StatelessWidget {
   const _SectionCard({
     required this.icon,

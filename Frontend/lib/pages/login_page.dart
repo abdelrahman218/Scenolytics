@@ -118,17 +118,6 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  void _showForgotPasswordHint() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        behavior: SnackBarBehavior.floating,
-        content: Text(
-          'Password recovery is coming soon — contact your team admin in the meantime.',
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -201,25 +190,7 @@ class _LoginPageState extends State<LoginPage> {
                   return null;
                 },
               ),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: _submitting ? null : _showForgotPasswordHint,
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    minimumSize: const Size(0, 36),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  child: Text(
-                    'Forgot password?',
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      color: cs.primary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 18),
               _GradientPrimaryButton(
                 onPressed: _submitting ? null : _submit,
                 label: 'Sign in',

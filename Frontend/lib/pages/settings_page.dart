@@ -8,7 +8,6 @@ import '../theme/scenolytics_colors.dart';
 import '../theme/theme_controller.dart';
 import '../theme/theme_scope.dart';
 
-/// Appearance (theme), email + in-app notification routing, director Google Calendar link.
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
     super.key,
@@ -23,10 +22,7 @@ class SettingsPage extends StatefulWidget {
   final NotificationsApi notificationsApi;
   final NotificationFeedController? notificationFeed;
 
-  /// Opens OAuth to store Calendar credentials for Meet callbacks (directors only).
   final Future<void> Function()? onDirectorConnectGoogleCalendar;
-
-  /// When true, rendered inside [MainShell] (no duplicate app bar).
   final bool embeddedInShell;
 
   @override

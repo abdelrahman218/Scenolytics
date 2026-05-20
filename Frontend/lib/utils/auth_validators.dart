@@ -109,8 +109,6 @@ String? validateAgeField(String? value) {
   return null;
 }
 
-/// Per-rule password requirements. Used by sign-up to render a live checklist
-/// and to drive the strength meter without re-implementing the validator.
 class PasswordRequirements {
   const PasswordRequirements({
     required this.minLength,
