@@ -15,6 +15,10 @@
 /// **`172.19.x.x` / `10.x.x.x`:** Often Hyper‑V/WSL virtual adapters—the phone on Wi‑Fi
 /// usually cannot reach them. Prefer your **Wireless LAN adapter IPv4** from `ipconfig`, plus
 /// the Docker **API_GATEWAY_PORT** if not 80.
+///
+/// **Notification WebSockets (Socket.IO):** The API Gateway does not proxy this service's
+/// socket endpoint. Override with **`SCENO_NOTIFICATION_SOCKET_URL`** (full origin, no path),
+/// e.g. `http://YOUR_LAN_HOST:6001`, or derive from [apiBaseUrl] using [notificationSocketWsPort].
 class AppEnv {
   /// Raw compile-time value; empty string would make Flutter **web** resolve `/api/...`
   /// against `localhost:<dev-server-port>` (404). Never expose an empty base URL.
@@ -26,6 +30,45 @@ class AppEnv {
   static String get apiBaseUrl {
     final t = _apiBaseUrlEnv.trim();
     return t.isEmpty ? 'http://localhost' : t;
+  }
+
+  /// Full Socket.IO server URL (`http(s)://host:port`). When empty, we build from [apiBaseUrl]
+  /// and [notificationSocketWsPort].
+  static const String _notificationSocketUrlEnv = String.fromEnvironment(
+    'SCENO_NOTIFICATION_SOCKET_URL',
+    defaultValue: '',
+  );
+
+  /// WebSocket port mapped for `notification-service` (see backend `WEB_SOCKET_PORT`, often 6001).
+  static const String _notificationSocketWsPortEnv = String.fromEnvironment(
+    'SCENO_NOTIFICATION_WS_PORT',
+    defaultValue: '6001',
+  );
+
+  static int get notificationSocketWsPort =>
+      int.tryParse(_notificationSocketWsPortEnv.trim()) ?? 6001;
+
+  /// Resolved Socket.IO base URL without trailing slash, or empty string if unavailable.
+  static String get notificationSocketBaseUrl {
+    final override = _notificationSocketUrlEnv.trim();
+    if (override.isNotEmpty) return override.replaceAll(RegExp(r'/$'), '');
+    try {
+      final api = Uri.parse(apiBaseUrl);
+      if (!api.hasScheme || api.host.isEmpty) return '';
+      final port = notificationSocketWsPort;
+      final defaultPort =
+          api.scheme == 'https' ? 443 : (api.scheme == 'http' ? 80 : 0);
+      final usePort =
+          port > 0 && port != api.port && port != defaultPort ? port : null;
+      final built = Uri(
+        scheme: api.scheme,
+        host: api.host,
+        port: usePort,
+      );
+      return built.toString().replaceAll(RegExp(r'/$'), '');
+    } catch (_) {
+      return '';
+    }
   }
 
   /// Public base URL for audition tapes (no trailing slash). Code appends

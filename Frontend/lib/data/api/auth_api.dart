@@ -73,8 +73,10 @@ class AuthApi {
     }
 
     buf.write(
-      'Ensure Docker publishes API_GATEWAY_PORT and Windows Firewall allows inbound '
-      'TCP on that port from your LAN.',
+      'Ensure Docker publishes API_GATEWAY_PORT. On Windows, if Wi‑Fi is a Public network, '
+      'inbound LAN traffic is blocked unless you set the network to Private or run '
+      'Backend/scripts/allow-lan-firewall.ps1 as Administrator. For USB debugging, use '
+      'Frontend/.env.usb after Frontend/scripts/setup-android-usb.ps1.',
     );
 
     return buf.toString().trim();

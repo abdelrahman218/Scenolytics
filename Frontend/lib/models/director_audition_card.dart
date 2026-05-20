@@ -1,4 +1,5 @@
 import 'audition_listing.dart';
+import 'callback_status.dart';
 
 /// Composite row for the director dashboard: a single audition plus the
 /// derived counts (submissions, pending invites, callbacks) and an optional
@@ -10,9 +11,13 @@ class DirectorAuditionCard {
     required this.audition,
     required this.submissionsCount,
     required this.pendingInvitationsCount,
-    required this.callbacksCount,
+    CallbackStatusCounts? callbackStatusCounts,
     this.topSubmissionScore,
-  });
+  }) : callbackStatusCounts =
+            callbackStatusCounts ?? const CallbackStatusCounts();
+
+  /// @deprecated Use [callbackStatusCounts.total].
+  int get callbacksCount => callbackStatusCounts.total;
 
   final AuditionListing audition;
 
@@ -24,9 +29,9 @@ class DirectorAuditionCard {
   /// `GET /api/v1/casting/director/auditions/:id/invitations/pending`.
   final int pendingInvitationsCount;
 
-  /// Number of callbacks from
+  /// Breakdown of `callback_status` from
   /// `GET /api/v1/casting/director/auditions/:id/callbacks`.
-  final int callbacksCount;
+  final CallbackStatusCounts callbackStatusCounts;
 
   /// Best `overall_performance_score` (0–100) seen across submissions, or
   /// null if there are no submissions / no score field on any row.
@@ -40,5 +45,5 @@ class DirectorAuditionCard {
 
   /// Total of all three counts — handy for "X total interactions" summaries.
   int get totalActivity =>
-      submissionsCount + pendingInvitationsCount + callbacksCount;
+      submissionsCount + pendingInvitationsCount + callbackStatusCounts.total;
 }

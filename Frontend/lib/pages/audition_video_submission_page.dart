@@ -1,8 +1,10 @@
 import 'dart:math' as math;
 
 import 'package:camera/camera.dart';
+import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 
 import '../config/app_env.dart';
@@ -10,8 +12,19 @@ import '../data/api/casting_api.dart';
 import '../data/repositories/auditions_repository.dart';
 import '../branding/scenolytics_branding.dart';
 import '../models/actor_audition_submission.dart';
+import '../models/actor_callback.dart';
+import '../models/callback_status.dart';
+import '../widgets/callback_status_chips.dart';
+import '../models/audition_submission_status.dart';
 import '../theme/scenolytics_colors.dart';
 import '../widgets/scenolytics_footer.dart';
+
+enum _SubmissionRecordingGate {
+  open,
+  pendingReview,
+  accepted,
+  rejected,
+}
 
 class AuditionVideoSubmissionPage extends StatefulWidget {
   const AuditionVideoSubmissionPage({
@@ -60,11 +73,73 @@ class _AuditionVideoSubmissionPageState
   String _actorDisplayName = '';
   int? _actorAge;
 
+  /// From casting list API for this audition (when returning to the page).
+  AuditionSubmissionStatus? _serverSubmissionStatus;
+
   /// Resolved from [AuditionVideoSubmissionPage.auditionId], casting API, then
   /// optional compile-time [AppEnv.auditionId].
   String _effectiveAuditionId = '';
 
   bool _isResolvingAuditionId = false;
+
+  List<ActorCallbackInfo> _actorCallbacks = const [];
+
+  _SubmissionRecordingGate get _recordingGate {
+    if (!_hasSubmittedForAudition) return _SubmissionRecordingGate.open;
+    final s = _lastSubmission?.submissionStatus ??
+        _serverSubmissionStatus ??
+        AuditionSubmissionStatus.pending;
+    if (s == AuditionSubmissionStatus.rejected) {
+      return _SubmissionRecordingGate.rejected;
+    }
+    if (s == AuditionSubmissionStatus.accepted) {
+      return _SubmissionRecordingGate.accepted;
+    }
+    return _SubmissionRecordingGate.pendingReview;
+  }
+
+  ActorCallbackInfo? get _callbackForThisAudition {
+    final aid = _effectiveAuditionId.trim();
+    if (aid.isEmpty) return null;
+    final matches =
+        _actorCallbacks.where((c) => c.auditionId == aid).toList();
+    if (matches.isEmpty) return null;
+    matches.sort((a, b) {
+      final ta = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final tb = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return tb.compareTo(ta);
+    });
+    return matches.first;
+  }
+
+  String _formatCallbackDate(DateTime dt) {
+    String p2(int n) => n.toString().padLeft(2, '0');
+    final l = dt.toLocal();
+    return '${l.year}-${p2(l.month)}-${p2(l.day)} ${p2(l.hour)}:${p2(l.minute)}';
+  }
+
+  Future<void> _openMeetLink(String raw) async {
+    final uri = Uri.tryParse(raw.trim());
+    if (uri == null ||
+        !(uri.hasScheme &&
+            (uri.scheme == 'http' || uri.scheme == 'https'))) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No valid meeting link is available yet.'),
+        ),
+      );
+      return;
+    }
+    final ok =
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!mounted) return;
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open the meeting link.')),
+      );
+    }
+  }
 
   @override
   void initState() {
@@ -119,7 +194,22 @@ class _AuditionVideoSubmissionPageState
   }
 
   Future<void> _loadAuditionAndActorFromBackend() async {
-    await Future.wait([_loadAuditionUi(), _loadActorProfileFromBackend()]);
+    await Future.wait([
+      _loadAuditionUi(),
+      _loadActorProfileFromBackend(),
+      _loadActorCallbacks(),
+    ]);
+  }
+
+  Future<void> _loadActorCallbacks() async {
+    if (widget.actorToken.trim().isEmpty) return;
+    try {
+      final list = await widget.auditionsRepository.loadActorCallbacks(
+        actorToken: widget.actorToken,
+      );
+      if (!mounted) return;
+      setState(() => _actorCallbacks = list);
+    } catch (_) {}
   }
 
   Future<void> _loadAuditionUi() async {
@@ -140,6 +230,7 @@ class _AuditionVideoSubmissionPageState
         _auditionDescription = ui.description;
         _scriptPlainText = ui.scriptPlainText;
         _mySubmissionCountForAudition = ui.mySubmissionCountForAudition;
+        _serverSubmissionStatus = ui.myLatestSubmissionStatus;
         if (ui.emotionsCsv.trim().isNotEmpty) {
           _requestedEmotion = ui.emotionsCsv;
         }
@@ -151,6 +242,121 @@ class _AuditionVideoSubmissionPageState
     } catch (_) {
       // Leave labels empty when casting/user-management data is unavailable.
     }
+  }
+
+  Widget? _buildPipelineStatusBanner(ThemeData theme, ColorScheme cs) {
+    if (_isSubmitting) {
+      return _pipelineStatusCard(
+        theme,
+        cs,
+        title: 'Uploading your video',
+        subtitle:
+            'Your file is being transferred securely. Keep this screen open.',
+        leading: Icons.cloud_upload_rounded,
+        fg: cs.onPrimaryContainer,
+        bg: cs.primaryContainer,
+      );
+    }
+    final status =
+        _lastSubmission?.submissionStatus ?? _serverSubmissionStatus;
+    if (status == null) return null;
+
+    final (String title, String subtitle, IconData icon, Color fg, Color bg) =
+        switch (status) {
+      AuditionSubmissionStatus.pending => (
+          'Pending',
+          'Your recording is ingested; automated scoring runs next.',
+          Icons.hourglass_top_rounded,
+          cs.onTertiaryContainer,
+          cs.tertiaryContainer,
+        ),
+      AuditionSubmissionStatus.underReview => (
+          'Under review',
+          'The casting team is reviewing your performance.',
+          Icons.visibility_rounded,
+          cs.onPrimaryContainer,
+          cs.primaryContainer,
+        ),
+      AuditionSubmissionStatus.accepted => (
+          'Accepted',
+          'The director accepted your audition.',
+          Icons.verified_rounded,
+          cs.onSecondaryContainer,
+          cs.secondaryContainer,
+        ),
+      AuditionSubmissionStatus.rejected => (
+          'Rejected',
+          'This audition was not selected. You can explore other roles.',
+          Icons.highlight_off_rounded,
+          cs.onErrorContainer,
+          cs.errorContainer,
+        ),
+      AuditionSubmissionStatus.unknown => (
+          'Submission',
+          'Status will update when the server finishes processing.',
+          Icons.info_outline_rounded,
+          cs.onSurfaceVariant,
+          cs.surfaceContainerHighest,
+        ),
+    };
+
+    return _pipelineStatusCard(
+      theme,
+      cs,
+      title: title,
+      subtitle: subtitle,
+      leading: icon,
+      fg: fg,
+      bg: bg,
+    );
+  }
+
+  Widget _pipelineStatusCard(
+    ThemeData theme,
+    ColorScheme cs, {
+    required String title,
+    required String subtitle,
+    required IconData leading,
+    required Color fg,
+    required Color bg,
+  }) {
+    return Material(
+      color: bg,
+      elevation: 2,
+      borderRadius: BorderRadius.circular(18),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(leading, color: fg, size: 26),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: fg,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: fg.withValues(alpha: 0.92),
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -328,7 +534,7 @@ class _AuditionVideoSubmissionPageState
   }
 
   Future<void> _openFullScreenRecorder() async {
-    if (_hasSubmittedForAudition) return;
+    if (_recordingGate != _SubmissionRecordingGate.open) return;
     if (_isFullScreenRecorderOpen) return;
 
     await _ensureCameraInitialized();
@@ -552,7 +758,71 @@ class _AuditionVideoSubmissionPageState
     setState(() => _isFullScreenRecorderOpen = false);
   }
 
-  Future<void> _copyScriptToClipboard() async {
+  String _sanitizedScriptPdfBasename() {
+    var base = _auditionTitle
+        .trim()
+        .replaceAll(RegExp(r'[<>:"/\\|?*\x00-\x1F]'), '')
+        .replaceAll(RegExp(r'\s+'), '_');
+    if (base.isEmpty) base = 'audition_script';
+    if (base.length > 64) base = base.substring(0, 64);
+    return base;
+  }
+
+  Future<void> _downloadScriptAsPdf() async {
+    final configError = AppEnv.validateActorSubmissionFor(
+      actorToken: widget.actorToken,
+      auditionId: _effectiveAuditionId,
+    );
+    if (configError != null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(configError)));
+      return;
+    }
+
+    try {
+      final bytes =
+          await widget.auditionsRepository.downloadActorAuditionScriptPdf(
+        actorToken: widget.actorToken,
+        auditionId: _effectiveAuditionId,
+      );
+      final base = _sanitizedScriptPdfBasename();
+
+      await FileSaver.instance.saveFile(
+        name: base,
+        bytes: bytes,
+        fileExtension: 'pdf',
+        mimeType: MimeType.pdf,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Script downloaded as PDF.'),
+          action: SnackBarAction(
+            label: 'Copy text',
+            onPressed: _copyPlainScriptToClipboard,
+          ),
+        ),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not download script (${e.runtimeType}).'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _copyPlainScriptToClipboard() async {
     final body = _scriptPlainText.trim();
     if (body.isEmpty) {
       if (!mounted) return;
@@ -571,16 +841,18 @@ class _AuditionVideoSubmissionPageState
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Script copied. Paste into a document to save or print.'),
+        content: Text(
+          'Plain script copied — paste elsewhere if you need the raw text.',
+        ),
       ),
     );
   }
 
   Future<void> _submit() async {
-    if (_hasSubmittedForAudition) {
+    if (_recordingGate != _SubmissionRecordingGate.open) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('You already submitted for this audition.'),
+          content: Text('You already have a submission on file for this audition.'),
         ),
       );
       return;
@@ -677,6 +949,7 @@ class _AuditionVideoSubmissionPageState
       );
 
       await _loadAuditionUi();
+      await _loadActorCallbacks();
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() => _isSubmitting = false);
@@ -697,6 +970,7 @@ class _AuditionVideoSubmissionPageState
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final b = theme.brightness;
+    final pipelineBanner = _buildPipelineStatusBanner(theme, cs);
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -736,10 +1010,12 @@ class _AuditionVideoSubmissionPageState
                     requestedEmotion: _requestedEmotion,
                     directorName: _directorName,
                     mySubmissionCount: _mySubmissionCountForAudition,
-                    onDownloadScript: () {
-                      _copyScriptToClipboard();
-                    },
+                    onDownloadScript: _downloadScriptAsPdf,
                   ),
+                  if (pipelineBanner != null) ...[
+                    const SizedBox(height: 16),
+                    pipelineBanner,
+                  ],
                   const SizedBox(height: 20),
                   Material(
                     color: b == Brightness.dark
@@ -811,13 +1087,27 @@ class _AuditionVideoSubmissionPageState
                               isInitializing: _isInitializingCamera,
                               isRecording: _isRecording,
                               isPreviewing: _isPreviewing,
-                              isLocked: _hasSubmittedForAudition,
+                              recordingGate: _recordingGate,
+                              callbackScheduledAt:
+                                  _callbackForThisAudition?.callbackDatetime,
+                              callbackStatus:
+                                  _callbackForThisAudition?.callbackStatus,
+                              callbackMeetLink:
+                                  _callbackForThisAudition?.link,
                               onStartRecording: _startRecording,
                               onStopRecording: _stopRecording,
                               onRequestFullScreen: _openFullScreenRecorder,
+                              formatCallbackDate: _formatCallbackDate,
+                              onOpenMeetLink: () {
+                                final link =
+                                    _callbackForThisAudition?.link?.trim() ??
+                                        '';
+                                if (link.isNotEmpty) _openMeetLink(link);
+                              },
                             ),
                           const SizedBox(height: 18),
-                          if (!_hasSubmittedForAudition &&
+                          if (_recordingGate ==
+                                  _SubmissionRecordingGate.open &&
                               !_isResolvingAuditionId &&
                               !_isCheckingExistingSubmission &&
                               _effectiveAuditionId.trim().isNotEmpty)
@@ -1024,8 +1314,7 @@ class _SubmissionHeroCard extends StatelessWidget {
   }
 }
 
-/// Same chrome as director rankings filter: gradient pill + “Download script”
-/// on every platform (web and phone).
+/// Same chrome as director rankings filter: gradient pill — saves script as PDF.
 class _HeroScriptDownloadChip extends StatelessWidget {
   const _HeroScriptDownloadChip({required this.onPressed});
 
@@ -1035,7 +1324,7 @@ class _HeroScriptDownloadChip extends StatelessWidget {
   Widget build(BuildContext context) {
     const radius = 20.0;
     return Tooltip(
-      message: 'Download script',
+      message: 'Download audition script as a PDF',
       child: Material(
         color: Colors.transparent,
         elevation: 3,
@@ -1057,14 +1346,14 @@ class _HeroScriptDownloadChip extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(
-                    Icons.description_outlined,
+                  Icon(
+                    Icons.picture_as_pdf_outlined,
                     size: 18,
                     color: ScenolyticsColors.webRankingsFilterForeground,
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'Download script',
+                    'Download script (PDF)',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
                       color: ScenolyticsColors.webRankingsFilterForeground,
                       fontWeight: FontWeight.w600,
@@ -1181,10 +1470,15 @@ class _RecordingCard extends StatelessWidget {
     required this.isInitializing,
     required this.isRecording,
     required this.isPreviewing,
-    required this.isLocked,
+    required this.recordingGate,
+    this.callbackScheduledAt,
+    this.callbackStatus,
+    this.callbackMeetLink,
     required this.onStartRecording,
     required this.onStopRecording,
     required this.onRequestFullScreen,
+    required this.formatCallbackDate,
+    required this.onOpenMeetLink,
   });
 
   final CameraController? cameraController;
@@ -1192,18 +1486,61 @@ class _RecordingCard extends StatelessWidget {
   final bool isInitializing;
   final bool isRecording;
   final bool isPreviewing;
-  final bool isLocked;
+  final _SubmissionRecordingGate recordingGate;
+  final DateTime? callbackScheduledAt;
+  final CallbackStatus? callbackStatus;
+  final String? callbackMeetLink;
   final VoidCallback onStartRecording;
   final VoidCallback onStopRecording;
   final VoidCallback onRequestFullScreen;
+  final String Function(DateTime dt) formatCallbackDate;
+  final VoidCallback onOpenMeetLink;
+
+  String get _callbackHeadline {
+    switch (callbackStatus) {
+      case CallbackStatus.accepted:
+        return 'Callback accepted';
+      case CallbackStatus.rejected:
+        return 'Callback declined';
+      case CallbackStatus.scheduled:
+      case CallbackStatus.unknown:
+      case null:
+        return 'Callback scheduled';
+    }
+  }
+
+  String get _callbackBodyText {
+    switch (callbackStatus) {
+      case CallbackStatus.rejected:
+        return 'This callback was declined or cancelled. You can explore other '
+            'roles from Explore Auditions.';
+      case CallbackStatus.accepted:
+        if (callbackScheduledAt != null) {
+          return 'Confirmed for ${formatCallbackDate(callbackScheduledAt!)}';
+        }
+        return 'Your callback was accepted.';
+      case CallbackStatus.scheduled:
+      case CallbackStatus.unknown:
+      case null:
+        if (callbackScheduledAt != null) {
+          return 'Scheduled for ${formatCallbackDate(callbackScheduledAt!)}';
+        }
+        return 'Your audition was accepted. Callback scheduling details will '
+            'appear here once they are saved.';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final hasPreview =
         isPreviewing &&
         videoController != null &&
         videoController!.value.isInitialized;
+
+    final meet =
+        callbackMeetLink?.trim().isNotEmpty ?? false ? callbackMeetLink!.trim() : '';
 
     return Container(
       decoration: BoxDecoration(
@@ -1219,14 +1556,93 @@ class _RecordingCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (isLocked)
-            Text(
-              'Submission sent. You have already submitted for this audition.',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w600,
+          if (recordingGate != _SubmissionRecordingGate.open) ...[
+            if (recordingGate == _SubmissionRecordingGate.rejected)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.highlight_off_rounded,
+                      color: cs.error, size: 26),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'This audition was not selected. You can explore other '
+                      'roles from Explore Auditions.',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            else if (recordingGate == _SubmissionRecordingGate.accepted)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.celebration_rounded,
+                          color: cs.primary, size: 26),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _callbackHeadline,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      if (callbackStatus != null &&
+                          callbackStatus != CallbackStatus.unknown)
+                        CallbackStatusChip(
+                          status: callbackStatus!,
+                          dense: true,
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    _callbackBodyText,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      height: 1.35,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                  if (meet.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: onOpenMeetLink,
+                      icon: const Icon(Icons.video_camera_front_outlined),
+                      label: const Text('Join Meet link'),
+                    ),
+                  ] else if (callbackScheduledAt != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'A Google Meet link will show here after your director '
+                      'connects Calendar and generates the invite.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ],
+              )
+            else
+              Text(
+                'Submission sent. You have already submitted for this audition.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            )
-          else ...[
+          ] else ...[
+            if (isInitializing)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 14),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else ...[
             Row(
               children: [
                 Icon(Icons.videocam_rounded, color: theme.colorScheme.primary),
@@ -1300,7 +1716,6 @@ class _RecordingCard extends StatelessWidget {
                   );
                 }
 
-                // Preview: keep it single-line friendly, but allow wrapping.
                 return Text(
                   'Preview ready. Tap Submit below to send your audition.',
                   style: theme.textTheme.bodySmall,
@@ -1309,6 +1724,7 @@ class _RecordingCard extends StatelessWidget {
                 );
               },
             ),
+          ],
           ],
         ],
       ),

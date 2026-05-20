@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../branding/scenolytics_branding.dart';
+import '../data/api/notifications_api.dart';
+import '../data/notification_feed_controller.dart';
 import '../theme/scenolytics_colors.dart';
 import 'account_menu_button.dart';
 
@@ -13,10 +15,16 @@ class ScenolyticsAppDrawer extends StatelessWidget {
     this.onSelectCreateAudition,
     this.onSelectSubmitVideo,
     this.onSelectExploreAuditions,
+    this.onSelectActorDashboard,
     this.onSelectDirectorDashboard,
+    this.onSelectMissedNotifies,
     this.showActorNav = true,
     this.showDirectorNav = true,
     this.onLogout,
+    this.authJwtForSettings,
+    this.notificationsApi,
+    this.notificationFeed,
+    this.onDirectorConnectGoogleCalendar,
   });
 
   final String? currentRouteName;
@@ -25,10 +33,16 @@ class ScenolyticsAppDrawer extends StatelessWidget {
   final VoidCallback? onSelectCreateAudition;
   final VoidCallback? onSelectSubmitVideo;
   final VoidCallback? onSelectExploreAuditions;
+  final VoidCallback? onSelectActorDashboard;
   final VoidCallback? onSelectDirectorDashboard;
+  final VoidCallback? onSelectMissedNotifies;
   final bool showActorNav;
   final bool showDirectorNav;
   final Future<void> Function()? onLogout;
+  final String? authJwtForSettings;
+  final NotificationsApi? notificationsApi;
+  final NotificationFeedController? notificationFeed;
+  final Future<void> Function()? onDirectorConnectGoogleCalendar;
 
   @override
   Widget build(BuildContext context) {
@@ -36,9 +50,20 @@ class ScenolyticsAppDrawer extends StatelessWidget {
     final logo = ScenolyticsBranding.of(context).logo;
     final tapCreateAudition = onSelectCreateAudition;
     final tapExplore = onSelectExploreAuditions;
+    final tapActorDashboard = onSelectActorDashboard;
     final tapDashboard = onSelectDirectorDashboard;
 
     final navTiles = <Widget>[
+      if (showActorNav && tapActorDashboard != null)
+        _DrawerTile(
+          icon: Icons.dashboard_outlined,
+          label: 'My dashboard',
+          selected: currentRouteName == 'actor-dashboard',
+          onTap: () {
+            Navigator.pop(context);
+            tapActorDashboard();
+          },
+        ),
       if (showActorNav && tapExplore != null)
         _DrawerTile(
           icon: Icons.explore_outlined,
@@ -89,13 +114,40 @@ class ScenolyticsAppDrawer extends StatelessWidget {
             tapCreateAudition();
           },
         ),
+      if (onSelectMissedNotifies != null)
+        _DrawerTile(
+          icon: Icons.notifications_paused_rounded,
+          label: 'Missed notifies',
+          selected: currentRouteName == 'missed-notifies',
+          onTap: () {
+            Navigator.pop(context);
+            onSelectMissedNotifies!();
+          },
+        ),
       _DrawerTile(
         icon: Icons.settings_outlined,
         label: 'Settings',
         selected: false,
         onTap: () {
           Navigator.pop(context);
-          AccountMenuButton.openSettings(context);
+          final jwt = (authJwtForSettings ?? '').trim();
+          final api = notificationsApi;
+          if (jwt.isEmpty || api == null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content:
+                    Text('Settings need an active profile session.'),
+              ),
+            );
+            return;
+          }
+          AccountMenuButton.openSettings(
+            context,
+            authJwt: jwt,
+            notificationsApi: api,
+            notificationFeed: notificationFeed,
+            onDirectorConnectGoogleCalendar: onDirectorConnectGoogleCalendar,
+          );
         },
       ),
     ];

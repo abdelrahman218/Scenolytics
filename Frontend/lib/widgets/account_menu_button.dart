@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../data/api/notifications_api.dart';
 import '../data/api/user_management_api.dart';
 import '../data/models/auth_user.dart';
+import '../data/notification_feed_controller.dart';
 import '../pages/profile_page.dart';
 import '../pages/settings_page.dart';
 
@@ -12,20 +14,30 @@ class AccountMenuButton extends StatelessWidget {
   const AccountMenuButton({
     super.key,
     required this.usePopupMenu,
+    this.authJwtForSettings,
+    this.notificationsApi,
+    this.notificationFeed,
     this.userEmail,
     this.accountRoleLabel,
     this.authUser,
     this.userManagementApi,
     this.onLogOut,
+    this.onDirectorConnectGoogleCalendar,
   });
 
   /// `true` when layout is wide (inline nav) — show a dropdown menu.
   final bool usePopupMenu;
+
+  /// Session token for authenticated notification preference APIs when opening Settings.
+  final String? authJwtForSettings;
+  final NotificationsApi? notificationsApi;
+  final NotificationFeedController? notificationFeed;
   final String? userEmail;
   final String? accountRoleLabel;
   final AuthUser? authUser;
   final UserManagementApi? userManagementApi;
   final Future<void> Function()? onLogOut;
+  final Future<void> Function()? onDirectorConnectGoogleCalendar;
 
   static void openProfile(
     BuildContext context, {
@@ -46,9 +58,33 @@ class AccountMenuButton extends StatelessWidget {
     );
   }
 
-  static void openSettings(BuildContext context) {
+  static void openSettings(
+    BuildContext context, {
+    required String authJwt,
+    required NotificationsApi notificationsApi,
+    NotificationFeedController? notificationFeed,
+    Future<void> Function()? onDirectorConnectGoogleCalendar,
+  }) {
+    final jwt = authJwt.trim();
+    if (jwt.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('Sign in again to adjust notification routing preferences.'),
+        ),
+      );
+      return;
+    }
+
     Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(builder: (_) => const SettingsPage()),
+      MaterialPageRoute<void>(
+        builder: (_) => SettingsPage(
+          authJwt: jwt,
+          notificationsApi: notificationsApi,
+          notificationFeed: notificationFeed,
+          onDirectorConnectGoogleCalendar: onDirectorConnectGoogleCalendar,
+        ),
+      ),
     );
   }
 
@@ -85,6 +121,10 @@ class AccountMenuButton extends StatelessWidget {
     String? roleLabel,
     AuthUser? user,
     UserManagementApi? api,
+    String? jwt,
+    NotificationsApi? notificationsApi,
+    NotificationFeedController? notificationFeed,
+    Future<void> Function()? onDirectorConnectGoogleCalendar,
   }) {
     switch (action) {
       case _AccountAction.profile:
@@ -96,7 +136,25 @@ class AccountMenuButton extends StatelessWidget {
           userManagementApi: api,
         );
       case _AccountAction.settings:
-        openSettings(context);
+        final prefsApi = notificationsApi;
+        final token = jwt?.trim() ?? '';
+        if (prefsApi == null || token.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Unable to reach notification preferences right now',
+              ),
+            ),
+          );
+          return;
+        }
+        openSettings(
+          context,
+          authJwt: token,
+          notificationsApi: prefsApi,
+          notificationFeed: notificationFeed,
+          onDirectorConnectGoogleCalendar: onDirectorConnectGoogleCalendar,
+        );
       case _AccountAction.help:
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Help & support — coming soon.')),
@@ -148,6 +206,10 @@ class AccountMenuButton extends StatelessWidget {
             roleLabel: accountRoleLabel,
             user: authUser,
             api: userManagementApi,
+            jwt: authJwtForSettings,
+            notificationsApi: notificationsApi,
+            notificationFeed: notificationFeed,
+            onDirectorConnectGoogleCalendar: onDirectorConnectGoogleCalendar,
           ),
       itemBuilder: (context) => [
         PopupMenuItem(

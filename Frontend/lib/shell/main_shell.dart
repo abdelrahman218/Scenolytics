@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../branding/scenolytics_branding.dart';
+import '../data/api/notifications_api.dart';
 import '../data/api/user_management_api.dart';
 import '../data/models/auth_user.dart';
+import '../data/notification_feed_controller.dart';
 import '../widgets/account_menu_button.dart';
+import '../widgets/chrome_notifications_header_control.dart';
 import '../widgets/scenolytics_app_drawer.dart';
 
 /// App chrome: full-width header + drawer on narrow screens; account menu at the trailing edge.
@@ -18,6 +21,7 @@ class MainShell extends StatefulWidget {
     this.onSelectCreateAudition,
     this.onSelectSubmitVideo,
     this.onSelectExploreAuditions,
+    this.onSelectActorDashboard,
     this.onSelectDirectorDashboard,
     this.showActorNav = true,
     this.showDirectorNav = true,
@@ -26,6 +30,13 @@ class MainShell extends StatefulWidget {
     this.authUser,
     this.userManagementApi,
     this.onLogout,
+    this.notificationsApi,
+    this.notificationFeed,
+    this.authJwtForSettings,
+    this.showChromeAlertsBell = false,
+    this.onOpenMissedNotifiesDetached,
+    this.onSelectMissedNotifiesShell,
+    this.onDirectorConnectGoogleCalendar,
   });
 
   final Widget body;
@@ -36,6 +47,7 @@ class MainShell extends StatefulWidget {
   final VoidCallback? onSelectCreateAudition;
   final VoidCallback? onSelectSubmitVideo;
   final VoidCallback? onSelectExploreAuditions;
+  final VoidCallback? onSelectActorDashboard;
   final VoidCallback? onSelectDirectorDashboard;
   final bool showActorNav;
   final bool showDirectorNav;
@@ -44,6 +56,13 @@ class MainShell extends StatefulWidget {
   final AuthUser? authUser;
   final UserManagementApi? userManagementApi;
   final Future<void> Function()? onLogout;
+  final NotificationsApi? notificationsApi;
+  final NotificationFeedController? notificationFeed;
+  final String? authJwtForSettings;
+  final bool showChromeAlertsBell;
+  final VoidCallback? onOpenMissedNotifiesDetached;
+  final VoidCallback? onSelectMissedNotifiesShell;
+  final Future<void> Function()? onDirectorConnectGoogleCalendar;
 
   static const double drawerBreakpoint = 760;
 
@@ -78,10 +97,17 @@ class _MainShellState extends State<MainShell> {
               onSelectCreateAudition: widget.onSelectCreateAudition,
               onSelectSubmitVideo: widget.onSelectSubmitVideo,
               onSelectExploreAuditions: widget.onSelectExploreAuditions,
+              onSelectActorDashboard: widget.onSelectActorDashboard,
               onSelectDirectorDashboard: widget.onSelectDirectorDashboard,
+              onSelectMissedNotifies: widget.onSelectMissedNotifiesShell,
               showActorNav: widget.showActorNav,
               showDirectorNav: widget.showDirectorNav,
               onLogout: widget.onLogout,
+              authJwtForSettings: widget.authJwtForSettings,
+              notificationsApi: widget.notificationsApi,
+              notificationFeed: widget.notificationFeed,
+              onDirectorConnectGoogleCalendar:
+                  widget.onDirectorConnectGoogleCalendar,
             )
           : null,
       drawerEnableOpenDragGesture: useDrawer,
@@ -103,6 +129,7 @@ class _MainShellState extends State<MainShell> {
             onSelectCreateAudition: widget.onSelectCreateAudition,
             onSelectSubmitVideo: widget.onSelectSubmitVideo,
             onSelectExploreAuditions: widget.onSelectExploreAuditions,
+            onSelectActorDashboard: widget.onSelectActorDashboard,
             onSelectDirectorDashboard: widget.onSelectDirectorDashboard,
             showActorNav: widget.showActorNav,
             showDirectorNav: widget.showDirectorNav,
@@ -111,6 +138,16 @@ class _MainShellState extends State<MainShell> {
             authUser: widget.authUser,
             userManagementApi: widget.userManagementApi,
             onLogout: widget.onLogout,
+            showChromeAlertsBell:
+                widget.showChromeAlertsBell && widget.notificationFeed != null,
+            notificationsFeed: widget.notificationFeed,
+            onOpenMissedNotifiesDetached: widget.onOpenMissedNotifiesDetached,
+            denseChromeAlerts:
+                MediaQuery.sizeOf(context).width >= MainShell.drawerBreakpoint,
+            authJwtForSettings: widget.authJwtForSettings,
+            notificationsApi: widget.notificationsApi,
+            onDirectorConnectGoogleCalendar:
+                widget.onDirectorConnectGoogleCalendar,
           ),
           Expanded(child: widget.body),
         ],
@@ -130,6 +167,7 @@ class _HeaderBar extends StatelessWidget {
     this.onSelectCreateAudition,
     this.onSelectSubmitVideo,
     this.onSelectExploreAuditions,
+    this.onSelectActorDashboard,
     this.onSelectDirectorDashboard,
     this.pageTitle,
     this.showActorNav = true,
@@ -139,6 +177,13 @@ class _HeaderBar extends StatelessWidget {
     this.authUser,
     this.userManagementApi,
     this.onLogout,
+    this.showChromeAlertsBell = false,
+    this.notificationsFeed,
+    this.onOpenMissedNotifiesDetached,
+    this.denseChromeAlerts = false,
+    this.authJwtForSettings,
+    this.notificationsApi,
+    this.onDirectorConnectGoogleCalendar,
   });
 
   final bool showMenu;
@@ -150,6 +195,7 @@ class _HeaderBar extends StatelessWidget {
   final VoidCallback? onSelectCreateAudition;
   final VoidCallback? onSelectSubmitVideo;
   final VoidCallback? onSelectExploreAuditions;
+  final VoidCallback? onSelectActorDashboard;
   final VoidCallback? onSelectDirectorDashboard;
   final String? pageTitle;
   final bool showActorNav;
@@ -159,6 +205,13 @@ class _HeaderBar extends StatelessWidget {
   final AuthUser? authUser;
   final UserManagementApi? userManagementApi;
   final Future<void> Function()? onLogout;
+  final bool showChromeAlertsBell;
+  final NotificationFeedController? notificationsFeed;
+  final VoidCallback? onOpenMissedNotifiesDetached;
+  final bool denseChromeAlerts;
+  final String? authJwtForSettings;
+  final NotificationsApi? notificationsApi;
+  final Future<void> Function()? onDirectorConnectGoogleCalendar;
 
   @override
   Widget build(BuildContext context) {
@@ -167,6 +220,7 @@ class _HeaderBar extends StatelessWidget {
     final showInlineNav = width >= MainShell.drawerBreakpoint;
     final tapCreateAudition = onSelectCreateAudition;
     final tapExplore = onSelectExploreAuditions;
+    final tapActorDashboard = onSelectActorDashboard;
     final tapDashboard = onSelectDirectorDashboard;
 
     return Material(
@@ -225,6 +279,14 @@ class _HeaderBar extends StatelessWidget {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   const SizedBox(width: 16),
+                                  if (showActorNav && tapActorDashboard != null)
+                                    _NavButton(
+                                      icon: Icons.dashboard_outlined,
+                                      label: 'My dashboard',
+                                      filled: currentRouteName ==
+                                          'actor-dashboard',
+                                      onPressed: tapActorDashboard,
+                                    ),
                                   if (showActorNav && tapExplore != null)
                                     _NavButton(
                                       icon: Icons.explore_outlined,
@@ -280,13 +342,35 @@ class _HeaderBar extends StatelessWidget {
               // Trailing inset so the account control is not flush with the viewport edge.
               Padding(
                 padding: const EdgeInsets.fromLTRB(0, 10, 8, 10),
-                child: AccountMenuButton(
-                  usePopupMenu: showInlineNav,
-                  userEmail: accountEmail,
-                  accountRoleLabel: accountRoleLabel,
-                  authUser: authUser,
-                  userManagementApi: userManagementApi,
-                  onLogOut: onLogout,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    if (showChromeAlertsBell &&
+                        notificationsFeed != null &&
+                        onOpenMissedNotifiesDetached != null)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 2),
+                        child: ChromeNotificationsHeaderControl(
+                          controller: notificationsFeed!,
+                          dense: denseChromeAlerts,
+                          onOpenFullListing: onOpenMissedNotifiesDetached!,
+                        ),
+                      ),
+                    AccountMenuButton(
+                      usePopupMenu: showInlineNav,
+                      authJwtForSettings: authJwtForSettings,
+                      notificationsApi: notificationsApi,
+                      notificationFeed: notificationsFeed,
+                      userEmail: accountEmail,
+                      accountRoleLabel: accountRoleLabel,
+                      authUser: authUser,
+                      userManagementApi: userManagementApi,
+                      onLogOut: onLogout,
+                      onDirectorConnectGoogleCalendar:
+                          onDirectorConnectGoogleCalendar,
+                    ),
+                  ],
                 ),
               ),
             ],

@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../data/api/casting_api.dart';
 import '../data/repositories/auditions_repository.dart';
+import '../models/callback_status.dart';
 import '../models/director_audition_card.dart';
 import '../theme/scenolytics_colors.dart';
+import '../widgets/callback_status_chips.dart';
 import '../widgets/scenolytics_footer.dart';
 
 /// Director-facing dashboard. Lists every audition the signed-in director
@@ -21,6 +23,7 @@ class DirectorDashboardPage extends StatefulWidget {
     required this.directorDisplayName,
     required this.onOpenRankings,
     required this.onCreateAudition,
+    required this.onEditAudition,
   });
 
   final AuditionsRepository auditionsRepository;
@@ -35,8 +38,11 @@ class DirectorDashboardPage extends StatefulWidget {
   /// state or hero — parent shell switches to the creation page.
   final VoidCallback onCreateAudition;
 
+  /// Called when the director taps "Edit" on a dashboard card.
+  final ValueChanged<DirectorAuditionCard> onEditAudition;
+
   @override
-  State<DirectorDashboardPage> createState() => _DirectorDashboardPageState();
+  State<DirectorDashboardPage> createState() => DirectorDashboardPageState();
 }
 
 enum _SortMode {
@@ -67,7 +73,7 @@ extension _SortModeX on _SortMode {
   }
 }
 
-class _DirectorDashboardPageState extends State<DirectorDashboardPage> {
+class DirectorDashboardPageState extends State<DirectorDashboardPage> {
   // Breakpoints aligned with MainShell / Explore so layout switches in lockstep.
   static const double _wideBreakpoint = 900;
   static const double _xWideBreakpoint = 1280;
@@ -78,6 +84,9 @@ class _DirectorDashboardPageState extends State<DirectorDashboardPage> {
   bool _loading = true;
   String? _loadError;
   List<DirectorAuditionCard> _all = const <DirectorAuditionCard>[];
+
+  /// Refreshes audition cards (e.g. after create or edit in the shell).
+  Future<void> refresh() => _refresh();
 
   // Filter / sort state
   String _searchQuery = '';
@@ -103,10 +112,12 @@ class _DirectorDashboardPageState extends State<DirectorDashboardPage> {
   }
 
   Future<void> _refresh() async {
-    setState(() {
-      _loading = true;
-      _loadError = null;
-    });
+    final firstLoad = _all.isEmpty && _loadError == null;
+    if (firstLoad) {
+      setState(() => _loading = true);
+    } else {
+      setState(() => _loadError = null);
+    }
     try {
       final cards = await widget.auditionsRepository.loadDirectorDashboard(
         directorToken: widget.directorToken,
@@ -120,8 +131,9 @@ class _DirectorDashboardPageState extends State<DirectorDashboardPage> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _loadError =
-            'Could not load your auditions (${e.runtimeType}). Pull to retry.';
+        _loadError = firstLoad
+            ? 'Could not load your auditions (${e.runtimeType}). Pull to retry.'
+            : 'Could not refresh (${e.runtimeType}). Pull to retry.';
       });
     }
   }
@@ -154,8 +166,10 @@ class _DirectorDashboardPageState extends State<DirectorDashboardPage> {
       _all.fold<int>(0, (acc, c) => acc + c.submissionsCount);
   int get _totalPending =>
       _all.fold<int>(0, (acc, c) => acc + c.pendingInvitationsCount);
-  int get _totalCallbacks =>
-      _all.fold<int>(0, (acc, c) => acc + c.callbacksCount);
+  CallbackStatusCounts get _totalCallbackBreakdown => _all.fold(
+        const CallbackStatusCounts(),
+        (acc, c) => acc + c.callbackStatusCounts,
+      );
 
   List<DirectorAuditionCard> get _filtered {
     final q = _searchQuery.trim().toLowerCase();
@@ -324,7 +338,7 @@ class _DirectorDashboardPageState extends State<DirectorDashboardPage> {
               totalAuditions: _totalAuditions,
               totalSubmissions: _totalSubmissions,
               totalPending: _totalPending,
-              totalCallbacks: _totalCallbacks,
+              callbackBreakdown: _totalCallbackBreakdown,
               onCreateAudition: widget.onCreateAudition,
               isWide: isWide,
             ),
@@ -426,6 +440,7 @@ class _DirectorDashboardPageState extends State<DirectorDashboardPage> {
                         card: filtered[i],
                         onOpenRankings: () =>
                             widget.onOpenRankings(filtered[i]),
+                        onEdit: () => widget.onEditAudition(filtered[i]),
                         onDelete: () => _confirmAndDelete(filtered[i]),
                       ),
                       childCount: filtered.length,
@@ -437,6 +452,7 @@ class _DirectorDashboardPageState extends State<DirectorDashboardPage> {
                     itemBuilder: (context, i) => _DashboardAuditionCard(
                       card: filtered[i],
                       onOpenRankings: () => widget.onOpenRankings(filtered[i]),
+                      onEdit: () => widget.onEditAudition(filtered[i]),
                       onDelete: () => _confirmAndDelete(filtered[i]),
                     ),
                   ),
@@ -457,7 +473,7 @@ class _DashboardHero extends StatelessWidget {
     required this.totalAuditions,
     required this.totalSubmissions,
     required this.totalPending,
-    required this.totalCallbacks,
+    required this.callbackBreakdown,
     required this.onCreateAudition,
     required this.isWide,
   });
@@ -466,7 +482,7 @@ class _DashboardHero extends StatelessWidget {
   final int totalAuditions;
   final int totalSubmissions;
   final int totalPending;
-  final int totalCallbacks;
+  final CallbackStatusCounts callbackBreakdown;
   final VoidCallback onCreateAudition;
   final bool isWide;
 
@@ -500,7 +516,11 @@ class _DashboardHero extends StatelessWidget {
       _HeroMetricTile(
         icon: Icons.phone_in_talk_outlined,
         label: 'Callbacks',
-        value: '$totalCallbacks',
+        value: '${callbackBreakdown.total}',
+        trailing: CallbackStatusBreakdownRow(
+          counts: callbackBreakdown,
+          dense: true,
+        ),
       ),
     ];
 
@@ -641,11 +661,13 @@ class _HeroMetricTile extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.value,
+    this.trailing,
   });
 
   final IconData icon;
   final String label;
   final String value;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -660,6 +682,7 @@ class _HeroMetricTile extends StatelessWidget {
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Icon(icon, size: 18, color: onHero),
           const SizedBox(width: 10),
@@ -686,6 +709,10 @@ class _HeroMetricTile extends StatelessWidget {
               ),
             ],
           ),
+          if (trailing != null) ...[
+            const SizedBox(width: 8),
+            Flexible(child: trailing!),
+          ],
         ],
       ),
     );
@@ -1151,11 +1178,13 @@ class _DashboardAuditionCard extends StatelessWidget {
   const _DashboardAuditionCard({
     required this.card,
     required this.onOpenRankings,
+    required this.onEdit,
     required this.onDelete,
   });
 
   final DirectorAuditionCard card;
   final VoidCallback onOpenRankings;
+  final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   @override
@@ -1286,7 +1315,7 @@ class _DashboardAuditionCard extends StatelessWidget {
                       child: _CountChip(
                         icon: Icons.phone_in_talk_outlined,
                         label: 'Callbacks',
-                        value: card.callbacksCount,
+                        value: card.callbackStatusCounts.total,
                         accent: ScenolyticsColors.success,
                       ),
                     ),
@@ -1344,6 +1373,27 @@ class _DashboardAuditionCard extends StatelessWidget {
                           ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(11),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Tooltip(
+                      message: 'Edit audition',
+                      child: Material(
+                        color: cs.primaryContainer.withValues(alpha: 0.65),
+                        borderRadius: BorderRadius.circular(11),
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          onTap: onEdit,
+                          borderRadius: BorderRadius.circular(11),
+                          child: Padding(
+                            padding: const EdgeInsets.all(10),
+                            child: Icon(
+                              Icons.edit_outlined,
+                              color: cs.onPrimaryContainer,
+                              size: 20,
+                            ),
                           ),
                         ),
                       ),

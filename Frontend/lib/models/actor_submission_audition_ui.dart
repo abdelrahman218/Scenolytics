@@ -1,3 +1,5 @@
+import 'audition_submission_status.dart';
+
 /// Audition hero copy for the actor submission page (from casting + director profile).
 class ActorSubmissionAuditionUi {
   const ActorSubmissionAuditionUi({
@@ -8,6 +10,8 @@ class ActorSubmissionAuditionUi {
     this.description = '',
     this.scriptPlainText = '',
     this.mySubmissionCountForAudition = 0,
+    this.myLatestSubmissionStatus,
+    this.hasSubmissionRecord = false,
   });
 
   final String titleLine;
@@ -23,4 +27,10 @@ class ActorSubmissionAuditionUi {
 
   /// Rows from `GET /api/v1/casting/actor/auditions/submissions` for this audition.
   final int mySubmissionCountForAudition;
+
+  /// Newest submission row’s status for this audition (from casting API), if any.
+  final AuditionSubmissionStatus? myLatestSubmissionStatus;
+
+  /// True when at least one submission row exists for this audition id.
+  final bool hasSubmissionRecord;
 }
