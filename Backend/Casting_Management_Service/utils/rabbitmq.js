@@ -11,7 +11,7 @@ export const EXCHANGES = {
   AUDITIONS: 'auditions_exchange',
   CALLBACKS: 'callbacks_exchange',
   VIDEOS: 'videos_exchange',
-  EVALUATIONS: 'evaluations_exchange',
+  EVALUATIONS: 'evaluation_events',
   INVITATIONS: 'invitations_exchange'
 };
 
