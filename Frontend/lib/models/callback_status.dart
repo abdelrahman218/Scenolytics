@@ -64,14 +64,32 @@ class CallbackStatusCounts {
 
   int get total => scheduled + accepted + rejected + unknown;
 
+  /// One callback per submission — reschedules and link regeneration must not
+  /// inflate the dashboard total (API may return duplicate rows historically).
   static CallbackStatusCounts fromCallbackRows(
     Iterable<Map<String, dynamic>> rows,
   ) {
+    final latestBySubmission = <String, Map<String, dynamic>>{};
+    final orphans = <Map<String, dynamic>>[];
+
+    for (final row in rows) {
+      final submissionId = row['audition_submission_id']?.toString().trim() ?? '';
+      if (submissionId.isEmpty) {
+        orphans.add(row);
+        continue;
+      }
+      final existing = latestBySubmission[submissionId];
+      if (existing == null || _callbackRowIsNewer(row, existing)) {
+        latestBySubmission[submissionId] = row;
+      }
+    }
+
     var scheduled = 0;
     var accepted = 0;
     var rejected = 0;
     var unknown = 0;
-    for (final row in rows) {
+
+    void tally(Map<String, dynamic> row) {
       switch (parseCallbackStatus(row['callback_status'])) {
         case CallbackStatus.scheduled:
           scheduled++;
@@ -83,12 +101,44 @@ class CallbackStatusCounts {
           unknown++;
       }
     }
+
+    for (final row in latestBySubmission.values) {
+      tally(row);
+    }
+    for (final row in orphans) {
+      tally(row);
+    }
+
     return CallbackStatusCounts(
       scheduled: scheduled,
       accepted: accepted,
       rejected: rejected,
       unknown: unknown,
     );
+  }
+
+  static bool _callbackRowIsNewer(
+    Map<String, dynamic> row,
+    Map<String, dynamic> existing,
+  ) {
+    final a = _parseCallbackCreatedAt(row['created_at']);
+    final b = _parseCallbackCreatedAt(existing['created_at']);
+    if (a != null && b != null) return a.isAfter(b);
+    final aId = row['id']?.toString();
+    final bId = existing['id']?.toString();
+    if (aId != null && bId != null) {
+      final ai = int.tryParse(aId);
+      final bi = int.tryParse(bId);
+      if (ai != null && bi != null) return ai > bi;
+    }
+    return false;
+  }
+
+  static DateTime? _parseCallbackCreatedAt(Object? raw) {
+    if (raw == null) return null;
+    final s = raw.toString().trim();
+    if (s.isEmpty) return null;
+    return DateTime.tryParse(s.replaceFirst(' ', 'T'));
   }
 
   CallbackStatusCounts operator +(CallbackStatusCounts other) {

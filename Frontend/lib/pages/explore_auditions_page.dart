@@ -371,30 +371,19 @@ class _ExploreHero extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final b = theme.brightness;
-    final cs = theme.colorScheme;
     final onHero = ScenolyticsColors.onPrimary;
 
     return Container(
       decoration: BoxDecoration(
-        gradient: b == Brightness.dark
-            ? const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF021A2E),
-                  ScenolyticsColors.heroGradientStart,
-                  Color(0xFF052F45),
-                ],
-              )
-            : ScenolyticsColors.heroBarGradient,
+        gradient: ScenolyticsColors.heroBarGradientFor(b),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: onHero.withValues(alpha: b == Brightness.dark ? 0.12 : 0.2),
+          color: onHero.withValues(alpha: ScenolyticsColors.heroBorderAlpha(b)),
         ),
         boxShadow: [
           BoxShadow(
-            color: cs.shadow.withValues(
-              alpha: b == Brightness.dark ? 0.35 : 0.12,
+            color: ScenolyticsColors.heroGradientStart.withValues(
+              alpha: ScenolyticsColors.heroGlowShadowAlpha(b),
             ),
             blurRadius: 18,
             offset: const Offset(0, 6),

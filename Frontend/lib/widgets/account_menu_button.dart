@@ -7,7 +7,7 @@ import '../data/notification_feed_controller.dart';
 import '../pages/profile_page.dart';
 import '../pages/settings_page.dart';
 
-enum _AccountAction { profile, settings, help, logout }
+enum _AccountAction { profile, settings, logout }
 
 /// Phone: opens [ProfilePage]. Wide / web-style: popup with Profile, Settings, Help, Log out.
 class AccountMenuButton extends StatelessWidget {
@@ -23,6 +23,8 @@ class AccountMenuButton extends StatelessWidget {
     this.userManagementApi,
     this.onLogOut,
     this.onDirectorConnectGoogleCalendar,
+    this.onSelectProfile,
+    this.onSelectSettings,
   });
 
   /// `true` when layout is wide (inline nav) — show a dropdown menu.
@@ -38,6 +40,12 @@ class AccountMenuButton extends StatelessWidget {
   final UserManagementApi? userManagementApi;
   final Future<void> Function()? onLogOut;
   final Future<void> Function()? onDirectorConnectGoogleCalendar;
+
+  /// When set, opens profile inside [MainShell] instead of a full-screen route.
+  final VoidCallback? onSelectProfile;
+
+  /// When set, opens settings inside [MainShell] instead of a full-screen route.
+  final VoidCallback? onSelectSettings;
 
   static void openProfile(
     BuildContext context, {
@@ -125,16 +133,22 @@ class AccountMenuButton extends StatelessWidget {
     NotificationsApi? notificationsApi,
     NotificationFeedController? notificationFeed,
     Future<void> Function()? onDirectorConnectGoogleCalendar,
+    VoidCallback? onSelectProfile,
+    VoidCallback? onSelectSettings,
   }) {
     switch (action) {
       case _AccountAction.profile:
-        openProfile(
-          context,
-          email: email,
-          roleLabel: roleLabel,
-          user: user,
-          userManagementApi: api,
-        );
+        if (onSelectProfile != null) {
+          onSelectProfile();
+        } else {
+          openProfile(
+            context,
+            email: email,
+            roleLabel: roleLabel,
+            user: user,
+            userManagementApi: api,
+          );
+        }
       case _AccountAction.settings:
         final prefsApi = notificationsApi;
         final token = jwt?.trim() ?? '';
@@ -148,17 +162,17 @@ class AccountMenuButton extends StatelessWidget {
           );
           return;
         }
-        openSettings(
-          context,
-          authJwt: token,
-          notificationsApi: prefsApi,
-          notificationFeed: notificationFeed,
-          onDirectorConnectGoogleCalendar: onDirectorConnectGoogleCalendar,
-        );
-      case _AccountAction.help:
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Help & support — coming soon.')),
-        );
+        if (onSelectSettings != null) {
+          onSelectSettings();
+        } else {
+          openSettings(
+            context,
+            authJwt: token,
+            notificationsApi: prefsApi,
+            notificationFeed: notificationFeed,
+            onDirectorConnectGoogleCalendar: onDirectorConnectGoogleCalendar,
+          );
+        }
       case _AccountAction.logout:
         confirmLogOut(context, onLogOut: onLogOut);
     }
@@ -170,13 +184,19 @@ class AccountMenuButton extends StatelessWidget {
 
     if (!usePopupMenu) {
       return IconButton.filledTonal(
-        onPressed: () => openProfile(
-          context,
-          email: userEmail,
-          roleLabel: accountRoleLabel,
-          user: authUser,
-          userManagementApi: userManagementApi,
-        ),
+        onPressed: () {
+          if (onSelectProfile != null) {
+            onSelectProfile!();
+          } else {
+            openProfile(
+              context,
+              email: userEmail,
+              roleLabel: accountRoleLabel,
+              user: authUser,
+              userManagementApi: userManagementApi,
+            );
+          }
+        },
         tooltip: 'Profile',
         style: IconButton.styleFrom(
           backgroundColor: cs.primaryContainer,
@@ -210,6 +230,8 @@ class AccountMenuButton extends StatelessWidget {
             notificationsApi: notificationsApi,
             notificationFeed: notificationFeed,
             onDirectorConnectGoogleCalendar: onDirectorConnectGoogleCalendar,
+            onSelectProfile: onSelectProfile,
+            onSelectSettings: onSelectSettings,
           ),
       itemBuilder: (context) => [
         PopupMenuItem(
@@ -228,15 +250,6 @@ class AccountMenuButton extends StatelessWidget {
             contentPadding: EdgeInsets.zero,
             leading: Icon(Icons.settings_outlined, color: cs.primary),
             title: const Text('Settings'),
-          ),
-        ),
-        PopupMenuItem(
-          value: _AccountAction.help,
-          child: ListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.help_outline_rounded, color: cs.primary),
-            title: const Text('Help'),
           ),
         ),
         const PopupMenuDivider(),

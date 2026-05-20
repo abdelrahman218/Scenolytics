@@ -38,10 +38,16 @@ class RankingsAuditionHeader {
   const RankingsAuditionHeader({
     required this.title,
     required this.subtitle,
+    this.auditionType = '',
   });
 
   final String title;
   final String subtitle;
+
+  /// Casting `auditions.type` ('Audio' or 'Video'). Empty when unknown.
+  final String auditionType;
+
+  bool get isAudioOnly => auditionType.trim().toLowerCase() == 'audio';
 }
 
 class AuditionsRepository {
@@ -326,7 +332,7 @@ class AuditionsRepository {
     for (final row in callbacks) {
       final info = ActorCallbackInfo.tryParse(row);
       if (info != null) {
-        callbackByAudition[info.auditionId] = info;
+        callbackByAudition.putIfAbsent(info.auditionId, () => info);
       }
     }
 
@@ -688,10 +694,11 @@ class AuditionsRepository {
       auditionId: auditionId,
     );
     final out = <String, DirectorAuditionCallback>{};
+    // API returns rows newest-first; keep the latest per submission only.
     for (final row in rows) {
       final parsed = DirectorAuditionCallback.tryParse(row);
       if (parsed == null) continue;
-      out[parsed.auditionSubmissionId] = parsed;
+      out.putIfAbsent(parsed.auditionSubmissionId, () => parsed);
     }
     return out;
   }
@@ -707,6 +714,32 @@ class AuditionsRepository {
     );
     return bySubmission.map((k, v) => MapEntry(k, v.status));
   }
+
+  /// Moves a scheduled callback to a new date/time (Calendar + DB).
+  Future<void> rescheduleDirectorCallback({
+    required String directorToken,
+    required String auditionId,
+    required String callbackId,
+    required String callbackDatetime,
+  }) =>
+      _castingApi.rescheduleDirectorCallback(
+        directorToken: directorToken,
+        auditionId: auditionId,
+        callbackId: callbackId,
+        callbackDatetime: callbackDatetime,
+      );
+
+  /// Creates a fresh Google Meet link for an existing scheduled callback.
+  Future<String> regenerateDirectorCallbackMeetingLink({
+    required String directorToken,
+    required String auditionId,
+    required String callbackId,
+  }) =>
+      _castingApi.regenerateDirectorCallbackMeeting(
+        directorToken: directorToken,
+        auditionId: auditionId,
+        callbackId: callbackId,
+      );
 
   /// Director decision after the callback meeting (`accepted` / `rejected`).
   Future<void> reviewDirectorCallback({
@@ -903,6 +936,7 @@ class AuditionsRepository {
         mySubmissionCountForAudition: myRows.length,
         myLatestSubmissionStatus: myStatus,
         hasSubmissionRecord: myRows.isNotEmpty,
+        auditionType: audition['type']?.toString().trim() ?? '',
       );
     } catch (_) {
       return const ActorSubmissionAuditionUi(
@@ -1008,7 +1042,12 @@ class AuditionsRepository {
       );
       final title = _auditionTitleFromMap(audition);
       final subtitle = _auditionSubtitleFromMap(audition, '');
-      return RankingsAuditionHeader(title: title, subtitle: subtitle);
+      final type = audition['type']?.toString().trim() ?? '';
+      return RankingsAuditionHeader(
+        title: title,
+        subtitle: subtitle,
+        auditionType: type,
+      );
     } catch (_) {
       return const RankingsAuditionHeader(title: '', subtitle: '');
     }

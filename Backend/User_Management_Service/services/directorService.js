@@ -43,11 +43,48 @@ export const getDirectorProfile = async (user_id) => {
   }
 };
 
+const nullIfEmpty = (value) => {
+  if (value === undefined || value === null) return null;
+  if (typeof value === 'string' && value.trim() === '') return null;
+  return value;
+};
+
 export const updateDirectorProfile = async (profile_id, updates) => {
   try {
-    await DirectorProfile.update(profile_id, updates);
-    const profile = await DirectorProfile.findById(profile_id);
-    return profile;
+    const existing = await DirectorProfile.findById(profile_id);
+    if (!existing) {
+      throw new Error('Director profile not found');
+    }
+
+    const displayName =
+      updates.display_name ?? updates.name ?? existing.display_name;
+
+    const merged = {
+      display_name: displayName,
+      company_name:
+        updates.company_name !== undefined
+          ? nullIfEmpty(updates.company_name)
+          : existing.company_name,
+      company_bio:
+        updates.company_bio !== undefined
+          ? nullIfEmpty(updates.company_bio)
+          : existing.company_bio,
+      website:
+        updates.website !== undefined
+          ? nullIfEmpty(updates.website)
+          : existing.website,
+      phone:
+        updates.phone !== undefined
+          ? nullIfEmpty(updates.phone)
+          : existing.phone,
+      location:
+        updates.location !== undefined
+          ? nullIfEmpty(updates.location)
+          : existing.location,
+    };
+
+    await DirectorProfile.update(profile_id, merged);
+    return await DirectorProfile.findById(profile_id);
   } catch (error) {
     throw new Error(`Failed to update director profile: ${error.message}`);
   }

@@ -142,10 +142,14 @@ class VocalEmotionScorePage extends StatelessWidget {
     super.key,
     required this.submission,
     this.sentences = _sentences,
+    this.nested = false,
   });
 
   final ActorAuditionSubmission submission;
   final List<SentenceEmotion> sentences;
+
+  /// When true, omits the page header so this can live inside a parent tab.
+  final bool nested;
 
   // ── BACKEND: replace with data from your API ──
   static const _sentences = [
@@ -184,28 +188,35 @@ class VocalEmotionScorePage extends StatelessWidget {
     final actorName = submission.actorName.trim().isEmpty ? 'Actor' : submission.actorName.trim();
     final actorAge = submission.age;
     final actorScore = submission.vocalToneScore;
+    final body = Column(
+      children: [
+        if (!nested) _AppBar(),
+        Expanded(
+          child: wide
+              ? _WebLayout(
+                  sentences: sentences,
+                  actorName: actorName,
+                  actorAge: actorAge,
+                  actorScore: actorScore,
+                )
+              : _MobileLayout(
+                  sentences: sentences,
+                  actorName: actorName,
+                  actorAge: actorAge,
+                  actorScore: actorScore,
+                ),
+        ),
+      ],
+    );
+    if (nested) {
+      return ColoredBox(
+        color: ScenolyticsColors.pageBackground,
+        child: body,
+      );
+    }
     return Scaffold(
       backgroundColor: ScenolyticsColors.pageBackground,
-      body: Column(
-        children: [
-          _AppBar(),
-          Expanded(
-            child: wide
-                ? _WebLayout(
-                    sentences: sentences,
-                    actorName: actorName,
-                    actorAge: actorAge,
-                    actorScore: actorScore,
-                  )
-                : _MobileLayout(
-                    sentences: sentences,
-                    actorName: actorName,
-                    actorAge: actorAge,
-                    actorScore: actorScore,
-                  ),
-          ),
-        ],
-      ),
+      body: body,
     );
   }
 }

@@ -33,7 +33,6 @@ class ActorDashboardPage extends StatefulWidget {
 enum _ActorSortMode {
   newest,
   oldest,
-  highestScore,
   alphabetical,
 }
 
@@ -41,7 +40,6 @@ extension _ActorSortModeX on _ActorSortMode {
   String get label => switch (this) {
         _ActorSortMode.newest => 'Newest submission',
         _ActorSortMode.oldest => 'Oldest submission',
-        _ActorSortMode.highestScore => 'Highest score',
         _ActorSortMode.alphabetical => 'A → Z',
       };
 }
@@ -129,15 +127,6 @@ class _ActorDashboardPageState extends State<ActorDashboardPage> {
       .where((c) => c.submissionStatus == AuditionSubmissionStatus.accepted)
       .length;
   int get _callbackCount => _all.where((c) => c.hasCallback).length;
-  double? get _bestScore {
-    double? best;
-    for (final c in _all) {
-      final s = c.overallScore;
-      if (s == null) continue;
-      if (best == null || s > best) best = s;
-    }
-    return best;
-  }
 
   List<ActorAuditionCard> get _filtered {
     final q = _searchQuery.trim().toLowerCase();
@@ -177,8 +166,6 @@ class _ActorDashboardPageState extends State<ActorDashboardPage> {
           final at = a.submittedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
           final bt = b.submittedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
           return at.compareTo(bt);
-        case _ActorSortMode.highestScore:
-          return (b.overallScore ?? -1).compareTo(a.overallScore ?? -1);
         case _ActorSortMode.alphabetical:
           return a.title.toLowerCase().compareTo(b.title.toLowerCase());
       }
@@ -249,7 +236,6 @@ class _ActorDashboardPageState extends State<ActorDashboardPage> {
               totalSubmissions: _totalSubmissions,
               acceptedCount: _acceptedCount,
               callbackCount: _callbackCount,
-              bestScore: _bestScore,
               isWide: isWide,
               onExplore: widget.onExploreAuditions,
             ),
@@ -258,7 +244,7 @@ class _ActorDashboardPageState extends State<ActorDashboardPage> {
         SliverPadding(
           padding: EdgeInsets.fromLTRB(sidePad, 12, sidePad, 8),
           sliver: SliverToBoxAdapter(
-            child: _ActorSearchToolbar(
+            child: _ActorSearchAndToolbar(
               controller: _searchCtrl,
               isWide: isWide,
               activeFilterCount: _activeFilterCount,
@@ -344,7 +330,7 @@ class _ActorDashboardPageState extends State<ActorDashboardPage> {
                     gridDelegate:
                         const SliverGridDelegateWithMaxCrossAxisExtent(
                       maxCrossAxisExtent: 420,
-                      mainAxisExtent: 320,
+                      mainAxisExtent: 290,
                       crossAxisSpacing: 14,
                       mainAxisSpacing: 14,
                     ),
@@ -381,7 +367,6 @@ class _ActorHero extends StatelessWidget {
     required this.totalSubmissions,
     required this.acceptedCount,
     required this.callbackCount,
-    required this.bestScore,
     required this.isWide,
     required this.onExplore,
   });
@@ -390,7 +375,6 @@ class _ActorHero extends StatelessWidget {
   final int totalSubmissions;
   final int acceptedCount;
   final int callbackCount;
-  final double? bestScore;
   final bool isWide;
   final VoidCallback onExplore;
 
@@ -404,26 +388,12 @@ class _ActorHero extends StatelessWidget {
         ? 'Welcome back, Actor'
         : 'Welcome back, $name';
 
-    final scoreLabel = bestScore != null
-        ? bestScore!.toStringAsFixed(0)
-        : '—';
-
     return Container(
       decoration: BoxDecoration(
-        gradient: b == Brightness.dark
-            ? const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF1A1030),
-                  ScenolyticsColors.heroGradientStart,
-                  Color(0xFF2A1848),
-                ],
-              )
-            : ScenolyticsColors.heroBarGradient,
+        gradient: ScenolyticsColors.heroBarGradientFor(b),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: onHero.withValues(alpha: b == Brightness.dark ? 0.12 : 0.2),
+          color: onHero.withValues(alpha: ScenolyticsColors.heroBorderAlpha(b)),
         ),
       ),
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
@@ -461,7 +431,7 @@ class _ActorHero extends StatelessWidget {
           Text(
             totalSubmissions == 0
                 ? 'You have not submitted to any auditions yet. Browse open roles and upload your tape.'
-                : 'Track every audition you submitted to — scores, director decisions, and callbacks.',
+                : 'Track every audition you submitted to — director decisions and callbacks.',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: onHero.withValues(alpha: 0.92),
               height: 1.35,
@@ -486,11 +456,6 @@ class _ActorHero extends StatelessWidget {
                 icon: Icons.phone_in_talk_outlined,
                 label: 'Callbacks',
                 value: '$callbackCount',
-              ),
-              _HeroMetric(
-                icon: Icons.grade_outlined,
-                label: 'Best score',
-                value: scoreLabel,
               ),
             ],
           ),
@@ -568,13 +533,13 @@ class _HeroMetric extends StatelessWidget {
   }
 }
 
-class _ActorSearchToolbar extends StatelessWidget {
-  const _ActorSearchToolbar({
+class _ActorSearchAndToolbar extends StatelessWidget {
+  const _ActorSearchAndToolbar({
     required this.controller,
     required this.isWide,
     required this.activeFilterCount,
-    required this.filtersOpenOnPhone,
     required this.onTogglePhoneFilters,
+    required this.filtersOpenOnPhone,
     required this.onReset,
     required this.onRefresh,
   });
@@ -582,55 +547,233 @@ class _ActorSearchToolbar extends StatelessWidget {
   final TextEditingController controller;
   final bool isWide;
   final int activeFilterCount;
-  final bool filtersOpenOnPhone;
   final VoidCallback onTogglePhoneFilters;
+  final bool filtersOpenOnPhone;
   final VoidCallback onReset;
-  final VoidCallback onRefresh;
+  final Future<void> Function() onRefresh;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    return Row(
+    final cs = Theme.of(context).colorScheme;
+
+    final search = TextField(
+      controller: controller,
+      textInputAction: TextInputAction.search,
+      decoration: InputDecoration(
+        hintText: 'Search your auditions by title, director, or type…',
+        prefixIcon: const Icon(Icons.search_rounded),
+        suffixIcon: controller.text.isEmpty
+            ? null
+            : IconButton(
+                tooltip: 'Clear',
+                icon: const Icon(Icons.close_rounded),
+                onPressed: () => controller.clear(),
+              ),
+        filled: true,
+        fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.55),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(
+            color: cs.outlineVariant.withValues(alpha: 0.7),
+          ),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(
+            color: cs.outlineVariant.withValues(alpha: 0.55),
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: cs.primary, width: 1.4),
+        ),
+        contentPadding: const EdgeInsets.symmetric(vertical: 14),
+      ),
+    );
+
+    final refreshBtn = _ActorIconActionButton(
+      tooltip: 'Refresh',
+      icon: Icons.refresh_rounded,
+      onPressed: () async {
+        await onRefresh();
+      },
+    );
+
+    if (isWide) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(child: search),
+          const SizedBox(width: 10),
+          refreshBtn,
+          const SizedBox(width: 8),
+          _ActorResetButton(
+            enabled: activeFilterCount > 0 || controller.text.isNotEmpty,
+            onTap: onReset,
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(
-          child: TextField(
-            controller: controller,
-            decoration: InputDecoration(
-              hintText: 'Search your auditions…',
-              prefixIcon: const Icon(Icons.search_rounded),
-              filled: true,
-              fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.55),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide.none,
+        search,
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _ActorFiltersToggle(
+                count: activeFilterCount,
+                open: filtersOpenOnPhone,
+                onTap: onTogglePhoneFilters,
               ),
             ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        if (!isWide)
-          IconButton.filledTonal(
-            onPressed: onTogglePhoneFilters,
-            icon: Badge(
-              isLabelVisible: activeFilterCount > 0,
-              label: Text('$activeFilterCount'),
-              child: Icon(
-                filtersOpenOnPhone
-                    ? Icons.filter_list_off_rounded
-                    : Icons.filter_list_rounded,
-              ),
+            const SizedBox(width: 8),
+            refreshBtn,
+            const SizedBox(width: 8),
+            _ActorResetButton(
+              enabled: activeFilterCount > 0 || controller.text.isNotEmpty,
+              onTap: onReset,
             ),
-            tooltip: 'Filters',
-          ),
-        IconButton.filledTonal(
-          onPressed: onRefresh,
-          icon: const Icon(Icons.refresh_rounded),
-          tooltip: 'Refresh',
+          ],
         ),
-        if (activeFilterCount > 0)
-          TextButton(onPressed: onReset, child: const Text('Reset')),
       ],
+    );
+  }
+}
+
+class _ActorIconActionButton extends StatelessWidget {
+  const _ActorIconActionButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: cs.primaryContainer.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(12),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Icon(icon, size: 20, color: cs.primary),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ActorResetButton extends StatelessWidget {
+  const _ActorResetButton({required this.enabled, required this.onTap});
+
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return TextButton.icon(
+      onPressed: enabled ? onTap : null,
+      icon: const Icon(Icons.restart_alt_rounded, size: 18),
+      label: const Text('Reset'),
+      style: TextButton.styleFrom(
+        foregroundColor: cs.primary,
+        backgroundColor: cs.primaryContainer.withValues(alpha: 0.35),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+}
+
+class _ActorFiltersToggle extends StatelessWidget {
+  const _ActorFiltersToggle({
+    required this.count,
+    required this.open,
+    required this.onTap,
+  });
+
+  final int count;
+  final bool open;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    const radius = 14.0;
+    return Material(
+      color: Colors.transparent,
+      elevation: 2,
+      shadowColor: ScenolyticsColors.webRankingsFilterGradientEnd
+          .withValues(alpha: 0.35),
+      borderRadius: BorderRadius.circular(radius),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(radius),
+        child: Ink(
+          decoration: const BoxDecoration(
+            gradient: ScenolyticsColors.webRankingsFilterGradient,
+            borderRadius: BorderRadius.all(Radius.circular(radius)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  open ? Icons.expand_less_rounded : Icons.tune_rounded,
+                  size: 18,
+                  color: ScenolyticsColors.webRankingsFilterForeground,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  open ? 'Hide filters' : 'Filters & sort',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: ScenolyticsColors.webRankingsFilterForeground,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.2,
+                      ),
+                ),
+                if (count > 0) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.25),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '$count',
+                      style: const TextStyle(
+                        color: ScenolyticsColors.webRankingsFilterForeground,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -654,77 +797,152 @@ class _ActorFilterBar extends StatelessWidget {
   final _ActorSortMode sort;
   final ValueChanged<_ActorSortMode> onSort;
 
+  static const _statusOptions = <String>[
+    'Any',
+    'pending',
+    'under_review',
+    'accepted',
+    'rejected',
+  ];
+
+  static String _statusLabel(String value) => switch (value) {
+        'Any' => 'Any status',
+        'pending' => 'Pending',
+        'under_review' => 'Under review',
+        'accepted' => 'Accepted',
+        'rejected' => 'Rejected',
+        _ => value,
+      };
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
-    Widget typeMenu() => DropdownMenu<String>(
-          initialSelection: typeFilter,
-          label: const Text('Type'),
-          dropdownMenuEntries: const [
-            DropdownMenuEntry(value: 'Any', label: 'Any type'),
-            DropdownMenuEntry(value: 'Video', label: 'Video'),
-            DropdownMenuEntry(value: 'Audio', label: 'Audio'),
-          ],
-          onSelected: (v) {
-            if (v != null) onType(v);
-          },
-        );
+    final typeDropdown = _ActorLabeledDropdown<String>(
+      icon: Icons.movie_filter_outlined,
+      label: 'Type',
+      value: typeFilter,
+      items: const ['Any', 'Audio', 'Video'],
+      itemLabel: (s) => s == 'Any' ? 'Any type' : s,
+      onChanged: onType,
+    );
 
-    Widget statusMenu() => DropdownMenu<String>(
-          initialSelection: statusFilter,
-          label: const Text('Status'),
-          dropdownMenuEntries: const [
-            DropdownMenuEntry(value: 'Any', label: 'Any status'),
-            DropdownMenuEntry(value: 'pending', label: 'Pending'),
-            DropdownMenuEntry(value: 'under_review', label: 'Under review'),
-            DropdownMenuEntry(value: 'accepted', label: 'Accepted'),
-            DropdownMenuEntry(value: 'rejected', label: 'Rejected'),
-          ],
-          onSelected: (v) {
-            if (v != null) onStatus(v);
-          },
-        );
+    final statusDropdown = _ActorLabeledDropdown<String>(
+      icon: Icons.flag_outlined,
+      label: 'Status',
+      value: statusFilter,
+      items: _statusOptions,
+      itemLabel: _statusLabel,
+      onChanged: onStatus,
+    );
 
-    Widget sortMenu() => DropdownMenu<_ActorSortMode>(
-          initialSelection: sort,
-          label: const Text('Sort'),
-          dropdownMenuEntries: _ActorSortMode.values
-              .map(
-                (m) => DropdownMenuEntry(value: m, label: m.label),
-              )
-              .toList(),
-          onSelected: (v) {
-            if (v != null) onSort(v);
-          },
-        );
-
-    if (stacked) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          typeMenu(),
-          const SizedBox(height: 8),
-          statusMenu(),
-          const SizedBox(height: 8),
-          sortMenu(),
-        ],
-      );
-    }
+    final sortDropdown = _ActorLabeledDropdown<_ActorSortMode>(
+      icon: Icons.sort_rounded,
+      label: 'Sort',
+      value: sort,
+      items: _ActorSortMode.values,
+      itemLabel: (m) => m.label,
+      onChanged: onSort,
+    );
 
     return Container(
-      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withValues(alpha: 0.45),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.55)),
+        color: cs.surface.withValues(alpha: 0.86),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.6)),
+        boxShadow: [
+          BoxShadow(
+            color: cs.shadow.withValues(
+              alpha: theme.brightness == Brightness.dark ? 0.25 : 0.06,
+            ),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      child: Wrap(
-        spacing: 12,
-        runSpacing: 8,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [typeMenu(), statusMenu(), sortMenu()],
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+      child: stacked
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                typeDropdown,
+                const SizedBox(height: 10),
+                statusDropdown,
+                const SizedBox(height: 10),
+                sortDropdown,
+              ],
+            )
+          : Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                SizedBox(width: 200, child: typeDropdown),
+                SizedBox(width: 220, child: statusDropdown),
+                SizedBox(width: 280, child: sortDropdown),
+              ],
+            ),
+    );
+  }
+}
+
+class _ActorLabeledDropdown<T> extends StatelessWidget {
+  const _ActorLabeledDropdown({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.items,
+    required this.itemLabel,
+    required this.onChanged,
+  });
+
+  final IconData icon;
+  final String label;
+  final T value;
+  final List<T> items;
+  final String Function(T) itemLabel;
+  final ValueChanged<T> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return DropdownButtonFormField<T>(
+      initialValue: value,
+      isExpanded: true,
+      onChanged: (v) {
+        if (v != null) onChanged(v);
+      },
+      items: items
+          .map(
+            (o) => DropdownMenuItem<T>(
+              value: o,
+              child: Text(itemLabel(o), overflow: TextOverflow.ellipsis),
+            ),
+          )
+          .toList(),
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, size: 18),
+        isDense: true,
+        filled: true,
+        fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.55),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide:
+              BorderSide(color: cs.outlineVariant.withValues(alpha: 0.7)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide:
+              BorderSide(color: cs.outlineVariant.withValues(alpha: 0.55)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: cs.primary, width: 1.4),
+        ),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       ),
     );
   }
@@ -805,7 +1023,6 @@ class _ActorSubmissionCard extends StatelessWidget {
     final a = card.audition;
     final isVideo = a.type.toLowerCase() == 'video';
     final director = card.directorDisplayName?.trim() ?? '';
-    final score = card.overallScore;
 
     return Material(
       color: Colors.transparent,
@@ -897,24 +1114,10 @@ class _ActorSubmissionCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _MiniStat(
-                        icon: Icons.grade_outlined,
-                        label: 'Score',
-                        value: score != null ? score.toStringAsFixed(0) : '—',
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _MiniStat(
-                        icon: Icons.schedule_outlined,
-                        label: 'Submitted',
-                        value: _submittedLabel(card.submittedAt),
-                      ),
-                    ),
-                  ],
+                _MiniStat(
+                  icon: Icons.schedule_outlined,
+                  label: 'Submitted',
+                  value: _submittedLabel(card.submittedAt),
                 ),
                 if (card.callbackDatetime != null) ...[
                   const SizedBox(height: 8),

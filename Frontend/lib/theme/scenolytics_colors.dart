@@ -76,12 +76,37 @@ abstract final class ScenolyticsColors {
   static const Color heroGradientMid = Color(0xFF0077B6);
   static const Color heroGradientEnd = Color(0xFF00B4D8);
 
-  /// App bars, headers, key CTAs.
+  /// App bars, headers, key CTAs (light theme).
   static const LinearGradient heroBarGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
     colors: [heroGradientStart, heroGradientMid, heroGradientEnd],
   );
+
+  /// Hero banners in dark mode — one gradient for every page.
+  static const LinearGradient darkHeroBarGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [
+      Color(0xFF0F1F35),
+      heroGradientStart,
+      Color(0xFF1A2D4D),
+    ],
+  );
+
+  static LinearGradient heroBarGradientFor(Brightness brightness) {
+    return brightness == Brightness.dark ? darkHeroBarGradient : heroBarGradient;
+  }
+
+  /// Border on hero cards over the gradient.
+  static double heroBorderAlpha(Brightness brightness) {
+    return brightness == Brightness.dark ? 0.12 : 0.2;
+  }
+
+  /// Glow shadow under hero cards.
+  static double heroGlowShadowAlpha(Brightness brightness) {
+    return brightness == Brightness.dark ? 0.35 : 0.22;
+  }
 
   /// Subtle page backdrop (very light).
   static const LinearGradient pageBackdropGradient = LinearGradient(

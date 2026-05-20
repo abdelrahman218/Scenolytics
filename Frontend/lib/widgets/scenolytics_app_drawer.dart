@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../branding/scenolytics_branding.dart';
+import '../branding/app_logo_placeholder.dart';
 import '../data/api/notifications_api.dart';
 import '../data/notification_feed_controller.dart';
 import '../theme/scenolytics_colors.dart';
@@ -47,7 +47,11 @@ class ScenolyticsAppDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final logo = ScenolyticsBranding.of(context).logo;
+    // Hero gradient header — light mark + wordmark on blue.
+    const logo = ScenolyticsThemeAwareLogo(
+      height: 48,
+      onHeroBackground: true,
+    );
     final tapCreateAudition = onSelectCreateAudition;
     final tapExplore = onSelectExploreAuditions;
     final tapActorDashboard = onSelectActorDashboard;
@@ -58,7 +62,8 @@ class ScenolyticsAppDrawer extends StatelessWidget {
         _DrawerTile(
           icon: Icons.dashboard_outlined,
           label: 'My dashboard',
-          selected: currentRouteName == 'actor-dashboard',
+          selected: currentRouteName == 'actor-dashboard' ||
+              currentRouteName == 'submit-video',
           onTap: () {
             Navigator.pop(context);
             tapActorDashboard();
@@ -74,34 +79,15 @@ class ScenolyticsAppDrawer extends StatelessWidget {
             tapExplore();
           },
         ),
-      if (showActorNav)
-        _DrawerTile(
-          icon: Icons.video_call_outlined,
-          label: 'Actor submission',
-          selected: currentRouteName == 'submit-video',
-          onTap: () {
-            Navigator.pop(context);
-            onSelectHome?.call();
-          },
-        ),
       if (showDirectorNav && tapDashboard != null)
         _DrawerTile(
           icon: Icons.dashboard_customize_outlined,
           label: 'Dashboard',
-          selected: currentRouteName == 'director-dashboard',
+          selected: currentRouteName == 'director-dashboard' ||
+              currentRouteName == 'rankings',
           onTap: () {
             Navigator.pop(context);
             tapDashboard();
-          },
-        ),
-      if (showDirectorNav)
-        _DrawerTile(
-          icon: Icons.leaderboard_outlined,
-          label: 'Director rankings',
-          selected: currentRouteName == 'rankings',
-          onTap: () {
-            Navigator.pop(context);
-            onSelectRankings?.call();
           },
         ),
       if (showDirectorNav && tapCreateAudition != null)
@@ -117,39 +103,13 @@ class ScenolyticsAppDrawer extends StatelessWidget {
       if (onSelectMissedNotifies != null)
         _DrawerTile(
           icon: Icons.notifications_paused_rounded,
-          label: 'Missed notifies',
+          label: 'Notifications',
           selected: currentRouteName == 'missed-notifies',
           onTap: () {
             Navigator.pop(context);
             onSelectMissedNotifies!();
           },
         ),
-      _DrawerTile(
-        icon: Icons.settings_outlined,
-        label: 'Settings',
-        selected: false,
-        onTap: () {
-          Navigator.pop(context);
-          final jwt = (authJwtForSettings ?? '').trim();
-          final api = notificationsApi;
-          if (jwt.isEmpty || api == null) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content:
-                    Text('Settings need an active profile session.'),
-              ),
-            );
-            return;
-          }
-          AccountMenuButton.openSettings(
-            context,
-            authJwt: jwt,
-            notificationsApi: api,
-            notificationFeed: notificationFeed,
-            onDirectorConnectGoogleCalendar: onDirectorConnectGoogleCalendar,
-          );
-        },
-      ),
     ];
 
     return Drawer(
@@ -161,8 +121,8 @@ class ScenolyticsAppDrawer extends StatelessWidget {
             DrawerHeader(
               margin: EdgeInsets.zero,
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-              decoration: const BoxDecoration(
-                gradient: ScenolyticsColors.heroBarGradient,
+              decoration: BoxDecoration(
+                gradient: ScenolyticsColors.heroBarGradientFor(theme.brightness),
               ),
               child: Align(
                 alignment: Alignment.bottomLeft,

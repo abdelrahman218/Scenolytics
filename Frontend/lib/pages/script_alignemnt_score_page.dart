@@ -249,28 +249,37 @@ class ScriptAlignmentScorePage extends StatelessWidget {
     super.key,
     required this.submission,
     this.result,
+    this.nested = false,
   });
 
   final ActorAuditionSubmission submission;
   final AlignmentResult? result;
+
+  /// When true, omits the page header so this can live inside a parent tab.
+  final bool nested;
 
   @override
   Widget build(BuildContext context) {
     final data = result ?? AlignmentResult.mockForSubmission(submission);
     final wide = _isWide(context);
 
+    final body = Column(
+      children: [
+        if (!nested) _AppBar(),
+        Expanded(
+          child: wide ? _WebLayout(data: data) : _MobileLayout(data: data),
+        ),
+      ],
+    );
+    if (nested) {
+      return ColoredBox(
+        color: ScenolyticsColors.pageBackground,
+        child: body,
+      );
+    }
     return Scaffold(
       backgroundColor: ScenolyticsColors.pageBackground,
-      body: Column(
-        children: [
-          _AppBar(),
-          Expanded(
-            child: wide
-                ? _WebLayout(data: data)
-                : _MobileLayout(data: data),
-          ),
-        ],
-      ),
+      body: body,
     );
   }
 }

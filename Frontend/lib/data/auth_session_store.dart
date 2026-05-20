@@ -6,6 +6,8 @@ const _kToken = 'scenolytics.auth.token';
 const _kUserId = 'scenolytics.auth.userId';
 const _kEmail = 'scenolytics.auth.email';
 const _kRole = 'scenolytics.auth.role';
+/// `actor` or `director` while mandatory profile setup is pending after sign-up.
+const _kPendingProfileSetup = 'scenolytics.auth.pendingProfileSetup';
 
 /// Persists the Identity Provider session on device (mobile + web).
 class AuthSessionStore {
@@ -42,5 +44,26 @@ class AuthSessionStore {
     await prefs.remove(_kUserId);
     await prefs.remove(_kEmail);
     await prefs.remove(_kRole);
+    await prefs.remove(_kPendingProfileSetup);
+  }
+
+  /// Persists which role still owes mandatory profile fields after sign-up.
+  Future<void> savePendingProfileSetup(String role) async {
+    final r = role.trim().toLowerCase();
+    if (r != 'actor' && r != 'director') return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kPendingProfileSetup, r);
+  }
+
+  Future<String?> loadPendingProfileSetup() async {
+    final prefs = await SharedPreferences.getInstance();
+    final r = prefs.getString(_kPendingProfileSetup)?.trim().toLowerCase() ?? '';
+    if (r == 'actor' || r == 'director') return r;
+    return null;
+  }
+
+  Future<void> clearPendingProfileSetup() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kPendingProfileSetup);
   }
 }

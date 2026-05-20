@@ -36,6 +36,8 @@ class MainShell extends StatefulWidget {
     this.showChromeAlertsBell = false,
     this.onOpenMissedNotifiesDetached,
     this.onSelectMissedNotifiesShell,
+    this.onSelectProfile,
+    this.onSelectSettings,
     this.onDirectorConnectGoogleCalendar,
   });
 
@@ -62,6 +64,8 @@ class MainShell extends StatefulWidget {
   final bool showChromeAlertsBell;
   final VoidCallback? onOpenMissedNotifiesDetached;
   final VoidCallback? onSelectMissedNotifiesShell;
+  final VoidCallback? onSelectProfile;
+  final VoidCallback? onSelectSettings;
   final Future<void> Function()? onDirectorConnectGoogleCalendar;
 
   static const double drawerBreakpoint = 760;
@@ -148,6 +152,8 @@ class _MainShellState extends State<MainShell> {
             notificationsApi: widget.notificationsApi,
             onDirectorConnectGoogleCalendar:
                 widget.onDirectorConnectGoogleCalendar,
+            onSelectProfile: widget.onSelectProfile,
+            onSelectSettings: widget.onSelectSettings,
           ),
           Expanded(child: widget.body),
         ],
@@ -184,6 +190,8 @@ class _HeaderBar extends StatelessWidget {
     this.authJwtForSettings,
     this.notificationsApi,
     this.onDirectorConnectGoogleCalendar,
+    this.onSelectProfile,
+    this.onSelectSettings,
   });
 
   final bool showMenu;
@@ -212,6 +220,8 @@ class _HeaderBar extends StatelessWidget {
   final String? authJwtForSettings;
   final NotificationsApi? notificationsApi;
   final Future<void> Function()? onDirectorConnectGoogleCalendar;
+  final VoidCallback? onSelectProfile;
+  final VoidCallback? onSelectSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -236,7 +246,7 @@ class _HeaderBar extends StatelessWidget {
             children: [
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+                  padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
@@ -255,7 +265,9 @@ class _HeaderBar extends StatelessWidget {
                           child: logo,
                         ),
                       ),
-                      if (pageTitle != null && pageTitle!.isNotEmpty) ...[
+                      if (!showInlineNav &&
+                          pageTitle != null &&
+                          pageTitle!.isNotEmpty) ...[
                         const SizedBox(width: 12),
                         Flexible(
                           child: Text(
@@ -275,59 +287,19 @@ class _HeaderBar extends StatelessWidget {
                             alignment: Alignment.centerLeft,
                             child: SingleChildScrollView(
                               scrollDirection: Axis.horizontal,
-                                child: Row(
+                              child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   const SizedBox(width: 16),
-                                  if (showActorNav && tapActorDashboard != null)
-                                    _NavButton(
-                                      icon: Icons.dashboard_outlined,
-                                      label: 'My dashboard',
-                                      filled: currentRouteName ==
-                                          'actor-dashboard',
-                                      onPressed: tapActorDashboard,
-                                    ),
-                                  if (showActorNav && tapExplore != null)
-                                    _NavButton(
-                                      icon: Icons.explore_outlined,
-                                      label: 'Explore auditions',
-                                      filled: currentRouteName ==
-                                          'explore-auditions',
-                                      onPressed: tapExplore,
-                                    ),
-                                  if (showActorNav)
-                                    _NavButton(
-                                      icon: Icons.video_call_outlined,
-                                      label: 'Actor submission',
-                                      filled: currentRouteName == 'submit-video',
-                                      onPressed: onSelectHome ?? () {},
-                                    ),
-                                  if (showDirectorNav &&
-                                      tapDashboard != null)
-                                    _NavButton(
-                                      icon:
-                                          Icons.dashboard_customize_outlined,
-                                      label: 'Dashboard',
-                                      filled: currentRouteName ==
-                                          'director-dashboard',
-                                      onPressed: tapDashboard,
-                                    ),
-                                  if (showDirectorNav)
-                                    _NavButton(
-                                      icon: Icons.leaderboard_outlined,
-                                      label: 'Director rankings',
-                                      filled: currentRouteName == 'rankings',
-                                      onPressed: onSelectRankings ?? () {},
-                                    ),
-                                  if (showDirectorNav &&
-                                      tapCreateAudition != null)
-                                    _NavButton(
-                                      icon: Icons.add_circle_outline_rounded,
-                                      label: 'Create audition',
-                                      filled: currentRouteName ==
-                                          'create-audition',
-                                      onPressed: tapCreateAudition,
-                                    ),
+                                  ..._primaryHeaderNavButtons(
+                                    showActorNav: showActorNav,
+                                    showDirectorNav: showDirectorNav,
+                                    currentRouteName: currentRouteName,
+                                    onActorDashboard: tapActorDashboard,
+                                    onExplore: tapExplore,
+                                    onDirectorDashboard: tapDashboard,
+                                    onCreateAudition: tapCreateAudition,
+                                  ),
                                 ],
                               ),
                             ),
@@ -369,6 +341,8 @@ class _HeaderBar extends StatelessWidget {
                       onLogOut: onLogout,
                       onDirectorConnectGoogleCalendar:
                           onDirectorConnectGoogleCalendar,
+                      onSelectProfile: onSelectProfile,
+                      onSelectSettings: onSelectSettings,
                     ),
                   ],
                 ),
@@ -379,6 +353,69 @@ class _HeaderBar extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Role-specific header links — rankings and submission are reached from dashboards.
+List<Widget> _primaryHeaderNavButtons({
+  required bool showActorNav,
+  required bool showDirectorNav,
+  required String currentRouteName,
+  required VoidCallback? onActorDashboard,
+  required VoidCallback? onExplore,
+  required VoidCallback? onDirectorDashboard,
+  required VoidCallback? onCreateAudition,
+}) {
+  final out = <Widget>[];
+
+  if (showActorNav) {
+    if (onActorDashboard != null) {
+      out.add(
+        _NavButton(
+          icon: Icons.dashboard_outlined,
+          label: 'My dashboard',
+          filled: currentRouteName == 'actor-dashboard' ||
+              currentRouteName == 'submit-video',
+          onPressed: onActorDashboard,
+        ),
+      );
+    }
+    if (onExplore != null) {
+      out.add(
+        _NavButton(
+          icon: Icons.explore_outlined,
+          label: 'Explore auditions',
+          filled: currentRouteName == 'explore-auditions',
+          onPressed: onExplore,
+        ),
+      );
+    }
+  }
+
+  if (showDirectorNav) {
+    if (onDirectorDashboard != null) {
+      out.add(
+        _NavButton(
+          icon: Icons.dashboard_customize_outlined,
+          label: 'Dashboard',
+          filled: currentRouteName == 'director-dashboard' ||
+              currentRouteName == 'rankings',
+          onPressed: onDirectorDashboard,
+        ),
+      );
+    }
+    if (onCreateAudition != null) {
+      out.add(
+        _NavButton(
+          icon: Icons.add_circle_outline_rounded,
+          label: 'Create audition',
+          filled: currentRouteName == 'create-audition',
+          onPressed: onCreateAudition,
+        ),
+      );
+    }
+  }
+
+  return out;
 }
 
 class _NavButton extends StatelessWidget {
@@ -400,7 +437,7 @@ class _NavButton extends StatelessWidget {
     final style = TextButton.styleFrom(
       foregroundColor: filled ? cs.onPrimary : cs.primary,
       backgroundColor: filled ? cs.primary : null,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     );
 

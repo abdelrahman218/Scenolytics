@@ -8,6 +8,29 @@ enum AuditionRankingsSortBy {
   scriptMatch,
 }
 
+/// Sort options shown in the director rankings UI for the given audition type.
+List<AuditionRankingsSortBy> auditionRankingsSortOptions({
+  required bool isAudioOnly,
+}) {
+  if (isAudioOnly) {
+    return const [
+      AuditionRankingsSortBy.overall,
+      AuditionRankingsSortBy.vocalEmotion,
+      AuditionRankingsSortBy.scriptMatch,
+    ];
+  }
+  return AuditionRankingsSortBy.values;
+}
+
+/// If the current sort is unavailable (e.g. facial on audio), fall back to overall.
+AuditionRankingsSortBy auditionRankingsSortOrFallback(
+  AuditionRankingsSortBy sortBy, {
+  required bool isAudioOnly,
+}) {
+  final allowed = auditionRankingsSortOptions(isAudioOnly: isAudioOnly);
+  return allowed.contains(sortBy) ? sortBy : AuditionRankingsSortBy.overall;
+}
+
 extension AuditionRankingsSortByUi on AuditionRankingsSortBy {
   /// Short label for the rank-by dropdown.
   String get menuLabel => switch (this) {

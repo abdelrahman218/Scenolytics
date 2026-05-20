@@ -1,4 +1,4 @@
-import 'dart:math' as math;
+import 'dart:async';
 
 import 'package:camera/camera.dart';
 import 'package:file_saver/file_saver.dart';
@@ -14,6 +14,7 @@ import '../branding/scenolytics_branding.dart';
 import '../models/actor_audition_submission.dart';
 import '../models/actor_callback.dart';
 import '../models/callback_status.dart';
+import '../widgets/audio_recorder_card.dart';
 import '../widgets/callback_status_chips.dart';
 import '../models/audition_submission_status.dart';
 import '../theme/scenolytics_colors.dart';
@@ -62,6 +63,16 @@ class _AuditionVideoSubmissionPageState
   CameraController? _cameraController;
   VideoPlayerController? _videoController;
   XFile? _recordedFile;
+
+  /// Recording timer (active recording duration), shown in the video card.
+  Duration _videoRecordElapsed = Duration.zero;
+  Timer? _videoRecordTicker;
+
+  /// Audio bytes captured by [AudioRecorderCard]. Mutually exclusive with the
+  /// video flow — only one of the two is used per submission depending on
+  /// [_auditionType].
+  Uint8List? _recordedAudioBytes;
+
   ActorAuditionSubmission? _lastSubmission;
   String _requestedEmotion = '';
   String _auditionTitle = '';
@@ -72,6 +83,12 @@ class _AuditionVideoSubmissionPageState
   int _mySubmissionCountForAudition = 0;
   String _actorDisplayName = '';
   int? _actorAge;
+
+  /// Casting `auditions.type` ('Audio' or 'Video'). Empty until the casting
+  /// detail loads. Empty defaults to video for backwards compatibility.
+  String _auditionType = '';
+
+  bool get _isAudioOnly => _auditionType.trim().toLowerCase() == 'audio';
 
   /// From casting list API for this audition (when returning to the page).
   AuditionSubmissionStatus? _serverSubmissionStatus;
@@ -231,6 +248,7 @@ class _AuditionVideoSubmissionPageState
         _scriptPlainText = ui.scriptPlainText;
         _mySubmissionCountForAudition = ui.mySubmissionCountForAudition;
         _serverSubmissionStatus = ui.myLatestSubmissionStatus;
+        _auditionType = ui.auditionType;
         if (ui.emotionsCsv.trim().isNotEmpty) {
           _requestedEmotion = ui.emotionsCsv;
         }
@@ -361,9 +379,27 @@ class _AuditionVideoSubmissionPageState
 
   @override
   void dispose() {
+    _videoRecordTicker?.cancel();
     _cameraController?.dispose();
     _videoController?.dispose();
     super.dispose();
+  }
+
+  void _startVideoTimer() {
+    _videoRecordTicker?.cancel();
+    _videoRecordElapsed = Duration.zero;
+    _videoRecordTicker =
+        Timer.periodic(const Duration(milliseconds: 200), (_) {
+      if (!mounted) return;
+      setState(() {
+        _videoRecordElapsed += const Duration(milliseconds: 200);
+      });
+    });
+  }
+
+  void _stopVideoTimer() {
+    _videoRecordTicker?.cancel();
+    _videoRecordTicker = null;
   }
 
   Future<void> _checkExistingSubmission() async {
@@ -474,6 +510,7 @@ class _AuditionVideoSubmissionPageState
     if (controller == null || !controller.value.isInitialized) return;
     try {
       await controller.startVideoRecording();
+      _startVideoTimer();
       setState(() {
         _isRecording = true;
         _isPreviewing = false;
@@ -498,6 +535,7 @@ class _AuditionVideoSubmissionPageState
     if (controller == null || !controller.value.isRecordingVideo) return;
     try {
       final file = await controller.stopVideoRecording();
+      _stopVideoTimer();
       final videoController = VideoPlayerController.networkUrl(
         Uri.parse(file.path),
       );
@@ -857,9 +895,20 @@ class _AuditionVideoSubmissionPageState
       );
       return;
     }
-    if (_recordedFile == null) {
+    final Uint8List? bytes = _isAudioOnly
+        ? _recordedAudioBytes
+        : (await _recordedFile?.readAsBytes());
+
+    if (!mounted) return;
+    if (bytes == null || bytes.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Record your audition video first.')),
+        SnackBar(
+          content: Text(
+            _isAudioOnly
+                ? 'Record your audition audio first.'
+                : 'Record your audition video first.',
+          ),
+        ),
       );
       return;
     }
@@ -867,6 +916,7 @@ class _AuditionVideoSubmissionPageState
       actorToken: widget.actorToken,
       auditionId: _effectiveAuditionId,
     );
+    if (!mounted) return;
     if (configError != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -878,7 +928,6 @@ class _AuditionVideoSubmissionPageState
 
     setState(() => _isSubmitting = true);
     try {
-      final bytes = await _recordedFile!.readAsBytes();
       final outcome = await widget.auditionsRepository.submitRecordedAudition(
         actorToken: widget.actorToken,
         auditionId: _effectiveAuditionId,
@@ -898,55 +947,10 @@ class _AuditionVideoSubmissionPageState
         _lastSubmission = outcome.submission;
         _isPreviewing = false;
         _recordedFile = null;
+        _recordedAudioBytes = null;
         _videoController?.dispose();
         _videoController = null;
       });
-
-      if (!mounted) return;
-      final payload = outcome.createSubmissionRawBody.trim().isEmpty
-          ? '(empty response body)'
-          : outcome.createSubmissionRawBody.trim();
-      ScaffoldMessenger.of(context).clearSnackBars();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          duration: const Duration(seconds: 30),
-          behavior: SnackBarBehavior.floating,
-          width: math.min(MediaQuery.sizeOf(context).width - 32, 520),
-          content: SizedBox(
-            height: 220,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'POST /casting/…/submissions response',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 10),
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: SelectableText(
-                      payload,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontFamily: 'monospace',
-                        fontSize: 11,
-                        height: 1.35,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          action: SnackBarAction(
-            label: 'Dismiss',
-            onPressed: () {
-              ScaffoldMessenger.of(context).hideCurrentSnackBar();
-            },
-          ),
-        ),
-      );
 
       await _loadAuditionUi();
       await _loadActorCallbacks();
@@ -1005,12 +1009,15 @@ class _AuditionVideoSubmissionPageState
                     auditionTitle: _auditionTitle,
                     heroBlurb: _auditionDescription.trim().isNotEmpty
                         ? _auditionDescription.trim()
-                        : 'Upload your audition video for AI analysis and director review.',
+                        : (_isAudioOnly
+                            ? 'Upload your audition audio for AI analysis and director review.'
+                            : 'Upload your audition video for AI analysis and director review.'),
                     auditionTheme: _auditionTheme,
                     requestedEmotion: _requestedEmotion,
                     directorName: _directorName,
                     mySubmissionCount: _mySubmissionCountForAudition,
                     onDownloadScript: _downloadScriptAsPdf,
+                    isAudioOnly: _isAudioOnly,
                   ),
                   if (pipelineBanner != null) ...[
                     const SizedBox(height: 16),
@@ -1038,23 +1045,35 @@ class _AuditionVideoSubmissionPageState
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Text(
-                            'Video submission',
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
+                          Row(
+                            children: [
+                              _SubmissionModeBadge(isAudioOnly: _isAudioOnly),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  _isAudioOnly
+                                      ? 'Audio submission'
+                                      : 'Video submission',
+                                  style: theme.textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 6),
                           Text(
                             _auditionDescription.trim().isNotEmpty
                                 ? _auditionDescription.trim()
-                                : 'Record your strongest take with confidence. Your performance will be analyzed and delivered to the director dashboard.',
+                                : (_isAudioOnly
+                                    ? 'Record your strongest vocal take. Your performance will be analyzed for tone and emotion, then sent to the director.'
+                                    : 'Record your strongest take with confidence. Your performance will be analyzed and delivered to the director dashboard.'),
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: cs.onSurfaceVariant,
                               height: 1.35,
                             ),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 14),
                           _LoggedInActorSummary(
                             actorName: _actorDisplayName,
                             actorAge: _actorAge,
@@ -1080,6 +1099,37 @@ class _AuditionVideoSubmissionPageState
                                 ),
                               ),
                             )
+                          else if (_isAudioOnly)
+                            _recordingGate ==
+                                    _SubmissionRecordingGate.open
+                                ? AudioRecorderCard(
+                                    enabled: true,
+                                    onRecordingReady: (bytes) {
+                                      setState(
+                                          () => _recordedAudioBytes = bytes);
+                                    },
+                                  )
+                                : _SubmissionPostRecordPanel(
+                                    recordingGate: _recordingGate,
+                                    isAudioOnly: true,
+                                    callbackScheduledAt:
+                                        _callbackForThisAudition
+                                            ?.callbackDatetime,
+                                    callbackStatus: _callbackForThisAudition
+                                        ?.callbackStatus,
+                                    callbackMeetLink:
+                                        _callbackForThisAudition?.link,
+                                    formatCallbackDate: _formatCallbackDate,
+                                    onOpenMeetLink: () {
+                                      final link = _callbackForThisAudition
+                                              ?.link
+                                              ?.trim() ??
+                                          '';
+                                      if (link.isNotEmpty) {
+                                        _openMeetLink(link);
+                                      }
+                                    },
+                                  )
                           else
                             _RecordingCard(
                               cameraController: _cameraController,
@@ -1088,6 +1138,7 @@ class _AuditionVideoSubmissionPageState
                               isRecording: _isRecording,
                               isPreviewing: _isPreviewing,
                               recordingGate: _recordingGate,
+                              recordingElapsed: _videoRecordElapsed,
                               callbackScheduledAt:
                                   _callbackForThisAudition?.callbackDatetime,
                               callbackStatus:
@@ -1158,6 +1209,7 @@ class _SubmissionHeroCard extends StatelessWidget {
     required this.directorName,
     required this.mySubmissionCount,
     required this.onDownloadScript,
+    this.isAudioOnly = false,
   });
 
   final ThemeData theme;
@@ -1168,6 +1220,7 @@ class _SubmissionHeroCard extends StatelessWidget {
   final String directorName;
   final int mySubmissionCount;
   final VoidCallback onDownloadScript;
+  final bool isAudioOnly;
 
   String _subtitleLine() {
     final parts = <String>[];
@@ -1182,29 +1235,18 @@ class _SubmissionHeroCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final b = theme.brightness;
-    final cs = theme.colorScheme;
     final onHero = ScenolyticsColors.onPrimary;
 
     final decoration = BoxDecoration(
-      gradient: b == Brightness.dark
-          ? const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color(0xFF021A2E),
-                ScenolyticsColors.heroGradientStart,
-                Color(0xFF052F45),
-              ],
-            )
-          : ScenolyticsColors.heroBarGradient,
+      gradient: ScenolyticsColors.heroBarGradientFor(b),
       borderRadius: BorderRadius.circular(20),
       border: Border.all(
-        color: onHero.withValues(alpha: b == Brightness.dark ? 0.12 : 0.2),
+        color: onHero.withValues(alpha: ScenolyticsColors.heroBorderAlpha(b)),
       ),
       boxShadow: [
         BoxShadow(
-          color: cs.shadow.withValues(
-            alpha: b == Brightness.dark ? 0.35 : 0.12,
+          color: ScenolyticsColors.heroGradientStart.withValues(
+            alpha: ScenolyticsColors.heroGlowShadowAlpha(b),
           ),
           blurRadius: 18,
           offset: const Offset(0, 6),
@@ -1226,7 +1268,13 @@ class _SubmissionHeroCard extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.movie_filter_rounded, color: onHero, size: 30),
+                  Icon(
+                    isAudioOnly
+                        ? Icons.graphic_eq_rounded
+                        : Icons.movie_filter_rounded,
+                    color: onHero,
+                    size: 30,
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
@@ -1243,6 +1291,41 @@ class _SubmissionHeroCard extends StatelessWidget {
                           ),
                         ],
                       ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: onHero.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: onHero.withValues(alpha: 0.5),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          isAudioOnly
+                              ? Icons.mic_rounded
+                              : Icons.videocam_rounded,
+                          color: onHero,
+                          size: 14,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          isAudioOnly ? 'AUDIO' : 'VIDEO',
+                          style: TextStyle(
+                            color: onHero,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -1304,7 +1387,9 @@ class _SubmissionHeroCard extends StatelessWidget {
           right: -8,
           top: -12,
           child: Icon(
-            Icons.movie_filter_rounded,
+            isAudioOnly
+                ? Icons.graphic_eq_rounded
+                : Icons.movie_filter_rounded,
             size: 96,
             color: onHero.withValues(alpha: 0.07),
           ),
@@ -1463,36 +1548,24 @@ class _LoggedInActorSummary extends StatelessWidget {
   }
 }
 
-class _RecordingCard extends StatelessWidget {
-  const _RecordingCard({
-    required this.cameraController,
-    required this.videoController,
-    required this.isInitializing,
-    required this.isRecording,
-    required this.isPreviewing,
+/// Shown after submit when recording is closed — callback time, Meet link, etc.
+/// Used for both audio and video submission pages.
+class _SubmissionPostRecordPanel extends StatelessWidget {
+  const _SubmissionPostRecordPanel({
     required this.recordingGate,
+    required this.isAudioOnly,
     this.callbackScheduledAt,
     this.callbackStatus,
     this.callbackMeetLink,
-    required this.onStartRecording,
-    required this.onStopRecording,
-    required this.onRequestFullScreen,
     required this.formatCallbackDate,
     required this.onOpenMeetLink,
   });
 
-  final CameraController? cameraController;
-  final VideoPlayerController? videoController;
-  final bool isInitializing;
-  final bool isRecording;
-  final bool isPreviewing;
   final _SubmissionRecordingGate recordingGate;
+  final bool isAudioOnly;
   final DateTime? callbackScheduledAt;
   final CallbackStatus? callbackStatus;
   final String? callbackMeetLink;
-  final VoidCallback onStartRecording;
-  final VoidCallback onStopRecording;
-  final VoidCallback onRequestFullScreen;
   final String Function(DateTime dt) formatCallbackDate;
   final VoidCallback onOpenMeetLink;
 
@@ -1516,7 +1589,7 @@ class _RecordingCard extends StatelessWidget {
             'roles from Explore Auditions.';
       case CallbackStatus.accepted:
         if (callbackScheduledAt != null) {
-          return 'Confirmed for ${formatCallbackDate(callbackScheduledAt!)}';
+          return 'Your callback is confirmed. Join at the scheduled time below.';
         }
         return 'Your callback was accepted.';
       case CallbackStatus.scheduled:
@@ -1534,199 +1607,757 @@ class _RecordingCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final hasPreview =
-        isPreviewing &&
-        videoController != null &&
-        videoController!.value.isInitialized;
-
+    final isDark = theme.brightness == Brightness.dark;
     final meet =
         callbackMeetLink?.trim().isNotEmpty ?? false ? callbackMeetLink!.trim() : '';
 
+    final bg = isDark
+        ? const Color(0xFF0B1A26)
+        : cs.surface.withValues(alpha: 0.92);
+    final border = isDark
+        ? cs.outline.withValues(alpha: 0.35)
+        : cs.outlineVariant.withValues(alpha: 0.7);
+
     return Container(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(
-          alpha: 0.55,
-        ),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.8),
-        ),
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: border),
+        boxShadow: isDark
+            ? null
+            : [
+                BoxShadow(
+                  color: cs.shadow.withValues(alpha: 0.06),
+                  blurRadius: 24,
+                  offset: const Offset(0, 10),
+                ),
+              ],
       ),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (recordingGate != _SubmissionRecordingGate.open) ...[
-            if (recordingGate == _SubmissionRecordingGate.rejected)
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.highlight_off_rounded,
-                      color: cs.error, size: 26),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'This audition was not selected. You can explore other '
-                      'roles from Explore Auditions.',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        height: 1.35,
-                      ),
-                    ),
-                  ),
-                ],
-              )
-            else if (recordingGate == _SubmissionRecordingGate.accepted)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.celebration_rounded,
-                          color: cs.primary, size: 26),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _callbackHeadline,
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      if (callbackStatus != null &&
-                          callbackStatus != CallbackStatus.unknown)
-                        CallbackStatusChip(
-                          status: callbackStatus!,
-                          dense: true,
-                        ),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      cs.primary.withValues(alpha: 0.18),
+                      ScenolyticsColors.accentCyan.withValues(alpha: 0.18),
                     ],
                   ),
-                  const SizedBox(height: 10),
-                  Text(
-                    _callbackBodyText,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      height: 1.35,
-                      color: cs.onSurfaceVariant,
-                    ),
-                  ),
-                  if (meet.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      onPressed: onOpenMeetLink,
-                      icon: const Icon(Icons.video_camera_front_outlined),
-                      label: const Text('Join Meet link'),
-                    ),
-                  ] else if (callbackScheduledAt != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      'A Google Meet link will show here after your director '
-                      'connects Calendar and generates the invite.',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: cs.onSurfaceVariant,
-                        height: 1.35,
-                      ),
-                    ),
-                  ],
-                ],
-              )
-            else
-              Text(
-                'Submission sent. You have already submitted for this audition.',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  isAudioOnly
+                      ? Icons.graphic_eq_rounded
+                      : Icons.videocam_rounded,
+                  color: cs.primary,
+                  size: 18,
                 ),
               ),
-          ] else ...[
-            if (isInitializing)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 14),
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else ...[
-            Row(
-              children: [
-                Icon(Icons.videocam_rounded, color: theme.colorScheme.primary),
-                const SizedBox(width: 8),
-                Text(
-                  'Record audition',
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  isAudioOnly ? 'Audio submission' : 'Video submission',
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (hasPreview) ...[
-              SizedBox(
-                height: 220,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(14),
-                  child: ColoredBox(
-                    color: Colors.black,
-                    child: Stack(
-                      fit: StackFit.expand,
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (recordingGate == _SubmissionRecordingGate.rejected)
+            _GateRow(
+              icon: Icons.highlight_off_rounded,
+              iconColor: cs.error,
+              text:
+                  'This audition was not selected. You can explore other roles from Explore Auditions.',
+            )
+          else if (recordingGate == _SubmissionRecordingGate.accepted)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.celebration_rounded,
+                        color: cs.primary, size: 26),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _callbackHeadline,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    if (callbackStatus != null &&
+                        callbackStatus != CallbackStatus.unknown)
+                      CallbackStatusChip(
+                        status: callbackStatus!,
+                        dense: true,
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  _callbackBodyText,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    height: 1.35,
+                    color: cs.onSurfaceVariant,
+                  ),
+                ),
+                if (callbackScheduledAt != null) ...[
+                  const SizedBox(height: 14),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: cs.primaryContainer.withValues(
+                        alpha: isDark ? 0.45 : 0.65,
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: cs.primary.withValues(alpha: 0.35),
+                      ),
+                    ),
+                    child: Row(
                       children: [
-                        VideoPlayer(videoController!),
-                        Positioned(
-                          bottom: 8,
-                          right: 8,
-                          child: IconButton(
-                            icon: Icon(
-                              videoController!.value.isPlaying
-                                  ? Icons.pause_circle_filled_rounded
-                                  : Icons.play_circle_fill_rounded,
-                              color: Colors.white,
-                              size: 30,
-                            ),
-                            onPressed: () {
-                              if (videoController!.value.isPlaying) {
-                                videoController!.pause();
-                              } else {
-                                videoController!.play();
-                              }
-                            },
+                        Icon(
+                          Icons.event_rounded,
+                          color: cs.primary,
+                          size: 26,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Callback time',
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  color: cs.onPrimaryContainer
+                                      .withValues(alpha: 0.85),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                formatCallbackDate(callbackScheduledAt!),
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  color: cs.onPrimaryContainer,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
                   ),
+                ],
+                if (meet.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: onOpenMeetLink,
+                    icon: const Icon(Icons.video_camera_front_outlined),
+                    label: const Text('Join Meet link'),
+                  ),
+                ] else if (callbackScheduledAt != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'A Google Meet link will show here after your director '
+                    'connects Calendar and generates the invite.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ],
+            )
+          else
+            _GateRow(
+              icon: Icons.hourglass_top_rounded,
+              iconColor: cs.primary,
+              text:
+                  'Submission sent. The director is reviewing it now — you’ll see status updates above.',
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecordingCard extends StatelessWidget {
+  const _RecordingCard({
+    required this.cameraController,
+    required this.videoController,
+    required this.isInitializing,
+    required this.isRecording,
+    required this.isPreviewing,
+    required this.recordingGate,
+    required this.recordingElapsed,
+    this.callbackScheduledAt,
+    this.callbackStatus,
+    this.callbackMeetLink,
+    required this.onStartRecording,
+    required this.onStopRecording,
+    required this.onRequestFullScreen,
+    required this.formatCallbackDate,
+    required this.onOpenMeetLink,
+  });
+
+  final CameraController? cameraController;
+  final VideoPlayerController? videoController;
+  final bool isInitializing;
+  final bool isRecording;
+  final bool isPreviewing;
+  final _SubmissionRecordingGate recordingGate;
+  final Duration recordingElapsed;
+  final DateTime? callbackScheduledAt;
+  final CallbackStatus? callbackStatus;
+  final String? callbackMeetLink;
+  final VoidCallback onStartRecording;
+  final VoidCallback onStopRecording;
+  final VoidCallback onRequestFullScreen;
+  final String Function(DateTime dt) formatCallbackDate;
+  final VoidCallback onOpenMeetLink;
+
+  String _formatDuration(Duration d) {
+    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final hasPreview =
+        isPreviewing &&
+        videoController != null &&
+        videoController!.value.isInitialized;
+
+    final isDark = theme.brightness == Brightness.dark;
+    final bg = isDark
+        ? const Color(0xFF0B1A26)
+        : theme.colorScheme.surface.withValues(alpha: 0.92);
+    final border = isDark
+        ? cs.outline.withValues(alpha: 0.35)
+        : cs.outlineVariant.withValues(alpha: 0.7);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: border),
+        boxShadow: isDark
+            ? null
+            : [
+                BoxShadow(
+                  color: cs.shadow.withValues(alpha: 0.06),
+                  blurRadius: 24,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+      ),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _VideoCardTitle(isRecording: isRecording),
+          const SizedBox(height: 14),
+          if (recordingGate != _SubmissionRecordingGate.open)
+            _SubmissionPostRecordPanel(
+              recordingGate: recordingGate,
+              isAudioOnly: false,
+              callbackScheduledAt: callbackScheduledAt,
+              callbackStatus: callbackStatus,
+              callbackMeetLink: callbackMeetLink,
+              formatCallbackDate: formatCallbackDate,
+              onOpenMeetLink: onOpenMeetLink,
+            )
+          else if (isInitializing) ...[
+            const SizedBox(
+              height: 168,
+              child: Center(
+                child: SizedBox.square(
+                  dimension: 32,
+                  child: CircularProgressIndicator(strokeWidth: 3),
                 ),
               ),
-              const SizedBox(height: 12),
-            ],
-            Builder(
-              builder: (context) {
-                if (!isRecording && !isPreviewing) {
-                  return FilledButton.icon(
-                    onPressed: onRequestFullScreen,
-                    icon: const Icon(Icons.fiber_manual_record_rounded),
-                    label: const Text('Start recording'),
-                  );
-                }
-
-                if (isRecording) {
-                  return FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      foregroundColor: Colors.white,
-                    ),
-                    onPressed: onStopRecording,
-                    icon: const Icon(Icons.stop_rounded),
-                    label: const Text('Stop'),
-                  );
-                }
-
-                return Text(
-                  'Preview ready. Tap Submit below to send your audition.',
-                  style: theme.textTheme.bodySmall,
-                  textAlign: TextAlign.center,
-                  softWrap: true,
-                );
-              },
             ),
-          ],
+          ] else ...[
+            _VideoStage(
+              cameraController: cameraController,
+              videoController: videoController,
+              isRecording: isRecording,
+              isPreviewing: isPreviewing,
+              hasPreview: hasPreview,
+              recordingElapsed: _formatDuration(recordingElapsed),
+            ),
+            const SizedBox(height: 14),
+            _VideoActions(
+              isRecording: isRecording,
+              isPreviewing: isPreviewing,
+              hasPreview: hasPreview,
+              onRequestFullScreen: onRequestFullScreen,
+              onStopRecording: onStopRecording,
+            ),
+            if (!isRecording && !isPreviewing) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Find a well-lit, quiet space and look into the camera for your take.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                  height: 1.35,
+                ),
+              ),
+            ] else if (hasPreview) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Preview ready. Tap Submit below to send your audition.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
+            ],
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _VideoCardTitle extends StatelessWidget {
+  const _VideoCardTitle({required this.isRecording});
+
+  final bool isRecording;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                cs.primary.withValues(alpha: 0.18),
+                ScenolyticsColors.accentCyan.withValues(alpha: 0.18),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(Icons.videocam_rounded, color: cs.primary, size: 18),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            'Video recording',
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        if (isRecording)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE53935).withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: const Color(0xFFE53935).withValues(alpha: 0.45),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                _SmallBlinkingDot(),
+                SizedBox(width: 6),
+                Text(
+                  'REC',
+                  style: TextStyle(
+                    color: Color(0xFFE53935),
+                    fontWeight: FontWeight.w800,
+                    fontSize: 11,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _SmallBlinkingDot extends StatefulWidget {
+  const _SmallBlinkingDot();
+
+  @override
+  State<_SmallBlinkingDot> createState() => _SmallBlinkingDotState();
+}
+
+class _SmallBlinkingDotState extends State<_SmallBlinkingDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (_, __) {
+        return Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: const Color(0xFFE53935)
+                .withValues(alpha: 0.5 + 0.5 * _ctrl.value),
+            shape: BoxShape.circle,
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _GateRow extends StatelessWidget {
+  const _GateRow({
+    required this.icon,
+    required this.iconColor,
+    required this.text,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: iconColor, size: 26),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              height: 1.35,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _VideoStage extends StatelessWidget {
+  const _VideoStage({
+    required this.cameraController,
+    required this.videoController,
+    required this.isRecording,
+    required this.isPreviewing,
+    required this.hasPreview,
+    required this.recordingElapsed,
+  });
+
+  final CameraController? cameraController;
+  final VideoPlayerController? videoController;
+  final bool isRecording;
+  final bool isPreviewing;
+  final bool hasPreview;
+  final String recordingElapsed;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final body = hasPreview
+        ? _PreviewBody(controller: videoController!)
+        : _IdleStage(isRecording: isRecording);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.black,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: cs.primary.withValues(alpha: 0.18),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.18),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: AspectRatio(
+        aspectRatio: 16 / 9,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            body,
+            if (isRecording)
+              Positioned(
+                left: 12,
+                top: 12,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.55),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const _SmallBlinkingDot(),
+                      const SizedBox(width: 6),
+                      Text(
+                        recordingElapsed,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontFeatures: [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _IdleStage extends StatelessWidget {
+  const _IdleStage({required this.isRecording});
+
+  final bool isRecording;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF0B1A26), Color(0xFF103047)],
+        ),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              isRecording
+                  ? Icons.fiber_manual_record_rounded
+                  : Icons.videocam_outlined,
+              color: Colors.white.withValues(alpha: 0.85),
+              size: 56,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              isRecording
+                  ? 'Recording in full screen…'
+                  : 'Tap “Start recording” to capture a take',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PreviewBody extends StatefulWidget {
+  const _PreviewBody({required this.controller});
+
+  final VideoPlayerController controller;
+
+  @override
+  State<_PreviewBody> createState() => _PreviewBodyState();
+}
+
+class _PreviewBodyState extends State<_PreviewBody> {
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_listener);
+  }
+
+  void _listener() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_listener);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.controller;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        FittedBox(
+          fit: BoxFit.cover,
+          child: SizedBox(
+            width: c.value.size.width,
+            height: c.value.size.height,
+            child: VideoPlayer(c),
+          ),
+        ),
+        if (!c.value.isPlaying)
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.center,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.transparent,
+                  Colors.black.withValues(alpha: 0.45),
+                ],
+              ),
+            ),
+          ),
+        Center(
+          child: Material(
+            color: Colors.black.withValues(alpha: 0.4),
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: () {
+                if (c.value.isPlaying) {
+                  c.pause();
+                } else {
+                  c.play();
+                }
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Icon(
+                  c.value.isPlaying
+                      ? Icons.pause_rounded
+                      : Icons.play_arrow_rounded,
+                  color: Colors.white,
+                  size: 38,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _VideoActions extends StatelessWidget {
+  const _VideoActions({
+    required this.isRecording,
+    required this.isPreviewing,
+    required this.hasPreview,
+    required this.onRequestFullScreen,
+    required this.onStopRecording,
+  });
+
+  final bool isRecording;
+  final bool isPreviewing;
+  final bool hasPreview;
+  final VoidCallback onRequestFullScreen;
+  final VoidCallback onStopRecording;
+
+  @override
+  Widget build(BuildContext context) {
+    if (isRecording) {
+      return FilledButton.icon(
+        style: FilledButton.styleFrom(
+          backgroundColor: const Color(0xFFE53935),
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+        ),
+        onPressed: onStopRecording,
+        icon: const Icon(Icons.stop_rounded),
+        label: const Text('Stop recording'),
+      );
+    }
+    if (hasPreview || isPreviewing) {
+      return const SizedBox.shrink();
+    }
+    return FilledButton.icon(
+      style: FilledButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+      ),
+      onPressed: onRequestFullScreen,
+      icon: const Icon(Icons.fiber_manual_record_rounded),
+      label: const Text('Start recording'),
+    );
+  }
+}
+
+class _SubmissionModeBadge extends StatelessWidget {
+  const _SubmissionModeBadge({required this.isAudioOnly});
+
+  final bool isAudioOnly;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            cs.primary.withValues(alpha: 0.18),
+            ScenolyticsColors.accentCyan.withValues(alpha: 0.18),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(
+        isAudioOnly ? Icons.graphic_eq_rounded : Icons.videocam_rounded,
+        color: cs.primary,
+        size: 22,
       ),
     );
   }

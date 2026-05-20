@@ -950,8 +950,8 @@ class _HeroHeader extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(24),
       child: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: ScenolyticsColors.heroBarGradient,
+        decoration: BoxDecoration(
+          gradient: ScenolyticsColors.heroBarGradientFor(theme.brightness),
         ),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),

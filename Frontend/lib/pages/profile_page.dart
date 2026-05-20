@@ -1,16 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../constants/profile_field_options.dart';
 import '../data/api/user_management_api.dart';
 import '../data/models/auth_user.dart';
 import '../theme/scenolytics_colors.dart';
+import '../utils/actor_profile_completion.dart';
+import '../utils/director_profile_completion.dart';
+import '../utils/auth_validators.dart' show validateAgeField;
+import '../utils/profile_validators.dart';
 
 /// Profile page for the signed-in user.
 ///
 /// Loads the existing actor/director profile row from the User Management
 /// service (`GET /api/v1/{actors|directors}/:user_id/profile`) and renders an
-/// editable form covering every column in the corresponding schema. All fields
-/// are optional. Saving will:
+/// editable form. **Required:** actors — display name, age, height, gender,
+/// body type, ethnicity; directors — display name, phone. All other fields are
+/// optional. Saving will:
 ///   - `POST  /api/v1/{actors|directors}/profile`              if no row exists
 ///   - `PATCH /api/v1/{actors|directors}/profile/:profile_id`  otherwise
 class ProfilePage extends StatefulWidget {
@@ -20,6 +26,11 @@ class ProfilePage extends StatefulWidget {
     this.userManagementApi,
     this.userEmail,
     this.accountRoleLabel,
+    this.profileSetupRole,
+    this.mandatorySetup = false,
+    this.embeddedInShell = false,
+    this.onSetupComplete,
+    this.onLogout,
   });
 
   /// Signed-in identity. When null, the page falls back to the read-only header
@@ -36,6 +47,22 @@ class ProfilePage extends StatefulWidget {
   /// Optional override for the role label (defaults to [user.role] capitalized).
   final String? accountRoleLabel;
 
+  /// When set (e.g. mandatory sign-up setup), drives which profile form to show.
+  final String? profileSetupRole;
+
+  /// When true (first-time sign-up setup), back navigation is blocked until the
+  /// profile is saved with all required fields.
+  final bool mandatorySetup;
+
+  /// When true, rendered inside [MainShell] (no duplicate app bar).
+  final bool embeddedInShell;
+
+  /// Called after a successful save while [mandatorySetup] is active.
+  final VoidCallback? onSetupComplete;
+
+  /// Optional sign-out while the setup gate is shown.
+  final Future<void> Function()? onLogout;
+
   @override
   State<ProfilePage> createState() => _ProfilePageState();
 }
@@ -44,22 +71,6 @@ class _ProfilePageState extends State<ProfilePage> {
   static const _wideBreakpoint = 640.0;
   static const _maxContentWidth = 720.0;
 
-  static const _genderOptions = <String>[
-    'Male',
-    'Female',
-    'Other',
-    'Prefer not to say',
-  ];
-  static const _bodyTypeOptions = <String>[
-    'Slim',
-    'Athletic',
-    'Average',
-    'Muscular',
-    'Curvy',
-    'Plus size',
-    'Other',
-  ];
-
   final _formKey = GlobalKey<FormState>();
 
   // Actor controllers ---------------------------------------------------------
@@ -67,13 +78,13 @@ class _ProfilePageState extends State<ProfilePage> {
   final _bio = TextEditingController();
   final _heightCm = TextEditingController();
   final _age = TextEditingController();
-  final _ethnicity = TextEditingController();
   final _personalityTraits = TextEditingController();
   final _genres = TextEditingController();
   final _experienceYears = TextEditingController();
   final _portfolioUrl = TextEditingController();
   String? _gender;
   String? _bodyType;
+  String? _ethnicity;
 
   // Director controllers ------------------------------------------------------
   final _companyName = TextEditingController();
@@ -102,7 +113,6 @@ class _ProfilePageState extends State<ProfilePage> {
     _bio.dispose();
     _heightCm.dispose();
     _age.dispose();
-    _ethnicity.dispose();
     _personalityTraits.dispose();
     _genres.dispose();
     _experienceYears.dispose();
@@ -121,8 +131,15 @@ class _ProfilePageState extends State<ProfilePage> {
 
   AuthUser? get _user => widget.user;
   UserManagementApi? get _api => widget.userManagementApi;
-  bool get _isActor => _user?.isActor ?? false;
-  bool get _isDirector => _user?.isDirector ?? false;
+
+  String? get _effectiveRole {
+    final setup = widget.profileSetupRole?.trim().toLowerCase();
+    if (setup == 'actor' || setup == 'director') return setup;
+    return _user?.normalizedRole;
+  }
+
+  bool get _isActor => _effectiveRole == 'actor';
+  bool get _isDirector => _effectiveRole == 'director';
   bool get _canEdit => _user != null && _api != null && (_isActor || _isDirector);
 
   Future<void> _loadProfile() async {
@@ -133,9 +150,9 @@ class _ProfilePageState extends State<ProfilePage> {
       return;
     }
     try {
-      final profile = user.isActor
+      final profile = _isActor
           ? await api.getActorProfile(user.userId, bearerToken: user.token)
-          : user.isDirector
+          : _isDirector
               ? await api.getDirectorProfile(
                   user.userId,
                   bearerToken: user.token,
@@ -144,6 +161,16 @@ class _ProfilePageState extends State<ProfilePage> {
       if (!mounted) return;
       if (profile != null) {
         _hydrateFromProfile(profile);
+        if (widget.mandatorySetup) {
+          final complete = _isActor
+              ? isActorProfileComplete(profile)
+              : _isDirector && isDirectorProfileComplete(profile);
+          if (complete) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) widget.onSetupComplete?.call();
+            });
+          }
+        }
       }
       setState(() => _loading = false);
     } catch (e) {
@@ -164,10 +191,13 @@ class _ProfilePageState extends State<ProfilePage> {
       _heightCm.text = _intStr(p['height_cm']);
       _age.text = _intStr(p['age']);
       final g = _str(p['gender']);
-      _gender = g.isEmpty ? null : _matchOption(g, _genderOptions);
-      _ethnicity.text = _str(p['ethnicity']);
+      _gender = g.isEmpty ? null : _matchOption(g, ActorProfileOptions.genderOptions);
+      final eth = _str(p['ethnicity']);
+      _ethnicity =
+          eth.isEmpty ? null : _matchOption(eth, ActorProfileOptions.ethnicityOptions);
       final bt = _str(p['body_type']);
-      _bodyType = bt.isEmpty ? null : _matchOption(bt, _bodyTypeOptions);
+      _bodyType =
+          bt.isEmpty ? null : _matchOption(bt, ActorProfileOptions.bodyTypeOptions);
       _personalityTraits.text = _csv(p['personality_traits']);
       _genres.text = _csv(p['genres']);
       _experienceYears.text = _intStr(p['experience_years']);
@@ -213,28 +243,39 @@ class _ProfilePageState extends State<ProfilePage> {
     return v.toString();
   }
 
-  String _matchOption(String value, List<String> options) {
+  String? _matchOption(String value, List<String> options) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return null;
     for (final opt in options) {
-      if (opt.toLowerCase() == value.toLowerCase()) return opt;
+      if (opt.toLowerCase() == trimmed.toLowerCase()) return opt;
     }
-    return options.last;
+    // Preserve server values not in the preset list (dropdown adds them).
+    return trimmed;
   }
 
   Map<String, dynamic> _collectActorFields() {
-    final fields = <String, dynamic>{};
-    void putString(String key, String value) {
+    final fields = <String, dynamic>{
+      'display_name': _displayName.text.trim(),
+      'age': int.parse(_age.text.trim()),
+      'height_cm': int.parse(_heightCm.text.trim()),
+      'gender': _gender!.trim(),
+      'body_type': _bodyType!.trim(),
+      'ethnicity': _ethnicity!.trim(),
+    };
+
+    void putOptionalString(String key, String value) {
       final t = value.trim();
       if (t.isNotEmpty) fields[key] = t;
     }
 
-    void putInt(String key, String value) {
+    void putOptionalInt(String key, String value) {
       final t = value.trim();
       if (t.isEmpty) return;
       final n = int.tryParse(t);
       if (n != null) fields[key] = n;
     }
 
-    void putList(String key, String value) {
+    void putOptionalList(String key, String value) {
       final parts = value
           .split(',')
           .map((e) => e.trim())
@@ -243,34 +284,30 @@ class _ProfilePageState extends State<ProfilePage> {
       if (parts.isNotEmpty) fields[key] = parts;
     }
 
-    putString('display_name', _displayName.text);
-    putString('bio', _bio.text);
-    putInt('height_cm', _heightCm.text);
-    putInt('age', _age.text);
-    if (_gender != null && _gender!.trim().isNotEmpty) fields['gender'] = _gender;
-    putString('ethnicity', _ethnicity.text);
-    if (_bodyType != null && _bodyType!.trim().isNotEmpty) fields['body_type'] = _bodyType;
-    putList('personality_traits', _personalityTraits.text);
-    putList('genres', _genres.text);
-    putInt('experience_years', _experienceYears.text);
-    putString('portfolio_url', _portfolioUrl.text);
+    putOptionalString('bio', _bio.text);
+    putOptionalList('personality_traits', _personalityTraits.text);
+    putOptionalList('genres', _genres.text);
+    putOptionalInt('experience_years', _experienceYears.text);
+    putOptionalString('portfolio_url', _portfolioUrl.text);
     return fields;
   }
 
   Map<String, dynamic> _collectDirectorFields() {
-    final fields = <String, dynamic>{};
-    void putString(String key, String value) {
-      final t = value.trim();
-      if (t.isNotEmpty) fields[key] = t;
-    }
+    return <String, dynamic>{
+      'display_name': _displayName.text.trim(),
+      'phone': _phone.text.trim(),
+      'company_name': _optionalStringOrNull(_companyName.text),
+      'company_bio': _optionalStringOrNull(_companyBio.text),
+      'website': _optionalStringOrNull(_website.text),
+      'location': _optionalStringOrNull(_location.text),
+    };
+  }
 
-    putString('display_name', _displayName.text);
-    putString('company_name', _companyName.text);
-    putString('company_bio', _companyBio.text);
-    putString('website', _website.text);
-    putString('phone', _phone.text);
-    putString('location', _location.text);
-    return fields;
+  /// Empty optional fields are sent as JSON `null` (not omitted) so the API
+  /// does not pass `undefined` into MySQL on PATCH.
+  String? _optionalStringOrNull(String value) {
+    final t = value.trim();
+    return t.isEmpty ? null : t;
   }
 
   Future<void> _save() async {
@@ -283,47 +320,50 @@ class _ProfilePageState extends State<ProfilePage> {
     try {
       final fields = _isActor ? _collectActorFields() : _collectDirectorFields();
       Map<String, dynamic> result;
-      if (_profileId == null || _profileId!.isEmpty) {
-        result = _isActor
-            ? await api.createActorProfile(
-                userId: user.userId,
-                fields: fields,
-                bearerToken: user.token,
-              )
-            : await api.createDirectorProfile(
-                userId: user.userId,
-                fields: fields,
-                bearerToken: user.token,
-              );
+      if (_isActor) {
+        result = await api.saveActorProfile(
+          userId: user.userId,
+          fields: fields,
+          bearerToken: user.token,
+          existingProfileId: _profileId,
+          // Avoid PATCH on first-time setup (broken on older User Management builds).
+          preferCreate: widget.mandatorySetup,
+        );
+        final newId = result['id']?.toString().trim();
+        if (newId != null && newId.isNotEmpty) _profileId = newId;
+      } else if (_profileId == null || _profileId!.isEmpty) {
+        result = await api.createDirectorProfile(
+          userId: user.userId,
+          fields: fields,
+          bearerToken: user.token,
+        );
         final newId = result['id']?.toString().trim();
         if (newId != null && newId.isNotEmpty) _profileId = newId;
       } else {
-        result = _isActor
-            ? await api.updateActorProfile(
-                profileId: _profileId!,
-                fields: fields,
-                bearerToken: user.token,
-              )
-            : await api.updateDirectorProfile(
-                profileId: _profileId!,
-                fields: fields,
-                bearerToken: user.token,
-              );
+        result = await api.updateDirectorProfile(
+          profileId: _profileId!,
+          fields: fields,
+          bearerToken: user.token,
+        );
       }
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
-              Icon(Icons.check_circle_rounded, color: Colors.white),
-              SizedBox(width: 10),
-              Text('Profile saved successfully.'),
-            ],
+      if (widget.mandatorySetup) {
+        widget.onSetupComplete?.call();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle_rounded, color: Colors.white),
+                SizedBox(width: 10),
+                Text('Profile saved successfully.'),
+              ],
+            ),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: ScenolyticsColors.success,
           ),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: ScenolyticsColors.success,
-        ),
-      );
+        );
+      }
     } on UserManagementApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -371,25 +411,15 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final brightness = theme.brightness;
 
-    return Scaffold(
-      backgroundColor: ScenolyticsColors.pageBackground,
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        title: const Text('Profile'),
-        backgroundColor: Colors.transparent,
-        foregroundColor: ScenolyticsColors.onPrimary,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: ScenolyticsColors.onPrimary),
-      ),
-      body: DecoratedBox(
+    final pageBody = DecoratedBox(
         decoration: BoxDecoration(
           gradient: ScenolyticsColors.pageBackdropGradientFor(brightness),
         ),
         child: SafeArea(
-          top: false,
+          top: !widget.embeddedInShell,
           child: LayoutBuilder(
             builder: (context, constraints) {
               final isWide = constraints.maxWidth >= _wideBreakpoint;
@@ -407,12 +437,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 slivers: [
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        sidePad,
-                        MediaQuery.paddingOf(context).top + kToolbarHeight + 8,
-                        sidePad,
-                        0,
-                      ),
+                      padding: EdgeInsets.fromLTRB(sidePad, 16, sidePad, 0),
                       child: Center(
                         child: ConstrainedBox(
                           constraints:
@@ -447,12 +472,54 @@ class _ProfilePageState extends State<ProfilePage> {
             },
           ),
         ),
+    );
+
+    if (widget.embeddedInShell) {
+      return PopScope(
+        canPop: !widget.mandatorySetup,
+        child: pageBody,
+      );
+    }
+
+    return PopScope(
+      canPop: !widget.mandatorySetup,
+      child: Scaffold(
+        backgroundColor: brightness == Brightness.dark
+            ? ScenolyticsColors.darkPageBackground
+            : ScenolyticsColors.pageBackground,
+        appBar: AppBar(
+          title:
+              Text(widget.mandatorySetup ? 'Complete your profile' : 'Profile'),
+          automaticallyImplyLeading: !widget.mandatorySetup,
+          backgroundColor: cs.surface,
+          foregroundColor: cs.onSurface,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          shadowColor: cs.shadow.withValues(alpha: 0.12),
+          iconTheme: IconThemeData(color: cs.onSurface),
+          actions: widget.mandatorySetup && widget.onLogout != null
+              ? [
+                  TextButton(
+                    onPressed: _saving ? null : () => widget.onLogout!(),
+                    child: Text(
+                      'Log out',
+                      style: TextStyle(
+                        color: cs.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ]
+              : null,
+        ),
+        body: pageBody,
       ),
     );
   }
 
   Widget _buildContent(BuildContext context, {required bool isWide}) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
     if (_loading) {
       return _ProfileLoadingCard();
@@ -476,6 +543,16 @@ class _ProfilePageState extends State<ProfilePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (widget.mandatorySetup) ...[
+          _MandatorySetupBanner(
+            theme: theme,
+            colorScheme: cs,
+            isDirector: _isDirector,
+            onLogout: widget.embeddedInShell ? widget.onLogout : null,
+            logoutEnabled: !_saving,
+          ),
+          const SizedBox(height: 16),
+        ],
         if (_loadError != null) ...[
           _InfoBanner(
             icon: Icons.info_outline,
@@ -497,6 +574,7 @@ class _ProfilePageState extends State<ProfilePage> {
           saving: _saving,
           onPressed: _save,
           isWide: isWide,
+          label: widget.mandatorySetup ? 'Save and continue' : 'Save profile',
         ),
       ],
     );
@@ -509,13 +587,18 @@ class _ProfilePageState extends State<ProfilePage> {
         _ProfileSectionCard(
           icon: Icons.badge_outlined,
           title: 'About you',
-          subtitle: 'How casting directors see you at a glance.',
+          subtitle: 'Required: display name. Bio is optional.',
           child: Column(
             children: [
-              _textField(controller: _displayName, label: 'Display name'),
+              _textField(
+                controller: _displayName,
+                label: 'Display name',
+                required: true,
+                validator: validateDisplayNameField,
+              ),
               _textField(
                 controller: _bio,
-                label: 'Bio',
+                label: 'Bio (optional)',
                 maxLines: 4,
                 helper: 'A short personal blurb for your casting profile.',
               ),
@@ -526,14 +609,24 @@ class _ProfilePageState extends State<ProfilePage> {
         _ProfileSectionCard(
           icon: Icons.person_outline_rounded,
           title: 'Personal details',
-          subtitle: 'Optional demographics for casting fit.',
+          subtitle: 'Required for casting match: age, height, gender, body type, ethnicity.',
           child: Column(
             children: [
               _responsiveRow(
                 isWide: isWide,
                 children: [
-                  _intField(controller: _age, label: 'Age'),
-                  _intField(controller: _heightCm, label: 'Height (cm)'),
+                  _intField(
+                    controller: _age,
+                    label: 'Age',
+                    required: true,
+                    validator: validateAgeField,
+                  ),
+                  _intField(
+                    controller: _heightCm,
+                    label: 'Height (cm)',
+                    required: true,
+                    validator: validateHeightCmField,
+                  ),
                 ],
               ),
               _responsiveRow(
@@ -542,18 +635,29 @@ class _ProfilePageState extends State<ProfilePage> {
                   _dropdown(
                     label: 'Gender',
                     value: _gender,
-                    options: _genderOptions,
+                    options: ActorProfileOptions.genderOptions,
+                    required: true,
+                    validator: validateActorGenderField,
                     onChanged: (v) => setState(() => _gender = v),
                   ),
                   _dropdown(
                     label: 'Body type',
                     value: _bodyType,
-                    options: _bodyTypeOptions,
+                    options: ActorProfileOptions.bodyTypeOptions,
+                    required: true,
+                    validator: validateBodyTypeField,
                     onChanged: (v) => setState(() => _bodyType = v),
                   ),
                 ],
               ),
-              _textField(controller: _ethnicity, label: 'Ethnicity'),
+              _dropdown(
+                label: 'Ethnicity',
+                value: _ethnicity,
+                options: ActorProfileOptions.ethnicityOptions,
+                required: true,
+                validator: validateEthnicityField,
+                onChanged: (v) => setState(() => _ethnicity = v),
+              ),
             ],
           ),
         ),
@@ -611,8 +715,13 @@ class _ProfilePageState extends State<ProfilePage> {
         _ProfileSectionCard(
           icon: Icons.badge_outlined,
           title: 'About you',
-          subtitle: 'Your public name on Scenolytics.',
-          child: _textField(controller: _displayName, label: 'Display name'),
+          subtitle: 'Required: display name.',
+          child: _textField(
+            controller: _displayName,
+            label: 'Display name',
+            required: true,
+            validator: validateDisplayNameField,
+          ),
         ),
         const SizedBox(height: 14),
         _ProfileSectionCard(
@@ -639,16 +748,21 @@ class _ProfilePageState extends State<ProfilePage> {
         _ProfileSectionCard(
           icon: Icons.contact_mail_outlined,
           title: 'Contact',
-          subtitle: 'How actors can reach your team.',
+          subtitle: 'Required: phone. Location is optional.',
           child: _responsiveRow(
             isWide: isWide,
             children: [
               _textField(
                 controller: _phone,
                 label: 'Phone',
+                required: true,
                 keyboard: TextInputType.phone,
+                validator: validatePhoneField,
               ),
-              _textField(controller: _location, label: 'Location'),
+              _textField(
+                controller: _location,
+                label: 'Location (optional)',
+              ),
             ],
           ),
         ),
@@ -680,6 +794,8 @@ class _ProfilePageState extends State<ProfilePage> {
     int maxLines = 1,
     TextInputType? keyboard,
     String? helper,
+    bool required = false,
+    FormFieldValidator<String>? validator,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -687,7 +803,9 @@ class _ProfilePageState extends State<ProfilePage> {
         controller: controller,
         maxLines: maxLines,
         keyboardType: keyboard,
-        decoration: _decoration(label, helper: helper),
+        enabled: !_saving,
+        validator: validator,
+        decoration: _decoration(label, helper: helper, required: required),
       ),
     );
   }
@@ -696,17 +814,21 @@ class _ProfilePageState extends State<ProfilePage> {
     required TextEditingController controller,
     required String label,
     String? helper,
+    bool required = false,
+    FormFieldValidator<String>? validator,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: TextFormField(
         controller: controller,
         keyboardType: TextInputType.number,
+        enabled: !_saving,
+        validator: validator,
         inputFormatters: <TextInputFormatter>[
           FilteringTextInputFormatter.digitsOnly,
-          LengthLimitingTextInputFormatter(4),
+          LengthLimitingTextInputFormatter(3),
         ],
-        decoration: _decoration(label, helper: helper),
+        decoration: _decoration(label, helper: helper, required: required),
       ),
     );
   }
@@ -716,19 +838,30 @@ class _ProfilePageState extends State<ProfilePage> {
     required String? value,
     required List<String> options,
     required ValueChanged<String?> onChanged,
+    bool required = false,
+    FormFieldValidator<String>? validator,
   }) {
+    final menuOptions = <String>[...options];
+    if (value != null &&
+        value.trim().isNotEmpty &&
+        !menuOptions.any((o) => o.toLowerCase() == value.toLowerCase())) {
+      menuOptions.insert(0, value);
+    }
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: DropdownButtonFormField<String>(
         initialValue: value,
         isExpanded: true,
-        decoration: _decoration(label),
+        decoration: _decoration(label, required: required),
+        validator: validator,
         items: <DropdownMenuItem<String>>[
-          const DropdownMenuItem<String>(
-            value: null,
-            child: Text('—'),
-          ),
-          ...options.map(
+          if (!required)
+            const DropdownMenuItem<String>(
+              value: null,
+              child: Text('—'),
+            ),
+          ...menuOptions.map(
             (g) => DropdownMenuItem<String>(value: g, child: Text(g)),
           ),
         ],
@@ -737,14 +870,21 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  InputDecoration _decoration(String label, {String? helper}) {
+  InputDecoration _decoration(
+    String label, {
+    String? helper,
+    bool required = false,
+  }) {
     final cs = Theme.of(context).colorScheme;
+    final b = cs.brightness;
     return InputDecoration(
-      labelText: label,
+      labelText: required ? '$label *' : label,
       helperText: helper,
       helperMaxLines: 3,
       filled: true,
-      fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.35),
+      fillColor: b == Brightness.dark
+          ? cs.surfaceContainerHighest.withValues(alpha: 0.45)
+          : ScenolyticsColors.surfaceMuted.withValues(alpha: 0.65),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(
@@ -822,25 +962,15 @@ class _ProfileHeroBanner extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        gradient: b == Brightness.dark
-            ? const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF1A1030),
-                  ScenolyticsColors.heroGradientStart,
-                  Color(0xFF2A1848),
-                ],
-              )
-            : ScenolyticsColors.heroBarGradient,
+        gradient: ScenolyticsColors.heroBarGradientFor(b),
         borderRadius: BorderRadius.circular(22),
         border: Border.all(
-          color: onHero.withValues(alpha: b == Brightness.dark ? 0.12 : 0.2),
+          color: onHero.withValues(alpha: ScenolyticsColors.heroBorderAlpha(b)),
         ),
         boxShadow: [
           BoxShadow(
             color: ScenolyticsColors.heroGradientStart.withValues(
-              alpha: b == Brightness.dark ? 0.35 : 0.22,
+              alpha: ScenolyticsColors.heroGlowShadowAlpha(b),
             ),
             blurRadius: 28,
             offset: const Offset(0, 12),
@@ -1084,16 +1214,103 @@ class _ProfileLoadingCard extends StatelessWidget {
   }
 }
 
+class _MandatorySetupBanner extends StatelessWidget {
+  const _MandatorySetupBanner({
+    required this.theme,
+    required this.colorScheme,
+    required this.isDirector,
+    this.onLogout,
+    this.logoutEnabled = true,
+  });
+
+  final ThemeData theme;
+  final ColorScheme colorScheme;
+  final bool isDirector;
+  final Future<void> Function()? onLogout;
+  final bool logoutEnabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            colorScheme.primaryContainer,
+            colorScheme.primaryContainer.withValues(alpha: 0.55),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: colorScheme.primary.withValues(alpha: 0.45),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.info_outline_rounded, color: colorScheme.primary),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isDirector
+                        ? 'Finish your director profile'
+                        : 'Finish your actor profile',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    isDirector
+                        ? 'Add your display name and phone, then tap Save and continue. '
+                            'You cannot use the app until those required fields are saved.'
+                        : 'Fill in every required field below and tap Save and continue. '
+                            'You cannot use the app until your profile is complete.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onPrimaryContainer,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (onLogout != null) ...[
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: logoutEnabled ? () => onLogout!() : null,
+                child: Text(
+                  'Log out',
+                  style: TextStyle(
+                    color: colorScheme.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _SaveButton extends StatelessWidget {
   const _SaveButton({
     required this.saving,
     required this.onPressed,
     required this.isWide,
+    this.label = 'Save profile',
   });
 
   final bool saving;
   final VoidCallback onPressed;
   final bool isWide;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -1102,7 +1319,7 @@ class _SaveButton extends StatelessWidget {
 
     final button = DecoratedBox(
       decoration: BoxDecoration(
-        gradient: ScenolyticsColors.heroBarGradient,
+        gradient: ScenolyticsColors.heroBarGradientFor(brightness),
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
@@ -1140,7 +1357,7 @@ class _SaveButton extends StatelessWidget {
                   ),
                 const SizedBox(width: 10),
                 Text(
-                  saving ? 'Saving…' : 'Save changes',
+                  saving ? 'Saving…' : label,
                   style: theme.textTheme.titleSmall?.copyWith(
                     color: ScenolyticsColors.onPrimary,
                     fontWeight: FontWeight.w700,

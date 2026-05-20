@@ -1,3 +1,4 @@
+import 'package:audioplayers/audioplayers.dart' as ap;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,10 +15,7 @@ import '../models/actor_callback.dart';
 import '../models/audition_submission_status.dart';
 import '../models/callback_status.dart';
 import '../widgets/callback_status_chips.dart';
-import '../pages/facial_emotion_score.dart';
 import '../pages/ranking_eyes_tone_details_page.dart';
-import '../pages/script_alignemnt_score_page.dart';
-import '../pages/vocal_emotion_score.dart';
 import '../theme/scenolytics_colors.dart';
 import '../utils/mysql_datetime.dart';
 import '../widgets/scenolytics_footer.dart';
@@ -85,16 +83,26 @@ class AuditionRankingsPage extends StatefulWidget {
     this.submissions,
     required this.auditionTitle,
     required this.auditionSubtitle,
+    this.auditionType = '',
     this.directorDisplayName,
     this.onRefresh,
     this.directorReviewToken,
     this.directorReviewAuditionId,
     this.directorReviewRepository,
+    this.onBackToDashboard,
+    this.onOpenSubmissionDetails,
   });
 
   final List<ActorAuditionSubmission>? submissions;
   final String auditionTitle;
   final String auditionSubtitle;
+
+  /// Casting `auditions.type` ('Audio' / 'Video'). Drives the playback button
+  /// label and icon and which media element renders inside the dialog.
+  final String auditionType;
+
+  bool get _isAudioOnly =>
+      auditionType.trim().toLowerCase() == 'audio';
 
   /// From `GET /api/v1/directors/:id/profile` when the director JWT resolves.
   final String? directorDisplayName;
@@ -106,11 +114,22 @@ class AuditionRankingsPage extends StatefulWidget {
   final String? directorReviewAuditionId;
   final AuditionsRepository? directorReviewRepository;
 
+  /// Returns to the director dashboard (shell navigation).
+  final VoidCallback? onBackToDashboard;
+
+  /// Opens the full AI-evaluation drill-down within the app shell, so the page
+  /// inherits the top header instead of pushing a bare route.
+  final ValueChanged<ActorAuditionSubmission>? onOpenSubmissionDetails;
+
   @override
   State<AuditionRankingsPage> createState() => _AuditionRankingsPageState();
 }
 
 class _AuditionRankingsPageState extends State<AuditionRankingsPage> {
+  /// Aligns content width with director dashboard / create-audition pages.
+  static const double _xWideBreakpoint = 1280;
+  static const double _maxContentWidth = 1240;
+
   RankingsViewMode _viewMode = RankingsViewMode.all;
   AuditionRankingsSortBy _sortBy = AuditionRankingsSortBy.overall;
 
@@ -120,17 +139,48 @@ class _AuditionRankingsPageState extends State<AuditionRankingsPage> {
   /// While a PATCH callback review is in flight for this callback id.
   String? _busyCallbackReviewId;
 
+  /// While `new_meeting` is in flight for this callback id.
+  String? _busyRegenerateCallbackId;
+
+  /// While `reschedule` is in flight for this callback id.
+  String? _busyRescheduleCallbackId;
+
   Map<String, DirectorAuditionCallback> _callbacksBySubmissionId =
       const <String, DirectorAuditionCallback>{};
 
   static const int _topCandidateCount = 10;
 
+  void _normalizeSortForAuditionType() {
+    final next = auditionRankingsSortOrFallback(
+      _sortBy,
+      isAudioOnly: widget._isAudioOnly,
+    );
+    if (next != _sortBy) _sortBy = next;
+  }
+
   @override
   void initState() {
     super.initState();
+    _normalizeSortForAuditionType();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadCallbacks();
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant AuditionRankingsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.auditionType != widget.auditionType) {
+      final next = auditionRankingsSortOrFallback(
+        _sortBy,
+        isAudioOnly: widget._isAudioOnly,
+      );
+      if (next != _sortBy) setState(() => _sortBy = next);
+    }
+  }
+
+  Future<void> _refreshRankings() async {
+    await widget.onRefresh?.call();
   }
 
   Future<void> _loadCallbacks() async {
@@ -169,19 +219,19 @@ class _AuditionRankingsPageState extends State<AuditionRankingsPage> {
       (widget.directorReviewToken?.trim().isNotEmpty ?? false) &&
       (widget.directorReviewAuditionId?.trim().isNotEmpty ?? false);
 
-  Future<DateTime?> _pickCallbackDateTime() async {
+  Future<DateTime?> _pickCallbackDateTime({DateTime? initial}) async {
     final now = DateTime.now();
-    final initialDate = now.add(const Duration(days: 7));
+    final seed = initial?.toLocal() ?? now.add(const Duration(days: 7));
     final d = await showDatePicker(
       context: context,
-      initialDate: initialDate,
+      initialDate: seed,
       firstDate: DateTime(now.year, now.month, now.day),
       lastDate: now.add(const Duration(days: 365)),
     );
     if (d == null || !mounted) return null;
     final t = await showTimePicker(
       context: context,
-      initialTime: const TimeOfDay(hour: 15, minute: 0),
+      initialTime: TimeOfDay(hour: seed.hour, minute: seed.minute),
     );
     if (t == null || !mounted) return null;
     return DateTime(d.year, d.month, d.day, t.hour, t.minute);
@@ -209,7 +259,7 @@ class _AuditionRankingsPageState extends State<AuditionRankingsPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(msg)),
       );
-      await widget.onRefresh?.call();
+      await _refreshRankings();
       await _loadCallbacks();
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -282,7 +332,7 @@ class _AuditionRankingsPageState extends State<AuditionRankingsPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(msg)),
       );
-      await widget.onRefresh?.call();
+      await _refreshRankings();
       await _loadCallbacks();
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -321,6 +371,118 @@ class _AuditionRankingsPageState extends State<AuditionRankingsPage> {
     );
     if (ok != true || !mounted) return;
     await _applyCallbackReview(callback, 'accepted');
+  }
+
+  Future<void> _onRescheduleCallback(DirectorAuditionCallback callback) async {
+    if (!_canConfigureDirectorReview) return;
+
+    final when = await _pickCallbackDateTime(
+      initial: callback.callbackDatetime,
+    );
+    if (when == null || !mounted) return;
+
+    setState(() => _busyRescheduleCallbackId = callback.id);
+    try {
+      // Re-accept updates Meet/time without the broken reschedule route (frontend-only).
+      await widget.directorReviewRepository!.reviewDirectorAuditionSubmission(
+        directorToken: widget.directorReviewToken!.trim(),
+        auditionId: widget.directorReviewAuditionId!.trim(),
+        submissionId: callback.auditionSubmissionId,
+        status: 'accepted',
+        callbackDatetime: formatDateTimeForMysqlUtc(when),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Callback rescheduled to ${_formatCallbackWhen(when)}. '
+            'The actor will see the updated time and Meet link.',
+          ),
+        ),
+      );
+      await _loadCallbacks();
+      await _refreshRankings();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      final msg = e.message.toLowerCase().contains('not found')
+          ? 'Could not reschedule. Check the audition and try again.'
+          : e.message;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not reschedule (${e.runtimeType}).'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _busyRescheduleCallbackId = null);
+    }
+  }
+
+  Future<void> _onRegenerateMeetLink(DirectorAuditionCallback callback) async {
+    if (!_canConfigureDirectorReview) return;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Regenerate Meet link?'),
+        content: const Text(
+          'This creates a new Google Meet link for the same callback time. '
+          'The actor will see the updated link on their audition page.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Regenerate'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    setState(() => _busyRegenerateCallbackId = callback.id);
+    try {
+      await widget.directorReviewRepository!.regenerateDirectorCallbackMeetingLink(
+        directorToken: widget.directorReviewToken!.trim(),
+        auditionId: widget.directorReviewAuditionId!.trim(),
+        callbackId: callback.id,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Meet link regenerated.')),
+      );
+      await _loadCallbacks();
+      await _refreshRankings();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e.message.contains('<html')
+                ? 'Could not regenerate the Meet link. Connect Google Calendar in Settings, then try again.'
+                : e.message,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not regenerate the Meet link. Connect Google Calendar in Settings, then try again.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _busyRegenerateCallbackId = null);
+    }
   }
 
   Future<void> _onCallbackDecline(DirectorAuditionCallback callback) async {
@@ -374,130 +536,6 @@ class _AuditionRankingsPageState extends State<AuditionRankingsPage> {
         : metricValues.reduce((a, b) => a + b) / metricValues.length;
     final topMetric = metricValues.isEmpty ? 0.0 : metricValues.first;
 
-    final slivers = <Widget>[
-      SliverPadding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-        sliver: SliverToBoxAdapter(
-          child: _RankingsHeaderCard(
-            auditionTitle: widget.auditionTitle,
-            auditionSubtitle: widget.auditionSubtitle,
-            directorDisplayName: widget.directorDisplayName,
-          ),
-        ),
-      ),
-    ];
-
-    if (ranked.isEmpty) {
-      slivers.add(
-        SliverFillRemaining(
-          hasScrollBody: false,
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text(
-                'No submissions yet.',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    } else {
-      slivers.addAll([
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-          sliver: SliverToBoxAdapter(
-            child: _StatsSection(
-              totalSubmissions: ranked.length,
-              sortBy: _sortBy,
-              averageMetric: averageMetric,
-              topMetric: topMetric,
-            ),
-          ),
-        ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          sliver: SliverToBoxAdapter(
-            child: _RankingsViewToolbar(
-              mode: _viewMode,
-              onModeChanged: (m) => setState(() => _viewMode = m),
-              sortBy: _sortBy,
-              onSortByChanged: (s) => setState(() => _sortBy = s),
-            ),
-          ),
-        ),
-        if (visible.isEmpty)
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
-            sliver: SliverToBoxAdapter(
-              child: Center(
-                child: Text(
-                  'Nothing to show for this view.',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ),
-          )
-        else
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
-            sliver: SliverList.separated(
-              itemCount: visible.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                final submission = visible[index].submission;
-                final callback = _callbacksBySubmissionId[submission.id];
-                return _CompactRankCard(
-                  entry: visible[index],
-                  sortBy: _sortBy,
-                  directorCallback: callback,
-                  formatCallbackWhen: _formatCallbackWhen,
-                  onOpenMeetLink: _openMeetLink,
-                  onDirectorAccept:
-                      _canConfigureDirectorReview ? _onDirectorAccept : null,
-                  onDirectorReject:
-                      _canConfigureDirectorReview ? _onDirectorReject : null,
-                  onCallbackConfirm: _canConfigureDirectorReview &&
-                          callback != null
-                      ? _onCallbackConfirm
-                      : null,
-                  onCallbackDecline: _canConfigureDirectorReview &&
-                          callback != null
-                      ? _onCallbackDecline
-                      : null,
-                  busyReviewSubmissionId: _busyReviewSubmissionId,
-                  busyCallbackReviewId: _busyCallbackReviewId,
-                );
-              },
-            ),
-          ),
-      ]);
-    }
-
-    final kb = MediaQuery.viewInsetsOf(context).bottom;
-    Widget scrollView = CustomScrollView(
-      physics: widget.onRefresh != null
-          ? const AlwaysScrollableScrollPhysics()
-          : null,
-      slivers: [
-        ...slivers,
-        SliverToBoxAdapter(child: SizedBox(height: kb)),
-      ],
-    );
-
-    if (widget.onRefresh != null) {
-      scrollView = RefreshIndicator(
-        onRefresh: widget.onRefresh!,
-        child: scrollView,
-      );
-    }
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -508,7 +546,177 @@ class _AuditionRankingsPageState extends State<AuditionRankingsPage> {
                 theme.brightness,
               ),
             ),
-            child: scrollView,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final layoutW = constraints.maxWidth;
+                final hPad =
+                    layoutW >= _xWideBreakpoint ? 36.0 : 16.0;
+                final sidePad = hPad +
+                    (layoutW > _maxContentWidth
+                        ? (layoutW - _maxContentWidth) / 2
+                        : 0.0);
+
+                final slivers = <Widget>[
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(sidePad, 12, sidePad, 0),
+                    sliver: SliverToBoxAdapter(
+                      child: _RankingsHeaderCard(
+                        auditionTitle: widget.auditionTitle,
+                        auditionSubtitle: widget.auditionSubtitle,
+                        directorDisplayName: widget.directorDisplayName,
+                        onBackToDashboard: widget.onBackToDashboard,
+                      ),
+                    ),
+                  ),
+                ];
+
+                if (ranked.isEmpty) {
+                  slivers.add(
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(sidePad, 24, sidePad, 24),
+                          child: Text(
+                            'No submissions yet.',
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                } else {
+                  slivers.addAll([
+                    SliverPadding(
+                      padding:
+                          EdgeInsets.fromLTRB(sidePad, 16, sidePad, 12),
+                      sliver: SliverToBoxAdapter(
+                        child: _StatsSection(
+                          totalSubmissions: ranked.length,
+                          sortBy: _sortBy,
+                          averageMetric: averageMetric,
+                          topMetric: topMetric,
+                        ),
+                      ),
+                    ),
+                    SliverPadding(
+                      padding:
+                          EdgeInsets.fromLTRB(sidePad, 0, sidePad, 12),
+                      sliver: SliverToBoxAdapter(
+                        child: _RankingsViewToolbar(
+                          mode: _viewMode,
+                          onModeChanged: (m) => setState(() => _viewMode = m),
+                          sortBy: _sortBy,
+                          isAudioOnly: widget._isAudioOnly,
+                          onSortByChanged: (s) => setState(() => _sortBy = s),
+                        ),
+                      ),
+                    ),
+                    if (visible.isEmpty)
+                      SliverPadding(
+                        padding:
+                            EdgeInsets.fromLTRB(sidePad, 32, sidePad, 24),
+                        sliver: SliverToBoxAdapter(
+                          child: Center(
+                            child: Text(
+                              'Nothing to show for this view.',
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.bodyLarge?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        ),
+                      )
+                    else
+                      SliverPadding(
+                        padding:
+                            EdgeInsets.fromLTRB(sidePad, 0, sidePad, 28),
+                        sliver: SliverList.separated(
+                          itemCount: visible.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 12),
+                          itemBuilder: (context, index) {
+                            final submission = visible[index].submission;
+                            final callback =
+                                _callbacksBySubmissionId[submission.id];
+                            return _CompactRankCard(
+                              entry: visible[index],
+                              sortBy: _sortBy,
+                              isAudioOnly: widget._isAudioOnly,
+                              directorCallback: callback,
+                              formatCallbackWhen: _formatCallbackWhen,
+                              onOpenMeetLink: _openMeetLink,
+                              onDirectorAccept: _canConfigureDirectorReview
+                                  ? _onDirectorAccept
+                                  : null,
+                              onDirectorReject: _canConfigureDirectorReview
+                                  ? _onDirectorReject
+                                  : null,
+                              onCallbackConfirm:
+                                  _canConfigureDirectorReview &&
+                                          callback != null
+                                      ? _onCallbackConfirm
+                                      : null,
+                              onCallbackDecline:
+                                  _canConfigureDirectorReview &&
+                                          callback != null
+                                      ? _onCallbackDecline
+                                      : null,
+                              busyReviewSubmissionId: _busyReviewSubmissionId,
+                              busyCallbackReviewId: _busyCallbackReviewId,
+                              onRescheduleCallback:
+                                  _canConfigureDirectorReview &&
+                                          callback != null &&
+                                          callback.status ==
+                                              CallbackStatus.scheduled
+                                      ? _onRescheduleCallback
+                                      : null,
+                              onRegenerateMeetLink:
+                                  _canConfigureDirectorReview &&
+                                          callback != null &&
+                                          callback.status ==
+                                              CallbackStatus.scheduled
+                                      ? _onRegenerateMeetLink
+                                      : null,
+                              busyRescheduleCallbackId:
+                                  _busyRescheduleCallbackId,
+                              busyRegenerateCallbackId:
+                                  _busyRegenerateCallbackId,
+                              onOpenSubmissionDetails:
+                                  widget.onOpenSubmissionDetails,
+                              auditionType: widget.auditionType,
+                            );
+                          },
+                        ),
+                      ),
+                  ]);
+                }
+
+                final kb = MediaQuery.viewInsetsOf(context).bottom;
+                Widget scrollView = CustomScrollView(
+                  physics: widget.onRefresh != null
+                      ? const AlwaysScrollableScrollPhysics()
+                      : null,
+                  slivers: [
+                    ...slivers,
+                    SliverToBoxAdapter(child: SizedBox(height: kb)),
+                  ],
+                );
+
+                if (widget.onRefresh != null) {
+                  scrollView = RefreshIndicator(
+                    onRefresh: _refreshRankings,
+                    child: scrollView,
+                  );
+                }
+
+                return scrollView;
+              },
+            ),
           ),
         ),
         const ScenolyticsFooter(),
@@ -522,12 +730,14 @@ class _RankingsViewToolbar extends StatelessWidget {
     required this.mode,
     required this.onModeChanged,
     required this.sortBy,
+    required this.isAudioOnly,
     required this.onSortByChanged,
   });
 
   final RankingsViewMode mode;
   final ValueChanged<RankingsViewMode> onModeChanged;
   final AuditionRankingsSortBy sortBy;
+  final bool isAudioOnly;
   final ValueChanged<AuditionRankingsSortBy> onSortByChanged;
 
   @override
@@ -557,6 +767,9 @@ class _RankingsViewToolbar extends StatelessWidget {
                   ),
                   child: _RankSortByDropdown(
                     value: sortBy,
+                    sortOptions: auditionRankingsSortOptions(
+                      isAudioOnly: isAudioOnly,
+                    ),
                     onChanged: onSortByChanged,
                   ),
                 ),
@@ -580,6 +793,7 @@ class _RankingsViewToolbar extends StatelessWidget {
             SizedBox(width: gap),
             _RankSortByDropdown(
               value: sortBy,
+              sortOptions: auditionRankingsSortOptions(isAudioOnly: isAudioOnly),
               onChanged: onSortByChanged,
             ),
           ],
@@ -593,10 +807,12 @@ class _RankingsViewToolbar extends StatelessWidget {
 class _RankSortByDropdown extends StatelessWidget {
   const _RankSortByDropdown({
     required this.value,
+    required this.sortOptions,
     required this.onChanged,
   });
 
   final AuditionRankingsSortBy value;
+  final List<AuditionRankingsSortBy> sortOptions;
   final ValueChanged<AuditionRankingsSortBy> onChanged;
 
   @override
@@ -619,87 +835,98 @@ class _RankSortByDropdown extends StatelessWidget {
       ),
     ];
 
+    // Plain DecoratedBox — no Ink/Material wrapper. Ink + DropdownButton both
+    // paint splash/focus on web and leave a stuck white crescent on the left.
     return Tooltip(
       message: 'Ranking: ${value.menuLabel}',
       waitDuration: const Duration(milliseconds: 550),
       child: ConstrainedBox(
         constraints: const BoxConstraints(minWidth: 164, maxWidth: 226),
-        child: Material(
-          color: Colors.transparent,
-          child: Ink(
-            height: h,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  cs.surface.withValues(alpha: kIsWeb ? 0.94 : 1),
-                  cs.primaryContainer.withValues(alpha: b == Brightness.dark ? 0.14 : 0.42),
-                ],
-              ),
-              border: Border.fromBorderSide(borderSide),
-              boxShadow: shadow,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                cs.surface.withValues(alpha: kIsWeb ? 0.94 : 1),
+                cs.primaryContainer.withValues(alpha: b == Brightness.dark ? 0.14 : 0.42),
+              ],
             ),
-            child: Padding(
-              padding: const EdgeInsets.only(left: 10, right: 4),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<AuditionRankingsSortBy>(
-                  value: value,
-                  isDense: true,
-                  elevation: kIsWeb ? 8 : 4,
-                  borderRadius: BorderRadius.circular(14),
-                  icon: Padding(
-                    padding: const EdgeInsets.only(left: 2),
-                    child: Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      color: cs.onSurfaceVariant,
-                      size: 22,
+            border: Border.fromBorderSide(borderSide),
+            boxShadow: shadow,
+          ),
+          child: Theme(
+            data: theme.copyWith(
+              splashColor: Colors.transparent,
+              highlightColor: Colors.transparent,
+              focusColor: Colors.transparent,
+              hoverColor: Colors.transparent,
+            ),
+            child: SizedBox(
+              height: h,
+              child: Padding(
+                padding: const EdgeInsets.only(left: 10, right: 4),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<AuditionRankingsSortBy>(
+                    value: value,
+                    isDense: true,
+                    focusColor: Colors.transparent,
+                    elevation: kIsWeb ? 8 : 4,
+                    borderRadius: BorderRadius.circular(14),
+                    dropdownColor: cs.surface,
+                    icon: Padding(
+                      padding: const EdgeInsets.only(left: 2),
+                      child: Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        color: cs.onSurfaceVariant,
+                        size: 22,
+                      ),
                     ),
-                  ),
-                  iconSize: 22,
-                  isExpanded: true,
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: cs.onSurface,
-                    letterSpacing: -0.1,
-                    fontSize: 13,
-                  ),
-                  items: AuditionRankingsSortBy.values
-                      .map(
-                        (e) => DropdownMenuItem(
-                          value: e,
-                          child: Text(e.menuLabel),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (v) {
-                    if (v != null) onChanged(v);
-                  },
-                  selectedItemBuilder: (ctx) =>
-                      AuditionRankingsSortBy.values.map((e) {
-                        return Align(
-                          alignment: AlignmentDirectional.centerStart,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.start,
-                            children: [
-                              Icon(
-                                Icons.sort_rounded,
-                                size: 17,
-                                color: cs.primary.withValues(alpha: 0.88),
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  e.menuLabel,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
+                    iconSize: 22,
+                    isExpanded: true,
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: cs.onSurface,
+                      letterSpacing: -0.1,
+                      fontSize: 13,
+                    ),
+                    items: sortOptions
+                        .map(
+                          (e) => DropdownMenuItem(
+                            value: e,
+                            child: Text(e.menuLabel),
                           ),
-                        );
-                      }).toList(),
+                        )
+                        .toList(),
+                    onChanged: (v) {
+                      if (v != null) onChanged(v);
+                    },
+                    selectedItemBuilder: (ctx) =>
+                        sortOptions.map((e) {
+                          return Align(
+                            alignment: AlignmentDirectional.centerStart,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  Icons.sort_rounded,
+                                  size: 17,
+                                  color: cs.primary.withValues(alpha: 0.88),
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    e.menuLabel,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                  ),
                 ),
               ),
             ),
@@ -875,39 +1102,30 @@ class _RankingsHeaderCard extends StatelessWidget {
     required this.auditionTitle,
     required this.auditionSubtitle,
     this.directorDisplayName,
+    this.onBackToDashboard,
   });
 
   final String auditionTitle;
   final String auditionSubtitle;
   final String? directorDisplayName;
+  final VoidCallback? onBackToDashboard;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final b = theme.brightness;
-    final cs = theme.colorScheme;
     final onHero = ScenolyticsColors.onPrimary;
 
     final decoration = BoxDecoration(
-      gradient: b == Brightness.dark
-          ? const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color(0xFF021A2E),
-                ScenolyticsColors.heroGradientStart,
-                Color(0xFF052F45),
-              ],
-            )
-          : ScenolyticsColors.heroBarGradient,
+      gradient: ScenolyticsColors.heroBarGradientFor(b),
       borderRadius: BorderRadius.circular(20),
       border: Border.all(
-        color: onHero.withValues(alpha: b == Brightness.dark ? 0.12 : 0.2),
+        color: onHero.withValues(alpha: ScenolyticsColors.heroBorderAlpha(b)),
       ),
       boxShadow: [
         BoxShadow(
-          color: cs.shadow.withValues(
-            alpha: b == Brightness.dark ? 0.35 : 0.12,
+          color: ScenolyticsColors.heroGradientStart.withValues(
+            alpha: ScenolyticsColors.heroGlowShadowAlpha(b),
           ),
           blurRadius: 18,
           offset: const Offset(0, 6),
@@ -924,6 +1142,32 @@ class _RankingsHeaderCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (onBackToDashboard != null) ...[
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: onBackToDashboard,
+                    style: TextButton.styleFrom(
+                      foregroundColor: onHero,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 0,
+                      ),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    icon: const Icon(Icons.arrow_back_rounded, size: 20),
+                    label: Text(
+                      'Back to dashboard',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: onHero,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1153,15 +1397,20 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-void _presentDirectorAuditionVideo(
+void _presentDirectorAuditionMedia(
   BuildContext context,
-  ActorAuditionSubmission submission,
-) {
+  ActorAuditionSubmission submission, {
+  required bool isAudioOnly,
+}) {
   final candidates = _directorTapePlaybackCandidates(submission);
   if (candidates.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Video is not available for this submission yet.'),
+      SnackBar(
+        content: Text(
+          isAudioOnly
+              ? 'Audio is not available for this submission yet.'
+              : 'Video is not available for this submission yet.',
+        ),
       ),
     );
     return;
@@ -1171,45 +1420,99 @@ void _presentDirectorAuditionVideo(
     isScrollControlled: true,
     useSafeArea: true,
     backgroundColor: Colors.transparent,
-    builder: (ctx) => _DirectorAuditionVideoSheet(
+    builder: (ctx) => _DirectorAuditionMediaSheet(
       playbackCandidates: candidates,
       actorName: submission.actorName,
       age: submission.age,
+      isAudioOnly: isAudioOnly,
     ),
   );
 }
 
-class _DirectorAuditionVideoSheet extends StatefulWidget {
-  const _DirectorAuditionVideoSheet({
+class _DirectorAuditionMediaSheet extends StatefulWidget {
+  const _DirectorAuditionMediaSheet({
     required this.playbackCandidates,
     required this.actorName,
     required this.age,
+    required this.isAudioOnly,
   });
 
   final List<String> playbackCandidates;
   final String actorName;
   final int age;
+  final bool isAudioOnly;
 
   @override
-  State<_DirectorAuditionVideoSheet> createState() =>
-      _DirectorAuditionVideoSheetState();
+  State<_DirectorAuditionMediaSheet> createState() =>
+      _DirectorAuditionMediaSheetState();
 }
 
-class _DirectorAuditionVideoSheetState
-    extends State<_DirectorAuditionVideoSheet> {
-  VideoPlayerController? _controller;
+class _DirectorAuditionMediaSheetState
+    extends State<_DirectorAuditionMediaSheet> {
+  VideoPlayerController? _videoController;
+
+  // Audio playback (only used when widget.isAudioOnly is true).
+  late final ap.AudioPlayer _audioPlayer;
+  bool _audioReady = false;
+  bool _isPlaying = false;
+  Duration _position = Duration.zero;
+  Duration _duration = Duration.zero;
+
   String? _error;
   String? _resolvedUrl;
 
   @override
   void initState() {
     super.initState();
+    if (widget.isAudioOnly) {
+      _audioPlayer = ap.AudioPlayer();
+      _audioPlayer.onPlayerStateChanged.listen((state) {
+        if (!mounted) return;
+        setState(() {
+          _isPlaying = state == ap.PlayerState.playing;
+          if (state == ap.PlayerState.completed) {
+            _isPlaying = false;
+            _position = Duration.zero;
+          }
+        });
+      });
+      _audioPlayer.onPositionChanged.listen((p) {
+        if (!mounted) return;
+        setState(() => _position = p);
+      });
+      _audioPlayer.onDurationChanged.listen((d) {
+        if (!mounted) return;
+        setState(() => _duration = d);
+      });
+    }
     _init();
   }
 
   Future<void> _init() async {
     Object? lastError;
     final urls = widget.playbackCandidates;
+    if (widget.isAudioOnly) {
+      for (final uriStr in urls) {
+        try {
+          await _audioPlayer.setSource(ap.UrlSource(uriStr));
+          if (!mounted) return;
+          setState(() {
+            _audioReady = true;
+            _resolvedUrl = uriStr;
+          });
+          return;
+        } catch (e) {
+          lastError = e;
+        }
+      }
+      if (mounted) {
+        final tried = urls.join('\n');
+        setState(() {
+          _error = 'Could not load audio.\n$tried\n\n${lastError ?? ''}';
+        });
+      }
+      return;
+    }
     for (final uriStr in urls) {
       VideoPlayerController? c;
       try {
@@ -1220,7 +1523,7 @@ class _DirectorAuditionVideoSheetState
           return;
         }
         setState(() {
-          _controller = c;
+          _videoController = c;
           _resolvedUrl = uriStr;
         });
         return;
@@ -1247,8 +1550,115 @@ class _DirectorAuditionVideoSheetState
 
   @override
   void dispose() {
-    _controller?.dispose();
+    _videoController?.dispose();
+    if (widget.isAudioOnly) _audioPlayer.dispose();
     super.dispose();
+  }
+
+  Future<void> _toggleAudio() async {
+    if (!_audioReady || _resolvedUrl == null) return;
+    if (_isPlaying) {
+      await _audioPlayer.pause();
+    } else {
+      await _audioPlayer.resume();
+    }
+  }
+
+  String _formatDuration(Duration d) {
+    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
+  Widget _buildAudioPlayer(ThemeData theme, ColorScheme cs) {
+    if (!_audioReady) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 28),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    final total = _duration > Duration.zero ? _duration : Duration.zero;
+    final positionMs = _position.inMilliseconds.toDouble();
+    final totalMs = total.inMilliseconds.toDouble();
+    final progress =
+        totalMs <= 0 ? 0.0 : (positionMs / totalMs).clamp(0.0, 1.0);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(18, 22, 18, 22),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                cs.primary.withValues(alpha: 0.92),
+                ScenolyticsColors.accentCyan.withValues(alpha: 0.85),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Column(
+            children: [
+              SizedBox(
+                height: 64,
+                child: CustomPaint(
+                  size: const Size.fromHeight(double.infinity),
+                  painter: _MockWavePainter(
+                    progress: progress,
+                    active: Colors.white,
+                    inactive: Colors.white.withValues(alpha: 0.32),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  IconButton.filled(
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: cs.primary,
+                      padding: const EdgeInsets.all(14),
+                    ),
+                    iconSize: 28,
+                    onPressed: _toggleAudio,
+                    icon: Icon(
+                      _isPlaying
+                          ? Icons.pause_rounded
+                          : Icons.play_arrow_rounded,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Audio take',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${_formatDuration(_position)} / ${_formatDuration(total)}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: Colors.white.withValues(alpha: 0.9),
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -1256,7 +1666,7 @@ class _DirectorAuditionVideoSheetState
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final bottomPad = MediaQuery.of(context).padding.bottom;
-    final controller = _controller;
+    final controller = _videoController;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(12, 10, 12, bottomPad + 12),
@@ -1295,7 +1705,9 @@ class _DirectorAuditionVideoSheetState
                             borderRadius: BorderRadius.circular(14),
                           ),
                           child: Icon(
-                            Icons.movie_filter_rounded,
+                            widget.isAudioOnly
+                                ? Icons.graphic_eq_rounded
+                                : Icons.movie_filter_rounded,
                             color: cs.primary,
                             size: 26,
                           ),
@@ -1306,7 +1718,9 @@ class _DirectorAuditionVideoSheetState
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Audition recording',
+                                widget.isAudioOnly
+                                    ? 'Audition audio'
+                                    : 'Audition recording',
                                 style: theme.textTheme.labelLarge?.copyWith(
                                   color: cs.onSurfaceVariant,
                                   fontWeight: FontWeight.w700,
@@ -1378,8 +1792,12 @@ class _DirectorAuditionVideoSheetState
                                       ScaffoldMessenger.of(
                                         context,
                                       ).showSnackBar(
-                                        const SnackBar(
-                                          content: Text('Video link copied.'),
+                                        SnackBar(
+                                          content: Text(
+                                            widget.isAudioOnly
+                                                ? 'Audio link copied.'
+                                                : 'Video link copied.',
+                                          ),
                                         ),
                                       );
                                     }
@@ -1388,12 +1806,18 @@ class _DirectorAuditionVideoSheetState
                                     Icons.link_rounded,
                                     size: 18,
                                   ),
-                                  label: const Text('Copy video link'),
+                                  label: Text(
+                                    widget.isAudioOnly
+                                        ? 'Copy audio link'
+                                        : 'Copy video link',
+                                  ),
                                 ),
                               ),
                             ],
                           ),
                         )
+                      : widget.isAudioOnly
+                      ? _buildAudioPlayer(theme, cs)
                       : controller == null || !controller.value.isInitialized
                       ? const AspectRatio(
                           aspectRatio: 16 / 9,
@@ -1516,6 +1940,54 @@ class _DirectorAuditionVideoSheetState
   }
 }
 
+/// Decorative static waveform behind the director audio playback dialog.
+class _MockWavePainter extends CustomPainter {
+  _MockWavePainter({
+    required this.progress,
+    required this.active,
+    required this.inactive,
+  });
+
+  final double progress;
+  final Color active;
+  final Color inactive;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
+    const int bars = 48;
+    const double gap = 3.0;
+    final barWidth = (size.width - gap * (bars - 1)) / bars;
+    final centerY = size.height / 2;
+    final maxBar = size.height * 0.95;
+    final minBar = size.height * 0.18;
+    final cutoff = (progress * bars).clamp(0.0, bars.toDouble());
+    for (int i = 0; i < bars; i++) {
+      final t = i / bars;
+      // Pseudo-random but stable heights for a clean waveform look.
+      final h = minBar +
+          (maxBar - minBar) *
+              (0.4 + 0.6 * ((1 + (i * 9301 + 49297) % 233) / 233.0)) *
+              (0.6 + 0.4 * t.clamp(0.0, 1.0));
+      final x = i * (barWidth + gap);
+      final rect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(x, centerY - h / 2, barWidth, h),
+        Radius.circular(barWidth / 2),
+      );
+      canvas.drawRRect(
+        rect,
+        Paint()..color = i < cutoff ? active : inactive,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _MockWavePainter old) =>
+      old.progress != progress ||
+      old.active != active ||
+      old.inactive != inactive;
+}
+
 /// Callback schedule + post-meeting accept/decline on director ranking cards.
 class _CallbackManagementSection extends StatelessWidget {
   const _CallbackManagementSection({
@@ -1525,6 +1997,10 @@ class _CallbackManagementSection extends StatelessWidget {
     this.onOpenMeetLink,
     required this.showReviewActions,
     required this.reviewBusy,
+    required this.regenerateBusy,
+    required this.rescheduleBusy,
+    this.onRescheduleCallback,
+    this.onRegenerateMeetLink,
     this.onConfirm,
     this.onDecline,
   });
@@ -1535,6 +2011,10 @@ class _CallbackManagementSection extends StatelessWidget {
   final Future<void> Function(String url)? onOpenMeetLink;
   final bool showReviewActions;
   final bool reviewBusy;
+  final bool regenerateBusy;
+  final bool rescheduleBusy;
+  final Future<void> Function(DirectorAuditionCallback)? onRescheduleCallback;
+  final Future<void> Function(DirectorAuditionCallback)? onRegenerateMeetLink;
   final Future<void> Function(DirectorAuditionCallback)? onConfirm;
   final Future<void> Function(DirectorAuditionCallback)? onDecline;
 
@@ -1562,11 +2042,85 @@ class _CallbackManagementSection extends StatelessWidget {
             ),
           ),
           if (when != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              'Scheduled ${formatCallbackWhen(when)}',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: cs.onSurfaceVariant,
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 10,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.event_rounded,
+                      size: 18,
+                      color: cs.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Scheduled ${formatCallbackWhen(when)}',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                  ],
+                ),
+                if (onRescheduleCallback != null)
+                  OutlinedButton.icon(
+                    onPressed: reviewBusy || regenerateBusy || rescheduleBusy
+                        ? null
+                        : () => onRescheduleCallback!(callback),
+                    icon: rescheduleBusy
+                        ? SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: cs.primary,
+                            ),
+                          )
+                        : const Icon(Icons.edit_calendar_outlined, size: 18),
+                    label: Text(
+                      rescheduleBusy ? 'Rescheduling…' : 'Reschedule',
+                    ),
+                  ),
+                if (onRegenerateMeetLink != null)
+                  OutlinedButton.icon(
+                    onPressed: reviewBusy || regenerateBusy || rescheduleBusy
+                        ? null
+                        : () => onRegenerateMeetLink!(callback),
+                    icon: regenerateBusy
+                        ? SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: cs.primary,
+                            ),
+                          )
+                        : const Icon(Icons.refresh_rounded, size: 18),
+                    label: Text(
+                      regenerateBusy ? 'Regenerating…' : 'Regenerate link',
+                    ),
+                  ),
+              ],
+            ),
+          ] else if (onRescheduleCallback != null) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: reviewBusy || regenerateBusy || rescheduleBusy
+                    ? null
+                    : () => onRescheduleCallback!(callback),
+                icon: rescheduleBusy
+                    ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.edit_calendar_outlined, size: 18),
+                label: Text(rescheduleBusy ? 'Rescheduling…' : 'Reschedule'),
               ),
             ),
           ],
@@ -1575,7 +2129,11 @@ class _CallbackManagementSection extends StatelessWidget {
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
-                onPressed: reviewBusy ? null : () => onOpenMeetLink!(meetLink),
+                onPressed: reviewBusy ||
+                        regenerateBusy ||
+                        rescheduleBusy
+                    ? null
+                    : () => onOpenMeetLink!(meetLink),
                 icon: const Icon(Icons.videocam_outlined, size: 18),
                 label: const Text('Open Meet'),
               ),
@@ -1647,6 +2205,7 @@ class _CompactRankCard extends StatelessWidget {
   const _CompactRankCard({
     required this.entry,
     required this.sortBy,
+    this.isAudioOnly = false,
     this.directorCallback,
     required this.formatCallbackWhen,
     this.onOpenMeetLink,
@@ -1654,12 +2213,19 @@ class _CompactRankCard extends StatelessWidget {
     this.onDirectorReject,
     this.onCallbackConfirm,
     this.onCallbackDecline,
+    this.onRescheduleCallback,
+    this.onRegenerateMeetLink,
+    this.onOpenSubmissionDetails,
+    this.auditionType = '',
     this.busyReviewSubmissionId,
     this.busyCallbackReviewId,
+    this.busyRescheduleCallbackId,
+    this.busyRegenerateCallbackId,
   });
 
   final RankedAuditionSubmission entry;
   final AuditionRankingsSortBy sortBy;
+  final bool isAudioOnly;
   final DirectorAuditionCallback? directorCallback;
   final String Function(DateTime dt) formatCallbackWhen;
   final Future<void> Function(String url)? onOpenMeetLink;
@@ -1667,8 +2233,14 @@ class _CompactRankCard extends StatelessWidget {
   final Future<void> Function(ActorAuditionSubmission)? onDirectorReject;
   final Future<void> Function(DirectorAuditionCallback)? onCallbackConfirm;
   final Future<void> Function(DirectorAuditionCallback)? onCallbackDecline;
+  final Future<void> Function(DirectorAuditionCallback)? onRescheduleCallback;
+  final Future<void> Function(DirectorAuditionCallback)? onRegenerateMeetLink;
+  final ValueChanged<ActorAuditionSubmission>? onOpenSubmissionDetails;
+  final String auditionType;
   final String? busyReviewSubmissionId;
   final String? busyCallbackReviewId;
+  final String? busyRescheduleCallbackId;
+  final String? busyRegenerateCallbackId;
 
   static const double _radius = 14;
   static const double _accentWidth = 7;
@@ -1695,6 +2267,10 @@ class _CompactRankCard extends StatelessWidget {
         callback.status == CallbackStatus.scheduled;
     final callbackBusy =
         callback != null && busyCallbackReviewId == callback.id;
+    final regenerateBusy =
+        callback != null && busyRegenerateCallbackId == callback.id;
+    final rescheduleBusy =
+        callback != null && busyRescheduleCallbackId == callback.id;
     final meetLink = callback?.link?.trim() ?? '';
 
     final cardBg = b == Brightness.dark
@@ -1849,6 +2425,10 @@ class _CompactRankCard extends StatelessWidget {
                       onOpenMeetLink: onOpenMeetLink,
                       showReviewActions: showCallbackReview,
                       reviewBusy: callbackBusy,
+                      regenerateBusy: regenerateBusy,
+                      rescheduleBusy: rescheduleBusy,
+                      onRescheduleCallback: onRescheduleCallback,
+                      onRegenerateMeetLink: onRegenerateMeetLink,
                       onConfirm: onCallbackConfirm,
                       onDecline: onCallbackDecline,
                     ),
@@ -1857,64 +2437,58 @@ class _CompactRankCard extends StatelessWidget {
                   LayoutBuilder(
                     builder: (context, c) {
                       final narrow = c.maxWidth < 360;
-                      final metrics = <(String, int, Color)>[
-                        (
-                          'Facial Emotions',
-                          s.emotionalScore,
-                          ScenolyticsColors.metricEmotional,
-                        ),
-                        (
-                          'Vocal Emotion',
-                          s.vocalToneScore,
-                          ScenolyticsColors.metricVocalTone,
-                        ),
-                        (
-                          'Script match',
-                          s.scriptMatchScore,
-                          ScenolyticsColors.metricScriptMatch,
-                        ),
-                      ];
+                      final metrics = isAudioOnly
+                          ? <(String, int, Color)>[
+                              (
+                                'Vocal Emotion',
+                                s.vocalToneScore,
+                                ScenolyticsColors.metricVocalTone,
+                              ),
+                              (
+                                'Script match',
+                                s.scriptMatchScore,
+                                ScenolyticsColors.metricScriptMatch,
+                              ),
+                            ]
+                          : <(String, int, Color)>[
+                              (
+                                'Facial Emotions',
+                                s.emotionalScore,
+                                ScenolyticsColors.metricEmotional,
+                              ),
+                              (
+                                'Vocal Emotion',
+                                s.vocalToneScore,
+                                ScenolyticsColors.metricVocalTone,
+                              ),
+                              (
+                                'Script match',
+                                s.scriptMatchScore,
+                                ScenolyticsColors.metricScriptMatch,
+                              ),
+                            ];
                       final track = b == Brightness.dark
                           ? ScenolyticsColors.actorCardMetricTrackDark
                           : ScenolyticsColors.actorCardMetricTrackLight;
 
                       Widget cell(int i) {
                         final (label, value, color) = metrics[i];
-                        VoidCallback? onTap;
-                        if (i == 0) {
-                          onTap = () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) =>
-                                    FacialEmotionScorePage(submission: s),
-                              ),
-                            );
-                          };
-                        } else if (i == 1) {
-                          onTap = () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) =>
-                                    VocalEmotionScorePage(submission: s),
-                              ),
-                            );
-                          };
-                        } else if (i == 2) {
-                          onTap = () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) =>
-                                    ScriptAlignmentScorePage(submission: s),
-                              ),
-                            );
-                          };
-                        }
                         return _ActorMetricBar(
                           label: label,
                           value: value,
                           barColor: color,
                           trackColor: track,
-                          onTap: onTap,
+                        );
+                      }
+
+                      if (metrics.length == 2) {
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: cell(0)),
+                            const SizedBox(width: 10),
+                            Expanded(child: cell(1)),
+                          ],
                         );
                       }
 
@@ -1943,7 +2517,7 @@ class _CompactRankCard extends StatelessWidget {
                       return Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          for (var i = 0; i < 3; i++) ...[
+                          for (var i = 0; i < metrics.length; i++) ...[
                             if (i > 0) const SizedBox(width: 10),
                             Expanded(child: cell(i)),
                           ],
@@ -1957,10 +2531,16 @@ class _CompactRankCard extends StatelessWidget {
                       alignment: Alignment.centerRight,
                       child: OutlinedButton.icon(
                         onPressed: () {
+                          final open = onOpenSubmissionDetails;
+                          if (open != null) {
+                            open(s);
+                            return;
+                          }
                           Navigator.of(context).push(
                             MaterialPageRoute<void>(
-                              builder: (_) => RankingEyesToneDetailsPage(
+                              builder: (_) => SubmissionEvaluationDetailsPage(
                                 submission: s,
+                                auditionType: auditionType,
                               ),
                             ),
                           );
@@ -2006,10 +2586,18 @@ class _CompactRankCard extends StatelessWidget {
                         ],
                       );
                       final watch = OutlinedButton.icon(
-                        onPressed: () =>
-                            _presentDirectorAuditionVideo(context, s),
-                        icon: const Icon(Icons.play_arrow_rounded, size: 18),
-                        label: const Text('Watch'),
+                        onPressed: () => _presentDirectorAuditionMedia(
+                          context,
+                          s,
+                          isAudioOnly: isAudioOnly,
+                        ),
+                        icon: Icon(
+                          isAudioOnly
+                              ? Icons.headphones_rounded
+                              : Icons.play_arrow_rounded,
+                          size: 18,
+                        ),
+                        label: const Text('View'),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: cs.onSurface,
                           side: BorderSide(
@@ -2227,14 +2815,12 @@ class _ActorMetricBar extends StatelessWidget {
     required this.value,
     required this.barColor,
     required this.trackColor,
-    this.onTap,
   });
 
   final String label;
   final int value;
   final Color barColor;
   final Color trackColor;
-  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -2242,52 +2828,45 @@ class _ActorMetricBar extends StatelessWidget {
     final cs = theme.colorScheme;
     final v = value.clamp(0, 100) / 100.0;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: cs.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: cs.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
                   ),
-                  Text(
-                    '$value',
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: cs.onSurface,
-                    ),
-                  ),
-                ],
+                ),
               ),
-              const SizedBox(height: 6),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: v,
-                  minHeight: 6,
-                  backgroundColor: trackColor,
-                  color: barColor,
+              Text(
+                '$value',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: cs.onSurface,
                 ),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: v,
+              minHeight: 6,
+              backgroundColor: trackColor,
+              color: barColor,
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
 import '../data/api/auth_api.dart';
 import '../data/auth_controller.dart';
 import '../theme/scenolytics_colors.dart';
@@ -24,6 +26,7 @@ class _LoginPageState extends State<LoginPage> {
   var _obscure = true;
   var _submitting = false;
   var _touched = false;
+  String? _formError;
 
   @override
   void dispose() {
@@ -37,79 +40,101 @@ class _LoginPageState extends State<LoginPage> {
   InputDecoration _fieldDecoration(
     BuildContext context, {
     required String label,
-    String? errorText,
+    String? hintText,
+    Widget? prefix,
     Widget? suffix,
   }) {
     final cs = Theme.of(context).colorScheme;
+    final brightness = cs.brightness;
     return InputDecoration(
       labelText: label,
-      errorText: errorText,
+      hintText: hintText,
+      prefixIcon: prefix,
       suffixIcon: suffix,
       filled: true,
-      fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.35),
+      fillColor: brightness == Brightness.dark
+          ? cs.surfaceContainerHighest.withValues(alpha: 0.55)
+          : Colors.white.withValues(alpha: 0.85),
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(
-          color: ScenolyticsColors.outlineSoftFor(cs.brightness)
+          color: ScenolyticsColors.outlineSoftFor(brightness)
               .withValues(alpha: 0.6),
         ),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(
-          color: ScenolyticsColors.outlineSoftFor(cs.brightness)
+          color: ScenolyticsColors.outlineSoftFor(brightness)
               .withValues(alpha: 0.55),
         ),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: cs.primary, width: 1.4),
+        borderSide: BorderSide(color: cs.primary, width: 1.6),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: cs.error, width: 1.2),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: cs.error, width: 1.6),
       ),
     );
   }
 
   Future<void> _submit() async {
-    setState(() => _touched = true);
-    if (!(_formKey.currentState?.validate() ?? false)) {
-      return;
-    }
+    setState(() {
+      _touched = true;
+      _formError = null;
+    });
+    if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _submitting = true);
     try {
       await widget.auth.signInWithPassword(
-        email: _email.text,
+        email: _email.text.trim(),
         password: _password.text,
       );
+      // App shell opens the role dashboard (no profile redirect on login).
     } on AuthApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.message),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+      if (mounted) setState(() => _formError = e.message);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Could not sign in (${e.runtimeType}).'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        setState(() => _formError = 'Could not sign in. Please try again.');
       }
     } finally {
-      if (mounted) {
-        setState(() => _submitting = false);
-      }
+      if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  void _openSignup() {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => SignupPage(auth: widget.auth),
+      ),
+    );
+  }
+
+  void _showForgotPasswordHint() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text(
+          'Password recovery is coming soon — contact your team admin in the meantime.',
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final autovalidate = _touched
-        ? AutovalidateMode.always
-        : AutovalidateMode.disabled;
+    final cs = theme.colorScheme;
+    final autovalidate =
+        _touched ? AutovalidateMode.always : AutovalidateMode.disabled;
 
     return AuthFlowScaffold(
       title: 'Welcome back',
@@ -120,80 +145,253 @@ class _LoginPageState extends State<LoginPage> {
           autovalidateMode: autovalidate,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
             children: [
-            TextFormField(
-              controller: _email,
-              focusNode: _emailFocus,
-              keyboardType: TextInputType.emailAddress,
-              autofillHints: const [AutofillHints.email],
-              textInputAction: TextInputAction.next,
-              onFieldSubmitted: (_) => _passwordFocus.requestFocus(),
-              decoration: _fieldDecoration(context, label: 'Email'),
-              validator: validateEmailField,
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _password,
-              focusNode: _passwordFocus,
-              obscureText: _obscure,
-              autofillHints: const [AutofillHints.password],
-              textInputAction: TextInputAction.done,
-              onFieldSubmitted: (_) => _submit(),
-              decoration: _fieldDecoration(
-                context,
-                label: 'Password',
-                suffix: IconButton(
-                  tooltip: _obscure ? 'Show password' : 'Hide password',
-                  onPressed: () => setState(() => _obscure = !_obscure),
-                  icon: Icon(
-                    _obscure
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
-                    color: theme.colorScheme.primary,
+              if (_formError != null) ...[
+                _AuthErrorBanner(message: _formError!),
+                const SizedBox(height: 14),
+              ],
+              TextFormField(
+                controller: _email,
+                focusNode: _emailFocus,
+                keyboardType: TextInputType.emailAddress,
+                autofillHints: const [AutofillHints.email],
+                textInputAction: TextInputAction.next,
+                enabled: !_submitting,
+                inputFormatters: const <TextInputFormatter>[],
+                onFieldSubmitted: (_) => _passwordFocus.requestFocus(),
+                decoration: _fieldDecoration(
+                  context,
+                  label: 'Email',
+                  hintText: 'you@example.com',
+                  prefix: Icon(Icons.alternate_email,
+                      color: cs.onSurfaceVariant, size: 20),
+                ),
+                validator: validateEmailField,
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _password,
+                focusNode: _passwordFocus,
+                obscureText: _obscure,
+                autofillHints: const [AutofillHints.password],
+                textInputAction: TextInputAction.done,
+                enabled: !_submitting,
+                onFieldSubmitted: (_) => _submit(),
+                decoration: _fieldDecoration(
+                  context,
+                  label: 'Password',
+                  prefix: Icon(Icons.lock_outline,
+                      color: cs.onSurfaceVariant, size: 20),
+                  suffix: IconButton(
+                    tooltip: _obscure ? 'Show password' : 'Hide password',
+                    onPressed: _submitting
+                        ? null
+                        : () => setState(() => _obscure = !_obscure),
+                    icon: Icon(
+                      _obscure
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                      color: cs.primary,
+                    ),
+                  ),
+                ),
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'Password is required';
+                  return null;
+                },
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: _submitting ? null : _showForgotPasswordHint,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    minimumSize: const Size(0, 36),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text(
+                    'Forgot password?',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: cs.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
-              validator: validatePasswordField,
-            ),
-            const SizedBox(height: 22),
-            FilledButton(
-              onPressed: _submitting ? null : _submit,
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+              const SizedBox(height: 6),
+              _GradientPrimaryButton(
+                onPressed: _submitting ? null : _submit,
+                label: 'Sign in',
+                loading: _submitting,
+              ),
+              const SizedBox(height: 18),
+              const _OrDivider(label: 'New to Scenolytics?'),
+              const SizedBox(height: 14),
+              OutlinedButton(
+                onPressed: _submitting ? null : _openSignup,
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  side: BorderSide(
+                    color: cs.primary.withValues(alpha: 0.45),
+                    width: 1.2,
+                  ),
+                ),
+                child: Text(
+                  'Create an account',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: cs.primary,
+                  ),
                 ),
               ),
-              child: _submitting
-                  ? const SizedBox(
-                      height: 22,
-                      width: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2.2),
-                    )
-                  : const Text('Sign in'),
-            ),
-            const SizedBox(height: 12),
-            TextButton(
-              onPressed: _submitting
-                  ? null
-                  : () {
-                      Navigator.of(context).push<void>(
-                        MaterialPageRoute<void>(
-                          builder: (_) => SignupPage(auth: widget.auth),
-                        ),
-                      );
-                    },
-              child: Text(
-                "Don't have an account? Create one",
-                style: theme.textTheme.labelLarge?.copyWith(
-                  color: theme.colorScheme.primary,
-                ),
-              ),
-            ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _AuthErrorBanner extends StatelessWidget {
+  const _AuthErrorBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: cs.errorContainer.withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cs.error.withValues(alpha: 0.5)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.error_outline, color: cs.error, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: TextStyle(
+                  color: cs.onErrorContainer,
+                  fontWeight: FontWeight.w600,
+                  height: 1.3,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GradientPrimaryButton extends StatelessWidget {
+  const _GradientPrimaryButton({
+    required this.onPressed,
+    required this.label,
+    required this.loading,
+  });
+
+  final VoidCallback? onPressed;
+  final String label;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    final disabled = onPressed == null;
+    return Opacity(
+      opacity: disabled && !loading ? 0.55 : 1,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: ScenolyticsColors.heroBarGradient,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: disabled
+              ? const []
+              : [
+                  BoxShadow(
+                    color: ScenolyticsColors.primaryDim.withValues(alpha: 0.4),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: onPressed,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              child: Center(
+                child: loading
+                    ? const SizedBox(
+                        height: 22,
+                        width: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.4,
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : Text(
+                        label,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OrDivider extends StatelessWidget {
+  const _OrDivider({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final line = Expanded(
+      child: Divider(
+        color: ScenolyticsColors.outlineSoftFor(cs.brightness)
+            .withValues(alpha: 0.55),
+        thickness: 1,
+      ),
+    );
+    return Row(
+      children: [
+        line,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: cs.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ),
+        line,
+      ],
     );
   }
 }

@@ -268,6 +268,75 @@ class CastingApi {
     }
   }
 
+  /// `PATCH …/callbacks/:callback_id/reschedule` — updates callback time
+  /// (`callback_datetime` as MariaDB `YYYY-MM-DD HH:MM:SS` UTC).
+  Future<void> rescheduleDirectorCallback({
+    required String directorToken,
+    required String auditionId,
+    required String callbackId,
+    required String callbackDatetime,
+  }) async {
+    final response = await _client.patch(
+      _uri(
+        '/api/v1/casting/director/auditions/$auditionId/callbacks/$callbackId/reschedule',
+      ),
+      headers: _authHeaders(directorToken),
+      body: jsonEncode(<String, dynamic>{
+        'callback_datetime': callbackDatetime.trim(),
+      }),
+    );
+    final body = _decodeJsonMap(response);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(
+        _friendlyApiMessage(
+          body,
+          response,
+          fallback: 'Could not reschedule the callback.',
+        ),
+        statusCode: response.statusCode,
+        responseBody: response.body,
+      );
+    }
+  }
+
+  /// `PATCH …/callbacks/:callback_id/new_meeting` — replaces Meet link for the
+  /// existing callback time. Response includes `{ "link": "…" }`.
+  Future<String> regenerateDirectorCallbackMeeting({
+    required String directorToken,
+    required String auditionId,
+    required String callbackId,
+  }) async {
+    final response = await _client.patch(
+      _uri(
+        '/api/v1/casting/director/auditions/$auditionId/callbacks/$callbackId/new_meeting',
+      ),
+      headers: _authHeaders(directorToken),
+      body: '{}',
+    );
+    final body = _decodeJsonMap(response);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(
+        _friendlyApiMessage(
+          body,
+          response,
+          fallback: 'Could not regenerate the Meet link.',
+        ),
+        statusCode: response.statusCode,
+        responseBody: response.body,
+      );
+    }
+    final link = body['link']?.toString().trim() ?? '';
+    if (link.isEmpty) {
+      throw ApiException(
+        body['message']?.toString() ??
+            'Meet link was not returned after regeneration.',
+        statusCode: response.statusCode,
+        responseBody: response.body,
+      );
+    }
+    return link;
+  }
+
   /// `PATCH …/callbacks/:callback_id/review` — `status`: `accepted` | `rejected`.
   Future<void> reviewDirectorCallback({
     required String directorToken,
@@ -532,5 +601,19 @@ class CastingApi {
       return value.map((k, v) => MapEntry(k.toString(), v));
     }
     return <String, dynamic>{};
+  }
+
+  String _friendlyApiMessage(
+    Map<String, dynamic> body,
+    http.Response response, {
+    required String fallback,
+  }) {
+    final raw = body['message']?.toString().trim() ?? '';
+    if (raw.isEmpty) return '$fallback (HTTP ${response.statusCode}).';
+    final lower = raw.toLowerCase();
+    if (lower.contains('<html') || lower.contains('<!doctype')) {
+      return fallback;
+    }
+    return raw;
   }
 }
