@@ -32,7 +32,7 @@ try:
     )
 except ImportError:
     # Fallback for relative imports
-    from Eye import (
+    from core.Eye import (
         run_ear_and_iris_extraction,
         run_baseline_establishment,
         run_normalization,

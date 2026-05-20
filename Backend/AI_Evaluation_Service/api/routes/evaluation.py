@@ -29,26 +29,11 @@ router = APIRouter(prefix='/api/evaluations', tags=['evaluations'])
 
 from pydantic import BaseModel, Field, field_validator
 
-class ProcessRequest(BaseModel):
-    evaluation_id: str
-    media_id: str
-    script_text: Optional[str] = Field(
-        None,
-        description='JSON string: [{"content": "...", "emotion": "angry"}, ...]'
-    )
-
-    @field_validator("script_text", mode="before")
-    @classmethod
-    def coerce_script_text(cls, v):
-        if isinstance(v, list):
-            return json.dumps(v)
-        return v
-
-
 class CreateEvaluationRequest(BaseModel):
     """Request model for creating a new evaluation"""
     media_id: str = Field(..., description="Video media identifier")
     submission_id: Optional[str] = Field(None, description="Audition submission ID")
+    audio_only: bool = Field(False, description="Run audio-only evaluation (no video model)")
     script_text: Optional[str] = Field(
         None,
         description=(
@@ -239,7 +224,7 @@ def _row_to_response(row: dict) -> EvaluationResponse:
 
 # ==================== Background ML Pipeline ====================
 
-async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_text: Optional[str] = None, rabbitmq_manager: Optional[RabbitMQManager] = None, submission_id: Optional[str] = None):
+async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_text: Optional[str] = None, rabbitmq_manager: Optional[RabbitMQManager] = None, submission_id: Optional[str] = None,audio_only: bool = False,):
     """Runs all 3 ML models and writes scores back to DB.
 
     Parameters
@@ -287,7 +272,7 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
         # evaluate_video() returns:
         #   emotional_expression_score, vocal_tone_score, script_alignment_score,
         #   overall_performance_score, detected_emotions (dict), ai_feedback (str)
-        scores = await pipeline.evaluate_video(video_path, script_text=script_text)
+        scores = await pipeline.evaluate_video(video_path, script_text=script_text,audio_only=audio_only)
         # overall is already calculated inside evaluate_video() using the
         # correct 40/35/25 weights — no need to recalculate here.
         overall = scores["overall_performance_score"]
@@ -337,7 +322,7 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
             WHERE evaluation_id = %s
             """,
             (
-                scores["emotional_expression_score"],
+                scores.get("emotional_expression_score"),
                 scores["vocal_tone_score"],
                 scores["script_alignment_score"],
                 overall,
@@ -392,14 +377,6 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
                 pass
 # ==================== Endpoints ====================
 
-@router.post("/process")
-async def process_evaluation(body: ProcessRequest, background_tasks: BackgroundTasks, http_request: Request):
-    """Called by Node.js — runs ML models in background and saves scores to DB."""
-    pipeline = http_request.app.state.ml_pipeline
-    background_tasks.add_task(run_ml_pipeline, body.evaluation_id, body.media_id, pipeline, body.script_text)
-    return {"message": "Processing started", "evaluation_id": body.evaluation_id}
-
-
 @router.post("/", response_model=EvaluationResponse, status_code=201)
 async def create_evaluation(request: CreateEvaluationRequest, background_tasks: BackgroundTasks, http_request: Request):
     """
@@ -423,7 +400,7 @@ async def create_evaluation(request: CreateEvaluationRequest, background_tasks: 
 
         # Pass the pipeline instance directly — avoids any import-time resolution issues
         pipeline = http_request.app.state.ml_pipeline
-        background_tasks.add_task(run_ml_pipeline, evaluation_id, request.media_id, pipeline, request.script_text, http_request.app.state.rabbitmq_manager, request.submission_id)
+        background_tasks.add_task(run_ml_pipeline, evaluation_id, request.media_id, pipeline, request.script_text, http_request.app.state.rabbitmq_manager, request.submission_id, request.audio_only)
 
         logger.info(f"Created evaluation {evaluation_id} and queued ML pipeline")
 
