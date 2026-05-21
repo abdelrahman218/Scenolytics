@@ -20,15 +20,26 @@ from core.database import init_db
 from core.rabbitmq_manager import RabbitMQManager
 from core.ml_pipeline import MLPipeline
 from core.service import handle_audition_event
+import logging
+import os
 
+# Silence noisy libraries BEFORE basicConfig
+logging.getLogger("aiormq").setLevel(logging.WARNING)
+logging.getLogger("aio_pika").setLevel(logging.WARNING)
+logging.getLogger("aiomysql").setLevel(logging.WARNING)
+logging.getLogger("torio").setLevel(logging.WARNING)
+logging.getLogger("torio._extension").setLevel(logging.WARNING)
+logging.getLogger("h5py").setLevel(logging.WARNING)
+logging.getLogger("speechbrain").setLevel(logging.WARNING)
+logging.getLogger("transformers").setLevel(logging.WARNING)
 
 # Configure logging
+log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=getattr(logging, log_level, logging.INFO),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-
 # Load environment variables
 load_dotenv()
 
