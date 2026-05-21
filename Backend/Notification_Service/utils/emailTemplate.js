@@ -13,7 +13,7 @@ export const generateEmailTemplate = (title, message) => {
       <style>
         body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f4f5; margin: 0; padding: 0; }
         .container { max-width: 600px; margin: 40px auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-        .header { background-color: #111827; color: #ffffff; padding: 24px; text-align: center; }
+        .header { background-color: #01131A; color: #ffffff; padding: 24px; text-align: center; }
         .header h1 { margin: 0; font-size: 24px; font-weight: 600; letter-spacing: 1px; }
         .content { padding: 32px; color: #282e36ff; line-height: 1.6; font-size: 16px; }
         .title { font-size: 20px; font-weight: 600; color: #111827; margin-top: 0; margin-bottom: 16px; }
@@ -26,6 +26,7 @@ export const generateEmailTemplate = (title, message) => {
     <body>
       <div class="container">
         <div class="header">
+          <img src="cid:logo" alt="Scenolytics Logo" style="height: 150px; display: block; margin: 0 auto 16px auto;" />
           <h1>SCENOLYTICS</h1>
         </div>
         <div class="content">
@@ -33,7 +34,7 @@ export const generateEmailTemplate = (title, message) => {
           <p>${message.replace(/\n/g, '<br>')}</p>
           
           <div class="button-container">
-            <a href="${FRONTEND_DASHBOARD_LINK}/dashboard" class="button">Go to Dashboard</a>
+            <a href="${FRONTEND_DASHBOARD_LINK}" class="button">Go to Dashboard</a>
           </div>
         </div>
         <div class="footer">
