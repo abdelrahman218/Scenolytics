@@ -1,3 +1,5 @@
+import 'audition_submission_status.dart';
+
 /// Audition hero copy for the actor submission page (from casting + director profile).
 class ActorSubmissionAuditionUi {
   const ActorSubmissionAuditionUi({
@@ -8,19 +10,20 @@ class ActorSubmissionAuditionUi {
     this.description = '',
     this.scriptPlainText = '',
     this.mySubmissionCountForAudition = 0,
+    this.myLatestSubmissionStatus,
+    this.hasSubmissionRecord = false,
+    this.auditionType = '',
   });
 
   final String titleLine;
   final String themeLine;
   final String emotionsCsv;
   final String? directorDisplayName;
-
-  /// Casting `auditions.description`.
+  final String auditionType;
+  bool get isAudioOnly => auditionType.trim().toLowerCase() == 'audio';
   final String description;
-
-  /// Lines built from casting `audition.script` (emotion + content) for download / display.
   final String scriptPlainText;
-
-  /// Rows from `GET /api/v1/casting/actor/auditions/submissions` for this audition.
   final int mySubmissionCountForAudition;
+  final AuditionSubmissionStatus? myLatestSubmissionStatus;
+  final bool hasSubmissionRecord;
 }

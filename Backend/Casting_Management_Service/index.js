@@ -11,7 +11,6 @@ import {
   validateDirectorAccess,
 } from "./validators/auth.js";
 import { setupAsyncListeners } from "./utils/asyncListeners.js";
-import { checkRequiredFieldsGoogleConnectCallback } from "./validators/general.js";
 import { connectGoogleMeetCallBack } from "./services/director.js";
 
 dotenv.config({ filepath: `./.env` });
@@ -25,10 +24,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Routes
+app.get("/google/callback", connectGoogleMeetCallBack);
 app.use("", validateJWTToken, generalRoutes);
 app.use("/director", validateDirectorAccess, directorRoutes);
 app.use("/actor", validateActorAccess, actorRoutes);
-app.get("/google/callback", checkRequiredFieldsGoogleConnectCallback, connectGoogleMeetCallBack);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

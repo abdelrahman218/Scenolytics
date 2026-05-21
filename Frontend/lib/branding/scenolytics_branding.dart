@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 /// Wrap [MaterialApp] (or its parent) once:
 /// ```dart
 /// ScenolyticsBranding(
-///   logo: Image.asset('assets/logo.png', height: 40),
+///   logo: const ScenolyticsThemeAwareLogo(height: 40),
 ///   child: MaterialApp(...),
 /// )
 /// ```

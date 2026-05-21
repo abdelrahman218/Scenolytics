@@ -73,8 +73,10 @@ class AuthApi {
     }
 
     buf.write(
-      'Ensure Docker publishes API_GATEWAY_PORT and Windows Firewall allows inbound '
-      'TCP on that port from your LAN.',
+      'Ensure Docker publishes API_GATEWAY_PORT. On Windows, if Wi‑Fi is a Public network, '
+      'inbound LAN traffic is blocked unless you set the network to Private or run '
+      'Backend/scripts/allow-lan-firewall.ps1 as Administrator. For USB debugging, use '
+      'Frontend/.env.usb after Frontend/scripts/setup-android-usb.ps1.',
     );
 
     return buf.toString().trim();
@@ -117,7 +119,10 @@ class AuthApi {
       }
       return AuthUser(token: token, userId: id, email: em, role: role);
     }
-    throw _errorFromResponse(response, fallback: 'Sign in failed.');
+    throw AuthApiException(
+      _loginErrorMessage(response),
+      statusCode: response.statusCode,
+    );
   }
 
   /// `POST /api/v1/auth/signup` — creates user (no token). Caller usually logs in next.
@@ -169,6 +174,29 @@ class AuthApi {
   Map<String, dynamic>? _parseUserMap(dynamic value) {
     if (value is! Map) return null;
     return value.map((k, v) => MapEntry(k.toString(), v));
+  }
+
+  /// Maps login failures to a single credential message (not sign-up password rules).
+  String _loginErrorMessage(http.Response response) {
+    if (response.statusCode == 401) {
+      return 'Wrong email or password.';
+    }
+    try {
+      final data = _decodeObject(response.body);
+      final m = data['message']?.toString().trim() ?? '';
+      if (m.isNotEmpty) {
+        final lower = m.toLowerCase();
+        if (lower.contains('invalid password') ||
+            lower.contains('at least 8 character')) {
+          return 'Wrong email or password.';
+        }
+        if (lower.contains('invalid email or password')) {
+          return 'Wrong email or password.';
+        }
+        return m;
+      }
+    } catch (_) {}
+    return 'Wrong email or password.';
   }
 
   AuthApiException _errorFromResponse(

@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../branding/scenolytics_branding.dart';
+import '../data/api/notifications_api.dart';
 import '../data/api/user_management_api.dart';
 import '../data/models/auth_user.dart';
+import '../data/notification_feed_controller.dart';
 import '../widgets/account_menu_button.dart';
+import '../widgets/chrome_notifications_header_control.dart';
 import '../widgets/scenolytics_app_drawer.dart';
 
 /// App chrome: full-width header + drawer on narrow screens; account menu at the trailing edge.
@@ -18,6 +21,7 @@ class MainShell extends StatefulWidget {
     this.onSelectCreateAudition,
     this.onSelectSubmitVideo,
     this.onSelectExploreAuditions,
+    this.onSelectActorDashboard,
     this.onSelectDirectorDashboard,
     this.showActorNav = true,
     this.showDirectorNav = true,
@@ -26,6 +30,15 @@ class MainShell extends StatefulWidget {
     this.authUser,
     this.userManagementApi,
     this.onLogout,
+    this.notificationsApi,
+    this.notificationFeed,
+    this.authJwtForSettings,
+    this.showChromeAlertsBell = false,
+    this.onOpenMissedNotifiesDetached,
+    this.onSelectMissedNotifiesShell,
+    this.onSelectProfile,
+    this.onSelectSettings,
+    this.onDirectorConnectGoogleCalendar,
   });
 
   final Widget body;
@@ -36,6 +49,7 @@ class MainShell extends StatefulWidget {
   final VoidCallback? onSelectCreateAudition;
   final VoidCallback? onSelectSubmitVideo;
   final VoidCallback? onSelectExploreAuditions;
+  final VoidCallback? onSelectActorDashboard;
   final VoidCallback? onSelectDirectorDashboard;
   final bool showActorNav;
   final bool showDirectorNav;
@@ -44,6 +58,15 @@ class MainShell extends StatefulWidget {
   final AuthUser? authUser;
   final UserManagementApi? userManagementApi;
   final Future<void> Function()? onLogout;
+  final NotificationsApi? notificationsApi;
+  final NotificationFeedController? notificationFeed;
+  final String? authJwtForSettings;
+  final bool showChromeAlertsBell;
+  final VoidCallback? onOpenMissedNotifiesDetached;
+  final VoidCallback? onSelectMissedNotifiesShell;
+  final VoidCallback? onSelectProfile;
+  final VoidCallback? onSelectSettings;
+  final Future<void> Function()? onDirectorConnectGoogleCalendar;
 
   static const double drawerBreakpoint = 760;
 
@@ -78,10 +101,17 @@ class _MainShellState extends State<MainShell> {
               onSelectCreateAudition: widget.onSelectCreateAudition,
               onSelectSubmitVideo: widget.onSelectSubmitVideo,
               onSelectExploreAuditions: widget.onSelectExploreAuditions,
+              onSelectActorDashboard: widget.onSelectActorDashboard,
               onSelectDirectorDashboard: widget.onSelectDirectorDashboard,
+              onSelectMissedNotifies: widget.onSelectMissedNotifiesShell,
               showActorNav: widget.showActorNav,
               showDirectorNav: widget.showDirectorNav,
               onLogout: widget.onLogout,
+              authJwtForSettings: widget.authJwtForSettings,
+              notificationsApi: widget.notificationsApi,
+              notificationFeed: widget.notificationFeed,
+              onDirectorConnectGoogleCalendar:
+                  widget.onDirectorConnectGoogleCalendar,
             )
           : null,
       drawerEnableOpenDragGesture: useDrawer,
@@ -103,6 +133,7 @@ class _MainShellState extends State<MainShell> {
             onSelectCreateAudition: widget.onSelectCreateAudition,
             onSelectSubmitVideo: widget.onSelectSubmitVideo,
             onSelectExploreAuditions: widget.onSelectExploreAuditions,
+            onSelectActorDashboard: widget.onSelectActorDashboard,
             onSelectDirectorDashboard: widget.onSelectDirectorDashboard,
             showActorNav: widget.showActorNav,
             showDirectorNav: widget.showDirectorNav,
@@ -111,6 +142,18 @@ class _MainShellState extends State<MainShell> {
             authUser: widget.authUser,
             userManagementApi: widget.userManagementApi,
             onLogout: widget.onLogout,
+            showChromeAlertsBell:
+                widget.showChromeAlertsBell && widget.notificationFeed != null,
+            notificationsFeed: widget.notificationFeed,
+            onOpenMissedNotifiesDetached: widget.onOpenMissedNotifiesDetached,
+            denseChromeAlerts:
+                MediaQuery.sizeOf(context).width >= MainShell.drawerBreakpoint,
+            authJwtForSettings: widget.authJwtForSettings,
+            notificationsApi: widget.notificationsApi,
+            onDirectorConnectGoogleCalendar:
+                widget.onDirectorConnectGoogleCalendar,
+            onSelectProfile: widget.onSelectProfile,
+            onSelectSettings: widget.onSelectSettings,
           ),
           Expanded(child: widget.body),
         ],
@@ -130,6 +173,7 @@ class _HeaderBar extends StatelessWidget {
     this.onSelectCreateAudition,
     this.onSelectSubmitVideo,
     this.onSelectExploreAuditions,
+    this.onSelectActorDashboard,
     this.onSelectDirectorDashboard,
     this.pageTitle,
     this.showActorNav = true,
@@ -139,6 +183,15 @@ class _HeaderBar extends StatelessWidget {
     this.authUser,
     this.userManagementApi,
     this.onLogout,
+    this.showChromeAlertsBell = false,
+    this.notificationsFeed,
+    this.onOpenMissedNotifiesDetached,
+    this.denseChromeAlerts = false,
+    this.authJwtForSettings,
+    this.notificationsApi,
+    this.onDirectorConnectGoogleCalendar,
+    this.onSelectProfile,
+    this.onSelectSettings,
   });
 
   final bool showMenu;
@@ -150,6 +203,7 @@ class _HeaderBar extends StatelessWidget {
   final VoidCallback? onSelectCreateAudition;
   final VoidCallback? onSelectSubmitVideo;
   final VoidCallback? onSelectExploreAuditions;
+  final VoidCallback? onSelectActorDashboard;
   final VoidCallback? onSelectDirectorDashboard;
   final String? pageTitle;
   final bool showActorNav;
@@ -159,6 +213,15 @@ class _HeaderBar extends StatelessWidget {
   final AuthUser? authUser;
   final UserManagementApi? userManagementApi;
   final Future<void> Function()? onLogout;
+  final bool showChromeAlertsBell;
+  final NotificationFeedController? notificationsFeed;
+  final VoidCallback? onOpenMissedNotifiesDetached;
+  final bool denseChromeAlerts;
+  final String? authJwtForSettings;
+  final NotificationsApi? notificationsApi;
+  final Future<void> Function()? onDirectorConnectGoogleCalendar;
+  final VoidCallback? onSelectProfile;
+  final VoidCallback? onSelectSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -167,6 +230,7 @@ class _HeaderBar extends StatelessWidget {
     final showInlineNav = width >= MainShell.drawerBreakpoint;
     final tapCreateAudition = onSelectCreateAudition;
     final tapExplore = onSelectExploreAuditions;
+    final tapActorDashboard = onSelectActorDashboard;
     final tapDashboard = onSelectDirectorDashboard;
 
     return Material(
@@ -182,7 +246,7 @@ class _HeaderBar extends StatelessWidget {
             children: [
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+                  padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
@@ -201,7 +265,9 @@ class _HeaderBar extends StatelessWidget {
                           child: logo,
                         ),
                       ),
-                      if (pageTitle != null && pageTitle!.isNotEmpty) ...[
+                      if (!showInlineNav &&
+                          pageTitle != null &&
+                          pageTitle!.isNotEmpty) ...[
                         const SizedBox(width: 12),
                         Flexible(
                           child: Text(
@@ -221,51 +287,19 @@ class _HeaderBar extends StatelessWidget {
                             alignment: Alignment.centerLeft,
                             child: SingleChildScrollView(
                               scrollDirection: Axis.horizontal,
-                                child: Row(
+                              child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   const SizedBox(width: 16),
-                                  if (showActorNav && tapExplore != null)
-                                    _NavButton(
-                                      icon: Icons.explore_outlined,
-                                      label: 'Explore auditions',
-                                      filled: currentRouteName ==
-                                          'explore-auditions',
-                                      onPressed: tapExplore,
-                                    ),
-                                  if (showActorNav)
-                                    _NavButton(
-                                      icon: Icons.video_call_outlined,
-                                      label: 'Actor submission',
-                                      filled: currentRouteName == 'submit-video',
-                                      onPressed: onSelectHome ?? () {},
-                                    ),
-                                  if (showDirectorNav &&
-                                      tapDashboard != null)
-                                    _NavButton(
-                                      icon:
-                                          Icons.dashboard_customize_outlined,
-                                      label: 'Dashboard',
-                                      filled: currentRouteName ==
-                                          'director-dashboard',
-                                      onPressed: tapDashboard,
-                                    ),
-                                  if (showDirectorNav)
-                                    _NavButton(
-                                      icon: Icons.leaderboard_outlined,
-                                      label: 'Director rankings',
-                                      filled: currentRouteName == 'rankings',
-                                      onPressed: onSelectRankings ?? () {},
-                                    ),
-                                  if (showDirectorNav &&
-                                      tapCreateAudition != null)
-                                    _NavButton(
-                                      icon: Icons.add_circle_outline_rounded,
-                                      label: 'Create audition',
-                                      filled: currentRouteName ==
-                                          'create-audition',
-                                      onPressed: tapCreateAudition,
-                                    ),
+                                  ..._primaryHeaderNavButtons(
+                                    showActorNav: showActorNav,
+                                    showDirectorNav: showDirectorNav,
+                                    currentRouteName: currentRouteName,
+                                    onActorDashboard: tapActorDashboard,
+                                    onExplore: tapExplore,
+                                    onDirectorDashboard: tapDashboard,
+                                    onCreateAudition: tapCreateAudition,
+                                  ),
                                 ],
                               ),
                             ),
@@ -280,13 +314,37 @@ class _HeaderBar extends StatelessWidget {
               // Trailing inset so the account control is not flush with the viewport edge.
               Padding(
                 padding: const EdgeInsets.fromLTRB(0, 10, 8, 10),
-                child: AccountMenuButton(
-                  usePopupMenu: showInlineNav,
-                  userEmail: accountEmail,
-                  accountRoleLabel: accountRoleLabel,
-                  authUser: authUser,
-                  userManagementApi: userManagementApi,
-                  onLogOut: onLogout,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    if (showChromeAlertsBell &&
+                        notificationsFeed != null &&
+                        onOpenMissedNotifiesDetached != null)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 2),
+                        child: ChromeNotificationsHeaderControl(
+                          controller: notificationsFeed!,
+                          dense: denseChromeAlerts,
+                          onOpenFullListing: onOpenMissedNotifiesDetached!,
+                        ),
+                      ),
+                    AccountMenuButton(
+                      usePopupMenu: showInlineNav,
+                      authJwtForSettings: authJwtForSettings,
+                      notificationsApi: notificationsApi,
+                      notificationFeed: notificationsFeed,
+                      userEmail: accountEmail,
+                      accountRoleLabel: accountRoleLabel,
+                      authUser: authUser,
+                      userManagementApi: userManagementApi,
+                      onLogOut: onLogout,
+                      onDirectorConnectGoogleCalendar:
+                          onDirectorConnectGoogleCalendar,
+                      onSelectProfile: onSelectProfile,
+                      onSelectSettings: onSelectSettings,
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -295,6 +353,69 @@ class _HeaderBar extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Role-specific header links — rankings and submission are reached from dashboards.
+List<Widget> _primaryHeaderNavButtons({
+  required bool showActorNav,
+  required bool showDirectorNav,
+  required String currentRouteName,
+  required VoidCallback? onActorDashboard,
+  required VoidCallback? onExplore,
+  required VoidCallback? onDirectorDashboard,
+  required VoidCallback? onCreateAudition,
+}) {
+  final out = <Widget>[];
+
+  if (showActorNav) {
+    if (onActorDashboard != null) {
+      out.add(
+        _NavButton(
+          icon: Icons.dashboard_outlined,
+          label: 'My dashboard',
+          filled: currentRouteName == 'actor-dashboard' ||
+              currentRouteName == 'submit-video',
+          onPressed: onActorDashboard,
+        ),
+      );
+    }
+    if (onExplore != null) {
+      out.add(
+        _NavButton(
+          icon: Icons.explore_outlined,
+          label: 'Explore auditions',
+          filled: currentRouteName == 'explore-auditions',
+          onPressed: onExplore,
+        ),
+      );
+    }
+  }
+
+  if (showDirectorNav) {
+    if (onDirectorDashboard != null) {
+      out.add(
+        _NavButton(
+          icon: Icons.dashboard_customize_outlined,
+          label: 'Dashboard',
+          filled: currentRouteName == 'director-dashboard' ||
+              currentRouteName == 'rankings',
+          onPressed: onDirectorDashboard,
+        ),
+      );
+    }
+    if (onCreateAudition != null) {
+      out.add(
+        _NavButton(
+          icon: Icons.add_circle_outline_rounded,
+          label: 'Create audition',
+          filled: currentRouteName == 'create-audition',
+          onPressed: onCreateAudition,
+        ),
+      );
+    }
+  }
+
+  return out;
 }
 
 class _NavButton extends StatelessWidget {
@@ -316,7 +437,7 @@ class _NavButton extends StatelessWidget {
     final style = TextButton.styleFrom(
       foregroundColor: filled ? cs.onPrimary : cs.primary,
       backgroundColor: filled ? cs.primary : null,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     );
 

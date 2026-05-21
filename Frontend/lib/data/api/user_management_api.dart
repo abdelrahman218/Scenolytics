@@ -3,6 +3,8 @@ import 'dart:developer' as developer;
 
 import 'package:http/http.dart' as http;
 
+import '../../utils/actor_profile_completion.dart';
+
 /// Thrown when a write to the User Management service fails (non-2xx).
 class UserManagementApiException implements Exception {
   UserManagementApiException(this.message, {this.statusCode});
@@ -168,6 +170,92 @@ class UserManagementApi {
     );
   }
 
+  /// Persists actor profile fields without relying on the broken PATCH handler
+  /// (`user_id is not defined` in older User Management builds).
+  ///
+  /// Uses `POST /actors/profile` (create). When a row already exists (e.g. from
+  /// the signup `USER_CREATED` listener), create may fail with a duplicate error;
+  /// we then read the profile back and succeed only if it is already complete.
+  Future<Map<String, dynamic>> saveActorProfile({
+    required String userId,
+    required Map<String, dynamic> fields,
+    required String bearerToken,
+    String? existingProfileId,
+    bool preferCreate = false,
+  }) async {
+    final createFields = _actorFieldsForCreate(fields);
+
+    final shouldCreateFirst =
+        preferCreate || existingProfileId == null || existingProfileId.isEmpty;
+
+    if (shouldCreateFirst) {
+      try {
+        return await createActorProfile(
+          userId: userId,
+          fields: createFields,
+          bearerToken: bearerToken,
+        );
+      } on UserManagementApiException catch (e) {
+        if (!_looksLikeDuplicateProfileError(e)) rethrow;
+        final existing = await getActorProfile(
+          userId,
+          bearerToken: bearerToken,
+        );
+        if (existing != null && isActorProfileComplete(existing)) {
+          return existing;
+        }
+        if (existingProfileId != null && existingProfileId.isNotEmpty) {
+          return _tryActorProfileUpdate(
+            profileId: existingProfileId,
+            fields: fields,
+            bearerToken: bearerToken,
+          );
+        }
+        rethrow;
+      }
+    }
+
+    return _tryActorProfileUpdate(
+      profileId: existingProfileId!,
+      fields: fields,
+      bearerToken: bearerToken,
+    );
+  }
+
+  Future<Map<String, dynamic>> _tryActorProfileUpdate({
+    required String profileId,
+    required Map<String, dynamic> fields,
+    required String bearerToken,
+  }) async {
+    try {
+      return await updateActorProfile(
+        profileId: profileId,
+        fields: fields,
+        bearerToken: bearerToken,
+      );
+    } on UserManagementApiException catch (e) {
+      if (!_looksLikeBrokenActorUpdateError(e)) rethrow;
+      throw UserManagementApiException(
+        'Could not save your profile. Restart the User Management service and '
+        'try again.',
+        statusCode: e.statusCode,
+      );
+    }
+  }
+
+  bool _looksLikeDuplicateProfileError(UserManagementApiException e) {
+    final m = e.message.toLowerCase();
+    return m.contains('duplicate') ||
+        m.contains('already exists') ||
+        m.contains('unique') ||
+        m.contains('er_dup') ||
+        e.statusCode == 409;
+  }
+
+  bool _looksLikeBrokenActorUpdateError(UserManagementApiException e) {
+    return e.message.contains('user_id is not defined');
+  }
+
   /// `POST /api/v1/directors/profile` — creates a new director profile row.
   /// User Management maps **`name`** → `display_name`.
   Future<Map<String, dynamic>> createDirectorProfile({
@@ -258,6 +346,16 @@ class UserManagementApi {
     } catch (_) {}
     return null;
   }
+}
+
+/// Maps profile form fields to the actor create body (`name` → display_name).
+Map<String, dynamic> _actorFieldsForCreate(Map<String, dynamic> fields) {
+  final out = Map<String, dynamic>.from(fields);
+  final dn = out['display_name']?.toString().trim();
+  if (dn != null && dn.isNotEmpty) {
+    out['name'] = dn;
+  }
+  return out;
 }
 
 /// Builds actor POST body: service reads **`name`** for display name.

@@ -1,3 +1,5 @@
+import '../constants/profile_field_options.dart';
+
 /// Client-side rules aligned with good passwords; the backend only requires non-empty fields.
 String? validateEmailField(String? value) {
   final v = value?.trim() ?? '';
@@ -86,6 +88,9 @@ String? validateGenderField(String? value) {
   if (v.isEmpty) {
     return 'Gender is required';
   }
+  if (!ActorProfileOptions.genderOptions.contains(v)) {
+    return 'Select Male or Female';
+  }
   return null;
 }
 
@@ -102,4 +107,41 @@ String? validateAgeField(String? value) {
     return 'Enter an age between 1 and 120';
   }
   return null;
+}
+
+class PasswordRequirements {
+  const PasswordRequirements({
+    required this.minLength,
+    required this.hasLetter,
+    required this.hasDigit,
+    required this.withinMaxLength,
+  });
+
+  final bool minLength;
+  final bool hasLetter;
+  final bool hasDigit;
+  final bool withinMaxLength;
+
+  bool get allMet => minLength && hasLetter && hasDigit && withinMaxLength;
+
+  int get satisfiedCount {
+    var c = 0;
+    if (minLength) c++;
+    if (hasLetter) c++;
+    if (hasDigit) c++;
+    if (withinMaxLength) c++;
+    return c;
+  }
+
+  /// 0.0–1.0 strength normalized to the required rules.
+  double get strength => satisfiedCount / 4.0;
+
+  static PasswordRequirements of(String value) {
+    return PasswordRequirements(
+      minLength: value.length >= 8,
+      hasLetter: RegExp(r'[A-Za-z]').hasMatch(value),
+      hasDigit: RegExp(r'[0-9]').hasMatch(value),
+      withinMaxLength: value.isNotEmpty && value.length <= 128,
+    );
+  }
 }

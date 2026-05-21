@@ -3,34 +3,15 @@ import 'dart:math' as math;
 import '../models/actor_audition_submission.dart';
 import '../theme/scenolytics_colors.dart';
 
-// ═════════════════════════════════════════════════════════════════════════════
-// BACKEND INTEGRATION GUIDE
-// ─────────────────────────────────────────────────────────────────────────────
-// 1. Replace AlignmentResult.mock() with data fetched from your API.
-// 2. WordStatus enum maps to your backend's diff status values.
-// 3. SentenceAlignment.scriptWords / transcriptWords come from your
-//    token-level alignment output per sentence.
-// 4. The summary counts (matched/added/removed/changed) should come from
-//    your API's aggregate stats, not re-computed on the client.
-// ═════════════════════════════════════════════════════════════════════════════
-
 const double _kMobileBreak = 600;
 bool _isWide(BuildContext ctx) =>
     MediaQuery.of(ctx).size.width >= _kMobileBreak;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Colour tokens
-// ─────────────────────────────────────────────────────────────────────────────
-
-const _colMatched = Color.fromARGB(255, 34, 255, 0);       // teal green — matched
-const _colAdded   = ScenolyticsColors.success;       // green      — added
-const _colRemoved = ScenolyticsColors.error;         // red        — removed
-const _colChanged = ScenolyticsColors.warning;       // amber      — changed
-const _colExtra   = ScenolyticsColors.secondary;     // blue       — transcript-only extras
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Data models
-// ─────────────────────────────────────────────────────────────────────────────
+const _colMatched = Color.fromARGB(255, 34, 255, 0);
+const _colAdded = ScenolyticsColors.success;
+const _colRemoved = ScenolyticsColors.error;
+const _colChanged = ScenolyticsColors.warning;
+const _colExtra = ScenolyticsColors.secondary;
 
 enum WordStatus { matched, added, removed, changed, extra }
 
@@ -240,44 +221,52 @@ class AlignmentResult {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Page root
-// ─────────────────────────────────────────────────────────────────────────────
-
 class ScriptAlignmentScorePage extends StatelessWidget {
   const ScriptAlignmentScorePage({
     super.key,
     required this.submission,
     this.result,
+    this.nested = false,
   });
 
   final ActorAuditionSubmission submission;
   final AlignmentResult? result;
 
+  /// When true, omits the page header so this can live inside a parent tab.
+  final bool nested;
+
   @override
   Widget build(BuildContext context) {
-    final data = result ?? AlignmentResult.mockForSubmission(submission);
+    final pending = !submission.evaluationCompleted;
+    final data = pending
+        ? null
+        : (result ?? AlignmentResult.mockForSubmission(submission));
     final wide = _isWide(context);
 
+    final body = Column(
+      children: [
+        if (!nested) _AppBar(),
+        Expanded(
+          child: pending
+              ? const _ScriptAlignmentPending()
+              : wide
+                  ? _WebLayout(data: data!)
+                  : _MobileLayout(data: data!),
+        ),
+      ],
+    );
+    if (nested) {
+      return ColoredBox(
+        color: ScenolyticsColors.pageBackground,
+        child: body,
+      );
+    }
     return Scaffold(
       backgroundColor: ScenolyticsColors.pageBackground,
-      body: Column(
-        children: [
-          _AppBar(),
-          Expanded(
-            child: wide
-                ? _WebLayout(data: data)
-                : _MobileLayout(data: data),
-          ),
-        ],
-      ),
+      body: body,
     );
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Layouts
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _MobileLayout extends StatelessWidget {
   final AlignmentResult data;
@@ -375,10 +364,6 @@ class _WebLayout extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// AppBar
-// ─────────────────────────────────────────────────────────────────────────────
-
 class _AppBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -414,10 +399,6 @@ class _AppBar extends StatelessWidget {
     );
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Sentence accordion
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _SentenceAccordion extends StatefulWidget {
   final SentenceAlignment sentence;
@@ -651,10 +632,6 @@ class _ExpandedWordRow extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Word stats 2×2 grid
-// ─────────────────────────────────────────────────────────────────────────────
-
 class _WordStatsGrid extends StatelessWidget {
   final AlignmentResult data;
   const _WordStatsGrid({required this.data});
@@ -787,10 +764,6 @@ class _StatCard extends StatelessWidget {
     );
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Word list sections (Changed / Added / Removed)
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _WordListSection extends StatefulWidget {
   final Color color;
@@ -934,10 +907,6 @@ class _WordListSectionState extends State<_WordListSection>
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Individual word rows
-// ─────────────────────────────────────────────────────────────────────────────
-
 class _ChangedWordRow extends StatelessWidget {
   final ChangedWordPair pair;
   const _ChangedWordRow({required this.pair});
@@ -1080,10 +1049,6 @@ class _WordPill extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Section heading
-// ─────────────────────────────────────────────────────────────────────────────
-
 class _SectionHeading extends StatelessWidget {
   final String text;
   const _SectionHeading(this.text);
@@ -1098,6 +1063,66 @@ class _SectionHeading extends StatelessWidget {
         color: ScenolyticsColors.textMuted,
         letterSpacing: 1.0,
       ),
+    );
+  }
+}
+
+class _ScriptAlignmentPending extends StatelessWidget {
+  const _ScriptAlignmentPending();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
+          decoration: BoxDecoration(
+            color: ScenolyticsColors.surfaceCard,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: ScenolyticsColors.outlineSoft),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.4,
+                      color: cs.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Script alignment is pending',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: ScenolyticsColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'The AI evaluation has not completed yet for this submission. '
+                'Word-level statistics and sentence comparisons will appear '
+                'here as soon as analysis finishes.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: ScenolyticsColors.textMuted,
+                  height: 1.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

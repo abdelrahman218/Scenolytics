@@ -40,10 +40,14 @@ export class Audition {
   }
 
   static async update(id, data, director_id) {
-    const result = await knex("auditions")
-      .where({ id })
-      .update({ ...data, director_id });
-    return result;
+    const { script: _script, id: _id, director_id: _directorId, ...auditionFields } =
+      data ?? {};
+
+    await knex("auditions")
+      .where({ id, director_id })
+      .update(auditionFields);
+
+    return knex("auditions").where({ id }).first();
   }
 
   static async delete(id) {

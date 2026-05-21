@@ -9,29 +9,23 @@ import '../theme/scenolytics_colors.dart';
 import '../widgets/scenolytics_footer.dart';
 import '../utils/pdf_audition_script_extractor.dart';
 
-/// Director-facing form to publish a casting call. Mirrors the casting service
-/// `auditions` + `sentences` schema (no backend changes — same payload shape:
-/// `{ title, description, type, candidate_*, script: [{content, emotion}] }`).
-///
-/// Layout:
-///   * Wide (>=900px / web): 2-column grid for Basics + Candidate criteria,
-///     Script card spans full width below. Content is centered with a max
-///     width of 1100px so it reads well on desktops.
-///   * Narrow (phone): everything stacks in a single column, full-width.
-///
-/// Emotion picker uses emoji pill-chips coloured by the emotion's accent hue
-/// (see [kAuditionEmotionEmoji] + [kAuditionEmotionAccent]).
 class DirectorAuditionCreationPage extends StatefulWidget {
   const DirectorAuditionCreationPage({
     super.key,
     required this.auditionsRepository,
     required this.directorToken,
+    this.editAuditionId,
     this.onAuditionCreated,
+    this.onAuditionUpdated,
   });
 
   final AuditionsRepository auditionsRepository;
   final String directorToken;
+
+  final String? editAuditionId;
+
   final ValueChanged<Map<String, dynamic>>? onAuditionCreated;
+  final ValueChanged<Map<String, dynamic>>? onAuditionUpdated;
 
   @override
   State<DirectorAuditionCreationPage> createState() =>
@@ -40,13 +34,6 @@ class DirectorAuditionCreationPage extends StatefulWidget {
 
 class _DirectorAuditionCreationPageState
     extends State<DirectorAuditionCreationPage> {
-  // Layout breakpoints for the create-audition surface.
-  //   < _wideBreakpoint           -> phone-style stacked column.
-  //   _wideBreakpoint .. _xWide   -> 2-column form with comfortable margins.
-  //   >= _xWide                   -> 2-column form, larger horizontal padding,
-  //                                  capped at _maxContentWidth so the form
-  //                                  never becomes uncomfortably wide on
-  //                                  ultrawide displays.
   static const double _wideBreakpoint = 900;
   static const double _xWide = 1280;
   static const double _maxContentWidth = 1240;
@@ -71,6 +58,115 @@ class _DirectorAuditionCreationPageState
 
   bool _submitting = false;
   bool _pdfBusy = false;
+  bool _loadingExisting = false;
+  String? _loadExistingError;
+
+  bool get _isEditMode =>
+      (widget.editAuditionId?.trim().isNotEmpty ?? false);
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isEditMode) {
+      _loadExistingAudition();
+    }
+  }
+
+  Future<void> _loadExistingAudition() async {
+    final id = widget.editAuditionId?.trim() ?? '';
+    if (id.isEmpty) return;
+    setState(() {
+      _loadingExisting = true;
+      _loadExistingError = null;
+    });
+    try {
+      final audition = await widget.auditionsRepository.fetchAuditionDetails(
+        token: widget.directorToken,
+        auditionId: id,
+      );
+      if (!mounted) return;
+      _hydrateFromAudition(audition);
+      setState(() => _loadingExisting = false);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingExisting = false;
+        _loadExistingError = 'Could not load audition (${e.runtimeType}).';
+      });
+    }
+  }
+
+  void _hydrateFromAudition(Map<String, dynamic> audition) {
+    _titleController.text = audition['title']?.toString().trim() ?? '';
+    _descriptionController.text =
+        audition['description']?.toString().trim() ?? '';
+
+    final type = audition['type']?.toString().trim() ?? '';
+    if (kAuditionMediaTypes.contains(type)) {
+      _mediaType = type;
+    }
+
+    _minAgeController.text = _intFieldText(audition['candidate_min_age']);
+    _maxAgeController.text = _intFieldText(audition['candidate_max_age']);
+    _minHeightController.text =
+        _intFieldText(audition['candidate_min_height_cm']);
+    _maxHeightController.text =
+        _intFieldText(audition['candidate_max_height_cm']);
+
+    _gender = _matchAuditionOption(
+      audition['candidate_gender']?.toString() ?? '',
+      kAuditionGenders,
+      fallback: kAuditionGenders[2],
+    );
+    _ethnicity = _matchAuditionOption(
+      audition['candidate_ethnicity']?.toString() ?? '',
+      kAuditionEthnicities,
+      fallback: kAuditionEthnicities[4],
+    );
+    _bodyType = _matchAuditionOption(
+      audition['candidate_body_type']?.toString() ?? '',
+      kAuditionBodyTypes,
+      fallback: kAuditionBodyTypes[4],
+    );
+
+    final script = audition['script'];
+    if (script is List && script.isNotEmpty) {
+      final drafts = <DraftScriptLine>[];
+      for (final row in script) {
+        if (row is! Map) continue;
+        drafts.add(
+          DraftScriptLine(
+            content: row['content']?.toString() ?? '',
+            emotion: coerceAuditionEmotion(
+              row['emotion']?.toString() ?? 'neutral',
+            ),
+          ),
+        );
+      }
+      if (drafts.isNotEmpty) {
+        _replaceLinesFromDrafts(drafts);
+      }
+    }
+  }
+
+  String _intFieldText(Object? value) {
+    if (value == null) return '';
+    if (value is num) return value.toInt().toString();
+    return value.toString().trim();
+  }
+
+  String _matchAuditionOption(
+    String value,
+    List<String> options, {
+    required String fallback,
+  }) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return fallback;
+    for (final opt in options) {
+      if (opt.toLowerCase() == trimmed.toLowerCase()) return opt;
+    }
+    return options.contains(trimmed) ? trimmed : fallback;
+  }
 
   @override
   void dispose() {
@@ -85,10 +181,6 @@ class _DirectorAuditionCreationPageState
     }
     super.dispose();
   }
-
-  // ---------------------------------------------------------------------------
-  // Sentence list mutations
-  // ---------------------------------------------------------------------------
 
   void _addSentenceRow() {
     setState(() {
@@ -122,11 +214,6 @@ class _DirectorAuditionCreationPageState
       }
     });
   }
-
-  // ---------------------------------------------------------------------------
-  // PDF / TXT import
-  // ---------------------------------------------------------------------------
-
   Future<void> _pickPdfAndMirrorScript() async {
     setState(() => _pdfBusy = true);
     try {
@@ -229,11 +316,6 @@ class _DirectorAuditionCreationPageState
     if (s.isEmpty) return null;
     return int.tryParse(s);
   }
-
-  // ---------------------------------------------------------------------------
-  // Submit
-  // ---------------------------------------------------------------------------
-
   Future<void> _submit() async {
     final messenger = ScaffoldMessenger.of(context);
     if (widget.directorToken.trim().isEmpty) {
@@ -311,49 +393,60 @@ class _DirectorAuditionCreationPageState
 
     setState(() => _submitting = true);
     try {
-      final audition = await widget.auditionsRepository.createDirectorAudition(
-        directorToken: widget.directorToken,
-        body: body,
-      );
-      if (!mounted) return;
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Audition created successfully.')),
-      );
-      widget.onAuditionCreated?.call(audition);
+      if (_isEditMode) {
+        final id = widget.editAuditionId!.trim();
+        final audition = await widget.auditionsRepository.updateDirectorAudition(
+          directorToken: widget.directorToken,
+          auditionId: id,
+          body: body,
+        );
+        if (!mounted) return;
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Audition updated successfully.')),
+        );
+        widget.onAuditionUpdated?.call(audition);
+      } else {
+        final audition = await widget.auditionsRepository.createDirectorAudition(
+          directorToken: widget.directorToken,
+          body: body,
+        );
+        if (!mounted) return;
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Audition created successfully.')),
+        );
+        widget.onAuditionCreated?.call(audition);
 
-      _titleController.clear();
-      _descriptionController.clear();
-      _minAgeController.clear();
-      _maxAgeController.clear();
-      _minHeightController.clear();
-      _maxHeightController.clear();
-      _replaceLinesFromDrafts(const <DraftScriptLine>[]);
-      _mediaType = kAuditionMediaTypes[1];
-      _gender = kAuditionGenders[2];
-      _ethnicity = kAuditionEthnicities[4];
-      _bodyType = kAuditionBodyTypes[4];
+        _titleController.clear();
+        _descriptionController.clear();
+        _minAgeController.clear();
+        _maxAgeController.clear();
+        _minHeightController.clear();
+        _maxHeightController.clear();
+        _replaceLinesFromDrafts(const <DraftScriptLine>[]);
+        _mediaType = kAuditionMediaTypes[1];
+        _gender = kAuditionGenders[2];
+        _ethnicity = kAuditionEthnicities[4];
+        _bodyType = kAuditionBodyTypes[4];
+      }
     } on ApiException catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
       messenger.showSnackBar(
-        const SnackBar(content: Text('Could not create audition. Try again.')),
+        SnackBar(
+          content: Text(
+            _isEditMode
+                ? 'Could not update audition. Try again.'
+                : 'Could not create audition. Try again.',
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Reusable bits
-  // ---------------------------------------------------------------------------
-
-  /// `InputDecorator` + `DropdownButton` (avoids the deprecated
-  /// `DropdownButtonFormField.value` in newer Flutter SDKs).
-  ///
-  /// When [isRequired] is true the label is rendered with a red asterisk to
-  /// match the rest of the required-field convention on this page.
   Widget _labeledStringDropdown({
     required String label,
     required String selected,
@@ -388,10 +481,6 @@ class _DirectorAuditionCreationPageState
       ),
     );
   }
-
-  /// Renders an `InputDecoration` label with a red `*` after required fields.
-  /// Pulls the surrounding label colour from the theme so it stays correct in
-  /// dark mode.
   Widget _fieldLabel(String text, {bool isRequired = false}) {
     final cs = Theme.of(context).colorScheme;
     return Text.rich(
@@ -411,11 +500,6 @@ class _DirectorAuditionCreationPageState
       ),
     );
   }
-
-  // ---------------------------------------------------------------------------
-  // Build
-  // ---------------------------------------------------------------------------
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -433,8 +517,6 @@ class _DirectorAuditionCreationPageState
               builder: (context, constraints) {
                 final w = constraints.maxWidth;
                 final isWide = w >= _wideBreakpoint;
-                // Smoothly scale horizontal padding: 16 on phone, 28 at the
-                // wide breakpoint, up to 56 on ultra-wide desktops.
                 final hPad = w >= _xWide
                     ? 56.0
                     : isWide
@@ -467,6 +549,48 @@ class _DirectorAuditionCreationPageState
   }
 
   Widget _buildContent(ThemeData theme, bool isWide) {
+    if (_loadingExisting) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _HeroHeader(theme: theme, isEditMode: _isEditMode),
+          const SizedBox(height: 24),
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 48),
+              child: CircularProgressIndicator(),
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (_loadExistingError != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _HeroHeader(theme: theme, isEditMode: _isEditMode),
+          const SizedBox(height: 24),
+          Icon(Icons.cloud_off_rounded,
+              size: 40, color: theme.colorScheme.error),
+          const SizedBox(height: 10),
+          Text(
+            _loadExistingError!,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: _loadExistingAudition,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Try again'),
+          ),
+        ],
+      );
+    }
+
     final basics = _SectionCard(
       icon: Icons.movie_creation_outlined,
       title: 'Basics',
@@ -492,7 +616,7 @@ class _DirectorAuditionCreationPageState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _HeroHeader(theme: theme),
+        _HeroHeader(theme: theme, isEditMode: _isEditMode),
         const SizedBox(height: 18),
         if (isWide) ...[
           IntrinsicHeight(
@@ -517,7 +641,8 @@ class _DirectorAuditionCreationPageState
         const SizedBox(height: 22),
         _PublishCta(
           submitting: _submitting,
-          disabled: _submitting || _pdfBusy,
+          disabled: _submitting || _pdfBusy || _loadingExisting,
+          isEditMode: _isEditMode,
           onPressed: _submit,
         ),
       ],
@@ -748,10 +873,6 @@ class _DirectorAuditionCreationPageState
   }
 }
 
-// ============================================================================
-// Sub-widgets
-// ============================================================================
-
 class _ScriptSentenceSlot {
   _ScriptSentenceSlot();
 
@@ -761,17 +882,18 @@ class _ScriptSentenceSlot {
 
 /// Top hero card — same gradient family as the rest of the app.
 class _HeroHeader extends StatelessWidget {
-  const _HeroHeader({required this.theme});
+  const _HeroHeader({required this.theme, required this.isEditMode});
 
   final ThemeData theme;
+  final bool isEditMode;
 
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(24),
       child: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: ScenolyticsColors.heroBarGradient,
+        decoration: BoxDecoration(
+          gradient: ScenolyticsColors.heroBarGradientFor(theme.brightness),
         ),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
@@ -788,8 +910,10 @@ class _HeroHeader extends StatelessWidget {
                     color: Colors.white.withValues(alpha: 0.35),
                   ),
                 ),
-                child: const Icon(
-                  Icons.movie_filter_rounded,
+                child: Icon(
+                  isEditMode
+                      ? Icons.edit_note_rounded
+                      : Icons.movie_filter_rounded,
                   color: Colors.white,
                   size: 28,
                 ),
@@ -800,7 +924,7 @@ class _HeroHeader extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'New audition',
+                      isEditMode ? 'Edit audition' : 'New audition',
                       style: theme.textTheme.headlineSmall?.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w800,
@@ -809,8 +933,11 @@ class _HeroHeader extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Define the brief, candidate filters, and emotion-tagged '
-                      'script lines actors will perform.',
+                      isEditMode
+                          ? 'Update the brief, candidate filters, and '
+                              'emotion-tagged script actors will perform.'
+                          : 'Define the brief, candidate filters, and emotion-tagged '
+                              'script lines actors will perform.',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: Colors.white.withValues(alpha: 0.92),
                         height: 1.35,
@@ -849,9 +976,6 @@ class _HeroHeader extends StatelessWidget {
   }
 }
 
-/// Reusable card with an icon-led title (and optional subtitle). When
-/// [isRequired] is set, a small "Required" pill is shown next to the title so
-/// directors can see at a glance which sections must be filled in to publish.
 class _SectionCard extends StatelessWidget {
   const _SectionCard({
     required this.icon,
@@ -1292,11 +1416,13 @@ class _PublishCta extends StatelessWidget {
   const _PublishCta({
     required this.submitting,
     required this.disabled,
+    required this.isEditMode,
     required this.onPressed,
   });
 
   final bool submitting;
   final bool disabled;
+  final bool isEditMode;
   final VoidCallback onPressed;
 
   @override
@@ -1342,14 +1468,18 @@ class _PublishCta extends StatelessWidget {
                           ),
                         )
                       else
-                        const Icon(
-                          Icons.rocket_launch_rounded,
+                        Icon(
+                          isEditMode
+                              ? Icons.save_rounded
+                              : Icons.rocket_launch_rounded,
                           color: Colors.white,
                           size: 20,
                         ),
                       const SizedBox(width: 10),
                       Text(
-                        submitting ? 'Publishing…' : 'Create audition',
+                        submitting
+                            ? (isEditMode ? 'Saving…' : 'Publishing…')
+                            : (isEditMode ? 'Save changes' : 'Create audition'),
                         style: theme.textTheme.titleMedium?.copyWith(
                           color: Colors.white,
                           fontWeight: FontWeight.w800,

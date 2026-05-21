@@ -26,13 +26,41 @@ class AuthController extends ChangeNotifier {
   AuthUser? get user => _user;
   bool get isAuthenticated => _user != null;
 
-  /// True for one read after a successful sign-up + auto-sign-in. Used by the app
-  /// shell to redirect the user straight to the profile page on first render.
-  bool _justSignedUp = false;
-  bool consumeJustSignedUpFlag() {
-    final v = _justSignedUp;
-    _justSignedUp = false;
-    return v;
+  /// When true, the app shell blocks navigation until the actor profile is complete.
+  bool _actorMustCompleteProfileSetup = false;
+  bool get actorMustCompleteProfileSetup => _actorMustCompleteProfileSetup;
+
+  /// When true, the app shell blocks navigation until the director profile is complete.
+  bool _directorMustCompleteProfileSetup = false;
+  bool get directorMustCompleteProfileSetup => _directorMustCompleteProfileSetup;
+
+  void requireActorProfileSetup() {
+    if (!_actorMustCompleteProfileSetup) {
+      _actorMustCompleteProfileSetup = true;
+      notifyListeners();
+    }
+  }
+
+  void completeActorProfileSetup() {
+    if (_actorMustCompleteProfileSetup) {
+      _actorMustCompleteProfileSetup = false;
+      _store.clearPendingProfileSetup();
+      notifyListeners();
+    }
+  }
+
+  void requireDirectorProfileSetup() {
+    if (!_directorMustCompleteProfileSetup) {
+      _directorMustCompleteProfileSetup = true;
+      notifyListeners();
+    }
+  }
+
+  void completeDirectorProfileSetup() {
+    if (_directorMustCompleteProfileSetup) {
+      _directorMustCompleteProfileSetup = false;
+      notifyListeners();
+    }
   }
 
   /// Set when sign-up succeeded but User Management profile row could not be confirmed.
@@ -46,6 +74,12 @@ class AuthController extends ChangeNotifier {
 
   Future<void> hydrate() async {
     _user = await _store.load();
+    final pending = await _store.loadPendingProfileSetup();
+    if (pending == 'actor') {
+      _actorMustCompleteProfileSetup = true;
+    } else if (pending == 'director') {
+      _directorMustCompleteProfileSetup = true;
+    }
     notifyListeners();
   }
 
@@ -107,6 +141,18 @@ class AuthController extends ChangeNotifier {
       age: age,
       gender: gender,
     );
+
+    // Set before sign-in (no notify — user is still null) so the shell sees the
+    // gate on first build after [signInWithPassword].
+    final signedUpRole = role.trim().toLowerCase();
+    if (signedUpRole == 'actor') {
+      _actorMustCompleteProfileSetup = true;
+      await _store.savePendingProfileSetup('actor');
+    } else if (signedUpRole == 'director') {
+      _directorMustCompleteProfileSetup = true;
+      await _store.savePendingProfileSetup('director');
+    }
+
     await signInWithPassword(email: email, password: password);
 
     _profileBootstrapMessage = null;
@@ -114,31 +160,48 @@ class AuthController extends ChangeNotifier {
     final um = _userManagementApi;
     if (signedIn != null && um != null) {
       try {
-        if (signedIn.isActor) {
+        if (signedUpRole == 'actor') {
           final profileFields = <String, dynamic>{
-            // User Management `createActorProfile` maps `name` → `display_name`.
             'name': name.trim(),
             if (age != null) 'age': age,
           };
           final g = gender?.trim();
           if (g != null &&
               g.isNotEmpty &&
-              const {'Male', 'Female', 'Other'}.contains(g)) {
+              const {'Male', 'Female'}.contains(g)) {
             profileFields['gender'] = g;
           }
-          await um.createActorProfile(
-            userId: signedIn.userId,
-            fields: profileFields,
-            bearerToken: signedIn.token,
-          );
-        } else if (signedIn.isDirector) {
-          await um.createDirectorProfile(
-            userId: signedIn.userId,
-            fields: <String, dynamic>{
-              'name': name.trim(),
-            },
-            bearerToken: signedIn.token,
-          );
+          try {
+            await um.createActorProfile(
+              userId: signedIn.userId,
+              fields: profileFields,
+              bearerToken: signedIn.token,
+            );
+          } on UserManagementApiException catch (e) {
+            final m = e.message.toLowerCase();
+            final duplicate = m.contains('duplicate') ||
+                m.contains('already exists') ||
+                m.contains('unique') ||
+                e.statusCode == 409;
+            if (!duplicate) rethrow;
+          }
+        } else if (signedUpRole == 'director') {
+          try {
+            await um.createDirectorProfile(
+              userId: signedIn.userId,
+              fields: <String, dynamic>{
+                'name': name.trim(),
+              },
+              bearerToken: signedIn.token,
+            );
+          } on UserManagementApiException catch (e) {
+            final m = e.message.toLowerCase();
+            final duplicate = m.contains('duplicate') ||
+                m.contains('already exists') ||
+                m.contains('unique') ||
+                e.statusCode == 409;
+            if (!duplicate) rethrow;
+          }
         }
       } catch (e, st) {
         developer.log(
@@ -147,15 +210,14 @@ class AuthController extends ChangeNotifier {
           error: e,
           stackTrace: st,
         );
-        // Row may already exist (e.g. RabbitMQ `USER_CREATED` beat us) or duplicate INSERT.
         var recovered = false;
-        if (signedIn.isActor) {
+        if (signedUpRole == 'actor') {
           final row = await um.getActorProfile(
             signedIn.userId,
             bearerToken: signedIn.token,
           );
           recovered = row != null;
-        } else if (signedIn.isDirector) {
+        } else if (signedUpRole == 'director') {
           final row = await um.getDirectorProfile(
             signedIn.userId,
             bearerToken: signedIn.token,
@@ -172,14 +234,20 @@ class AuthController extends ChangeNotifier {
         }
       }
     }
-
-    _justSignedUp = true;
-    notifyListeners();
   }
 
   Future<void> signOut() async {
+    _actorMustCompleteProfileSetup = false;
+    _directorMustCompleteProfileSetup = false;
     _user = null;
     await _store.clear();
     notifyListeners();
+  }
+
+  /// Role that still owes mandatory profile fields (`actor` / `director`), if any.
+  String? get pendingProfileSetupRole {
+    if (_actorMustCompleteProfileSetup) return 'actor';
+    if (_directorMustCompleteProfileSetup) return 'director';
+    return null;
   }
 }

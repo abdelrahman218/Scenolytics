@@ -1,13 +1,11 @@
 import '../utils/json_map_read.dart';
 
-/// Director-facing profile fields from User Management (`GET /api/v1/directors/:id/profile`).
 class DirectorProfileUi {
   const DirectorProfileUi({
     this.displayName,
     this.companyName,
   });
 
-  /// From API `display_name`, else [companyName], else first line of `company_bio`.
   final String? displayName;
   final String? companyName;
 

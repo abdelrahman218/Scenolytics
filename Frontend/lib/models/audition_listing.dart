@@ -7,9 +7,6 @@ enum AuditionRelationship {
   submitted,
 }
 
-/// Browse-friendly view of a casting audition row (from
-/// `GET /api/v1/casting/auditions/:id`). Mirrors the table columns plus
-/// optional [directorDisplayName] and the actor [relationship].
 class AuditionListing {
   const AuditionListing({
     required this.id,
