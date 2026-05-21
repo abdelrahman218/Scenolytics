@@ -230,6 +230,7 @@ services:
       AWS_REGION: ${AWS_REGION}
       S3_BUCKET_VIDEOS: ${S3_BUCKET_VIDEOS}
       TORIO_USE_FFMPEG_BACKEND: "0"
+      LOG_LEVEL: "WARNING"
     deploy:
       replicas: 1
     ports:
