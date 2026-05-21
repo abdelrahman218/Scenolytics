@@ -8,13 +8,18 @@ Endpoints for managing audition video evaluations with 4 metrics:
   - overall_performance_score: Calculated weighted average
 """
 
+import asyncio
 import logging
 import uuid
 import json
 import random
 from datetime import datetime
 from typing import Optional, Dict, Any, List
-
+import os
+import tempfile
+from botocore.exceptions import ClientError
+from core.storage import get_s3_client
+from core.rabbitmq_manager import RabbitMQManager
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel, Field
 
@@ -26,26 +31,11 @@ router = APIRouter(prefix='/api/evaluations', tags=['evaluations'])
 
 from pydantic import BaseModel, Field, field_validator
 
-class ProcessRequest(BaseModel):
-    evaluation_id: str
-    media_id: str
-    script_text: Optional[str] = Field(
-        None,
-        description='JSON string: [{"content": "...", "emotion": "angry"}, ...]'
-    )
-
-    @field_validator("script_text", mode="before")
-    @classmethod
-    def coerce_script_text(cls, v):
-        if isinstance(v, list):
-            return json.dumps(v)
-        return v
-
-
 class CreateEvaluationRequest(BaseModel):
     """Request model for creating a new evaluation"""
     media_id: str = Field(..., description="Video media identifier")
     submission_id: Optional[str] = Field(None, description="Audition submission ID")
+    audio_only: bool = Field(False, description="Run audio-only evaluation (no video model)")
     script_text: Optional[str] = Field(
         None,
         description=(
@@ -236,22 +226,71 @@ def _row_to_response(row: dict) -> EvaluationResponse:
 
 # ==================== Background ML Pipeline ====================
 
-async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_text: Optional[str] = None):
+def _is_s3_not_found(exc: BaseException) -> bool:
+    if isinstance(exc, ClientError):
+        code = exc.response.get("Error", {}).get("Code", "")
+        return code in ("404", "NoSuchKey", "NotFound")
+    return "404" in str(exc) and "Not Found" in str(exc)
+
+
+async def _download_video_from_minio(
+    s3,
+    bucket: str,
+    s3_key: str,
+    dest_path: str,
+    *,
+    max_attempts: int = 15,
+    initial_delay_sec: float = 2.0,
+) -> None:
+    """Wait for client-side presigned PUT to finish (casting fires audition.submitted first)."""
+    delay = initial_delay_sec
+    last_error: Optional[BaseException] = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            await asyncio.to_thread(s3.download_file, bucket, s3_key, dest_path)
+            if attempt > 1:
+                logger.info(
+                    "Video '%s' available in MinIO after %s attempts",
+                    s3_key,
+                    attempt,
+                )
+            return
+        except Exception as e:
+            if not _is_s3_not_found(e) or attempt >= max_attempts:
+                raise
+            last_error = e
+            logger.info(
+                "Video '%s' not in MinIO yet (%s/%s); retrying in %.0fs",
+                s3_key,
+                attempt,
+                max_attempts,
+                delay,
+            )
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, 30.0)
+    if last_error is not None:
+        raise last_error
+
+
+async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_text: Optional[str] = None, rabbitmq_manager: Optional[RabbitMQManager] = None, submission_id: Optional[str] = None,audio_only: bool = False,):
     """Runs all 3 ML models and writes scores back to DB.
 
     Parameters
     ----------
     evaluation_id : UUID of the evaluation row to update
-    media_id      : used to locate the video file at VIDEO_STORAGE_PATH/<media_id>.mp4
+    media_id      : MinIO key uploads/<media_id>.mp4 in S3_BUCKET_VIDEOS
+    pipeline      : MLPipeline instance for running evaluations
     script_text   : optional expected script — passed to WhisperX alignment.
                     If None, script_alignment_score will be 0.
+    rabbitmq_manager : RabbitMQManager instance for publishing evaluation completion events
+    submission_id : Optional submission ID for tracking audition submissions
     """
     from core.database import Database
     import os
     from pathlib import Path
     
     db = Database()
-
+    video_path = None
     try:
         # Let callers distinguish "queued" from "actively running"
         await db.execute(
@@ -259,13 +298,17 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
             (evaluation_id,),
         )
 
-        # Get video storage path from environment or use default
-        video_storage_dir = os.getenv('VIDEO_STORAGE_PATH', '/app/videos')
-        video_path = os.path.join(video_storage_dir, f"{media_id}.mp4")
-        
-        # Check if video file exists
-        if not Path(video_path).exists():
-            error_msg = f"Video file not found: {video_path}. Configure VIDEO_STORAGE_PATH environment variable or place videos in /videos directory."
+        s3 = get_s3_client()
+        bucket = os.getenv('S3_BUCKET_VIDEOS', 'videos')
+        s3_key = f"uploads/{media_id}.mp4"
+
+        with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as tmp:
+            video_path = tmp.name
+
+        try:
+            await _download_video_from_minio(s3, bucket, s3_key, video_path)
+        except Exception as e:
+            error_msg = f"Failed to download video '{s3_key}' from MinIO bucket '{bucket}': {e}"
             logger.error(error_msg)
             await db.execute(
                 "UPDATE evaluations SET evaluation_status = 'failed', error_message = %s WHERE evaluation_id = %s",
@@ -273,10 +316,11 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
             )
             return
 
+
         # evaluate_video() returns:
         #   emotional_expression_score, vocal_tone_score, script_alignment_score,
         #   overall_performance_score, detected_emotions (dict), ai_feedback (str)
-        scores = await pipeline.evaluate_video(video_path, script_text=script_text)
+        scores = await pipeline.evaluate_video(video_path, script_text=script_text,audio_only=audio_only)
         # overall is already calculated inside evaluate_video() using the
         # correct 40/35/25 weights — no need to recalculate here.
         overall = scores["overall_performance_score"]
@@ -326,7 +370,7 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
             WHERE evaluation_id = %s
             """,
             (
-                scores["emotional_expression_score"],
+                scores.get("emotional_expression_score"),
                 scores["vocal_tone_score"],
                 scores["script_alignment_score"],
                 overall,
@@ -341,6 +385,26 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
             ),
         )
         logger.info(f"ML pipeline completed for evaluation {evaluation_id}")
+        
+        # Publish evaluation completed event to RabbitMQ
+        if rabbitmq_manager:
+            logger.info(f"Publishing evaluation completed event for {evaluation_id}...")
+            try:
+                await rabbitmq_manager.publish_evaluation_completed(
+                    evaluation_id=evaluation_id,
+                    media_id=media_id,
+                    submission_id=submission_id,
+                    emotional_expression_score=scores["emotional_expression_score"],
+                    vocal_tone_score=scores["vocal_tone_score"],
+                    script_alignment_score=scores["script_alignment_score"],
+                    overall_performance_score=overall,
+                    ai_feedback=scores.get("ai_feedback"),
+                    evaluation_status="completed"
+                )
+            except Exception as e:
+                logger.error(f"Failed to publish evaluation completed event: {e}", exc_info=True)
+        else:
+            logger.warning(f"rabbitmq_manager is None — skipping publish for {evaluation_id}")
 
     except Exception as e:
         logger.error(f"ML pipeline failed for evaluation {evaluation_id}: {e}", exc_info=True)
@@ -352,16 +416,14 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
         except Exception as db_err:
             logger.error(f"Could not update failure status for {evaluation_id}: {db_err}", exc_info=True)
 
-
+    finally:
+        # Always clean up the temp file regardless of success or failure
+        if video_path:
+            try:
+                os.unlink(video_path)
+            except Exception:
+                pass
 # ==================== Endpoints ====================
-
-@router.post("/process")
-async def process_evaluation(body: ProcessRequest, background_tasks: BackgroundTasks, http_request: Request):
-    """Called by Node.js — runs ML models in background and saves scores to DB."""
-    pipeline = http_request.app.state.ml_pipeline
-    background_tasks.add_task(run_ml_pipeline, body.evaluation_id, body.media_id, pipeline, body.script_text)
-    return {"message": "Processing started", "evaluation_id": body.evaluation_id}
-
 
 @router.post("/", response_model=EvaluationResponse, status_code=201)
 async def create_evaluation(request: CreateEvaluationRequest, background_tasks: BackgroundTasks, http_request: Request):
@@ -386,7 +448,7 @@ async def create_evaluation(request: CreateEvaluationRequest, background_tasks: 
 
         # Pass the pipeline instance directly — avoids any import-time resolution issues
         pipeline = http_request.app.state.ml_pipeline
-        background_tasks.add_task(run_ml_pipeline, evaluation_id, request.media_id, pipeline, request.script_text)
+        background_tasks.add_task(run_ml_pipeline, evaluation_id, request.media_id, pipeline, request.script_text, http_request.app.state.rabbitmq_manager, request.submission_id, request.audio_only)
 
         logger.info(f"Created evaluation {evaluation_id} and queued ML pipeline")
 
@@ -418,6 +480,74 @@ async def create_evaluation(request: CreateEvaluationRequest, background_tasks: 
 
 # FIX: /pending must be declared BEFORE /{evaluation_id} or FastAPI will treat
 #      the literal string "pending" as an evaluation_id and return a 404.
+@router.get("/by-media/{media_id}", response_model=EvaluationResponse)
+async def get_evaluation_by_media(media_id: str):
+    """Latest evaluation for a casting tape media id (fallback when submission_id unset)."""
+    try:
+        from core.database import Database
+        db = Database()
+
+        result = await db.fetch_one(
+            """
+            SELECT * FROM evaluations
+            WHERE media_id = %s
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (media_id,),
+        )
+
+        if not result:
+            raise HTTPException(status_code=404, detail="Evaluation not found for media")
+        return _row_to_response(result)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "Error retrieving evaluation for media %s: %s",
+            media_id,
+            e,
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/by-submission/{submission_id}", response_model=EvaluationResponse)
+async def get_evaluation_by_submission(submission_id: str):
+    """
+    Latest evaluation for an audition submission (director rankings / detail UI).
+    """
+    try:
+        from core.database import Database
+        db = Database()
+
+        result = await db.fetch_one(
+            """
+            SELECT * FROM evaluations
+            WHERE submission_id = %s
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (submission_id,),
+        )
+
+        if not result:
+            raise HTTPException(status_code=404, detail="Evaluation not found for submission")
+        return _row_to_response(result)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "Error retrieving evaluation for submission %s: %s",
+            submission_id,
+            e,
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/pending", response_model=List[EvaluationResponse])
 async def get_pending_evaluations():
     """
@@ -456,7 +586,6 @@ async def get_evaluation(evaluation_id: str):
 
         if not result:
             raise HTTPException(status_code=404, detail="Evaluation not found")
-
         return _row_to_response(result)
 
     except HTTPException:

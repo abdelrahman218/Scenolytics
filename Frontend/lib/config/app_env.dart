@@ -15,6 +15,10 @@
 /// **`172.19.x.x` / `10.x.x.x`:** Often Hyper‑V/WSL virtual adapters—the phone on Wi‑Fi
 /// usually cannot reach them. Prefer your **Wireless LAN adapter IPv4** from `ipconfig`, plus
 /// the Docker **API_GATEWAY_PORT** if not 80.
+///
+/// **Notification WebSockets (Socket.IO):** The API Gateway does not proxy this service's
+/// socket endpoint. Override with **`SCENO_NOTIFICATION_SOCKET_URL`** (full origin, no path),
+/// e.g. `http://YOUR_LAN_HOST:6001`, or derive from [apiBaseUrl] using [notificationSocketWsPort].
 class AppEnv {
   /// Raw compile-time value; empty string would make Flutter **web** resolve `/api/...`
   /// against `localhost:<dev-server-port>` (404). Never expose an empty base URL.
@@ -26,6 +30,45 @@ class AppEnv {
   static String get apiBaseUrl {
     final t = _apiBaseUrlEnv.trim();
     return t.isEmpty ? 'http://localhost' : t;
+  }
+
+  /// Full Socket.IO server URL (`http(s)://host:port`). When empty, we build from [apiBaseUrl]
+  /// and [notificationSocketWsPort].
+  static const String _notificationSocketUrlEnv = String.fromEnvironment(
+    'SCENO_NOTIFICATION_SOCKET_URL',
+    defaultValue: '',
+  );
+
+  /// WebSocket port mapped for `notification-service` (see backend `WEB_SOCKET_PORT`, often 6001).
+  static const String _notificationSocketWsPortEnv = String.fromEnvironment(
+    'SCENO_NOTIFICATION_WS_PORT',
+    defaultValue: '6001',
+  );
+
+  static int get notificationSocketWsPort =>
+      int.tryParse(_notificationSocketWsPortEnv.trim()) ?? 6001;
+
+  /// Resolved Socket.IO base URL without trailing slash, or empty string if unavailable.
+  static String get notificationSocketBaseUrl {
+    final override = _notificationSocketUrlEnv.trim();
+    if (override.isNotEmpty) return override.replaceAll(RegExp(r'/$'), '');
+    try {
+      final api = Uri.parse(apiBaseUrl);
+      if (!api.hasScheme || api.host.isEmpty) return '';
+      final port = notificationSocketWsPort;
+      final defaultPort =
+          api.scheme == 'https' ? 443 : (api.scheme == 'http' ? 80 : 0);
+      final usePort =
+          port > 0 && port != api.port && port != defaultPort ? port : null;
+      final built = Uri(
+        scheme: api.scheme,
+        host: api.host,
+        port: usePort,
+      );
+      return built.toString().replaceAll(RegExp(r'/$'), '');
+    } catch (_) {
+      return '';
+    }
   }
 
   /// Public base URL for audition tapes (no trailing slash). Code appends
@@ -44,6 +87,20 @@ class AppEnv {
     return t.isEmpty ? 'http://localhost/api/v1/storage/videos' : t;
   }
 
+  /// Path-style MinIO bucket root for tapes (no trailing slash). Used as a playback
+  /// fallback when gateway URLs 404 — default matches Docker Compose `AWS_PORT=9000`.
+  /// Override with `--dart-define=SCENO_MINIO_VIDEOS_BASE=http://YOUR_HOST:9000/videos`
+  /// on LAN / emulator.
+  static const String _minioVideosBaseEnv = String.fromEnvironment(
+    'SCENO_MINIO_VIDEOS_BASE',
+    defaultValue: 'http://localhost:9000/videos',
+  );
+
+  static String get minioVideosBase {
+    final t = _minioVideosBaseEnv.trim();
+    return t.isEmpty ? 'http://localhost:9000/videos' : t;
+  }
+
   /// Optional compile-time fallbacks. The app uses JWTs from in-app sign-in; these
   /// are only for legacy/tooling and are not required for in-app sign-in.
   static const String actorToken = String.fromEnvironment(
@@ -56,20 +113,30 @@ class AppEnv {
     defaultValue: '',
   );
 
+  /// Optional compile-time fallback when Explore did not pick an audition and casting
+  /// cannot infer one yet; normally IDs come from invitations or the actor catalog APIs.
   static const String auditionId = String.fromEnvironment(
     'SCENO_AUDITION_ID',
     defaultValue: '',
   );
 
-  /// Validates config for the actor submission flow using the resolved token (from auth or .env).
-  static String? validateActorSubmissionFor({required String actorToken}) {
+  /// Validates config for the actor submission flow.
+  ///
+  /// [auditionId] must be non-empty once resolved (typically from Explore, from
+  /// casting `GET /actor/invitations` + catalog, or from optional compile-time
+  /// `SCENO_AUDITION_ID`).
+  static String? validateActorSubmissionFor({
+    required String actorToken,
+    required String auditionId,
+  }) {
     if (actorToken.isEmpty) {
       return 'Sign in as an actor, or set SCENO_ACTOR_TOKEN in your run configuration '
           '(e.g. --dart-define-from-file=Frontend/.env).';
     }
-    if (auditionId.isEmpty) {
-      return 'Missing SCENO_AUDITION_ID. Use the same --dart-define-from-file or '
-          '--dart-define=SCENO_AUDITION_ID=…';
+    if (auditionId.trim().isEmpty) {
+      return 'No audition is selected yet. Pick one under Explore Auditions, or '
+          'ensure casting has invitations or catalog rows you can submit to '
+          '(optional dev fallback: SCENO_AUDITION_ID).';
     }
     return null;
   }

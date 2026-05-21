@@ -304,16 +304,28 @@ export const reviewCallback = async (req, res, next) => {
   }
 };
 
+function buildGoogleMeetAuthUrl(directorId) {
+  return oauth2Client.generateAuthUrl({
+    access_type: "offline", // gets refresh_token
+    prompt: "consent", // force consent to always get refresh_token
+    scope: SCOPES,
+    state: directorId, // carry director identity through the OAuth redirect
+  });
+}
+
+/** Browser redirect (Postman, direct link). */
 export const connectGoogleMeet = async (req, res, next) => {
   try {
-    const url = oauth2Client.generateAuthUrl({
-      access_type: "offline", // gets refresh_token
-      prompt: "consent", // force consent to always get refresh_token
-      scope: SCOPES,
-      state: req.user.user_id, // carry director identity through the OAuth redirect
+    res.redirect(buildGoogleMeetAuthUrl(req.user.user_id));
+  } catch (error) {
+    next(error);
+  }
+};
 
-    });
-    res.redirect(url);
+/** JSON auth URL for SPA / Flutter web (avoids opaque cross-origin 302 Location). */
+export const connectGoogleMeetAuthUrl = async (req, res, next) => {
+  try {
+    res.status(200).json({ url: buildGoogleMeetAuthUrl(req.user.user_id) });
   } catch (error) {
     next(error);
   }
@@ -347,6 +359,7 @@ export const connectGoogleMeetCallBack = async (req, res, next) => {
     const frontendUrl = FRONTEND_LINK;
     res.redirect(`${frontendUrl}?google_connected=true`);
   } catch (error) {
+    console.log(error);
     const frontendUrl = FRONTEND_LINK;
     res.redirect(`${frontendUrl}?google_connected=false&error=connection_failed`);
   }

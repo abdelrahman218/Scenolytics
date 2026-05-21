@@ -56,3 +56,20 @@ CREATE TABLE IF NOT EXISTS model_performance (
     INDEX idx_model_name (model_name),
     INDEX idx_recorded_at (recorded_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS auditions(
+    id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    audition_id VARCHAR(36) UNIQUE NOT NULL,
+    media_id VARCHAR(255) NOT NULL,
+    submission_id VARCHAR(255),
+    actor_id VARCHAR(36),
+    director_id VARCHAR(36),
+    script TEXT,
+    status VARCHAR(50) DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    INDEX idx_media_id (media_id),
+    INDEX idx_submission_id (submission_id),
+    INDEX idx_actor_id (actor_id),
+    INDEX idx_director_id (director_id)
+)

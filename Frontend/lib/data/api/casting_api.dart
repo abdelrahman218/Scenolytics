@@ -20,12 +20,16 @@ class CastingSubmissionInitResponse {
     required this.mediaId,
     required this.uploadUrl,
     required this.rawSubmission,
+    required this.rawHttpBody,
   });
 
   final String submissionId;
   final String mediaId;
   final String uploadUrl;
   final Map<String, dynamic> rawSubmission;
+
+  /// Full JSON body from `POST …/submissions` (for debug UI).
+  final String rawHttpBody;
 }
 
 class CastingApi {
@@ -43,6 +47,11 @@ class CastingApi {
   Map<String, String> _authHeaders(String token) => <String, String>{
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
+      };
+
+  Map<String, String> _pdfAuthHeaders(String token) => <String, String>{
+        'Authorization': 'Bearer $token',
+        'Accept': 'application/pdf',
       };
 
   Future<CastingSubmissionInitResponse> createSubmission({
@@ -83,17 +92,29 @@ class CastingApi {
       mediaId: mediaId,
       uploadUrl: uploadUrl,
       rawSubmission: submission,
+      rawHttpBody: response.body,
     );
   }
 
+  /// Sends [bytes] to [uploadUrl] **exactly** as returned by casting
+  /// `POST …/submissions` (`uploadURL` / `upload_url`). Do not substitute
+  /// `SCENO_VIDEO_PUBLIC_BASE` or any other compile-time URL here — SigV4
+  /// binds host, path, and query together.
   Future<void> uploadSubmissionVideo({
     required String uploadUrl,
     required Uint8List bytes,
   }) async {
     // Presigned PUT from PutObjectCommand(Bucket, Key) is signed without
     // Content-Type. Sending Content-Type here often breaks SigV4 (403).
+    //
+    // On Flutter Web, uploads use the browser fetch stack. Cross-origin PUT is
+    // never "simple"; the browser will send OPTIONS first, then PUT. That is
+    // required by CORS—you cannot suppress OPTIONS from Dart while keeping a
+    // normal PUT upload. Same-origin uploads (matching scheme/host/port as the
+    // app), or dart:io (Windows/desktop/mobile), skip browser CORS.
+    final uri = Uri.parse(uploadUrl.trim());
     final response = await _client.put(
-      Uri.parse(uploadUrl),
+      uri,
       body: bytes,
     );
 
@@ -112,6 +133,51 @@ class CastingApi {
     }
   }
 
+  /// Authenticated audition script PDF from casting (`…/auditions/:id/script`).
+  Future<Uint8List> fetchActorAuditionScriptPdf({
+    required String actorToken,
+    required String auditionId,
+  }) async {
+    final id = auditionId.trim();
+    if (id.isEmpty) {
+      throw ApiException('Audition ID is missing.');
+    }
+    final response = await _client.get(
+      _uri('/api/v1/casting/actor/auditions/$id/script'),
+      headers: _pdfAuthHeaders(actorToken),
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      var detail = response.body.isNotEmpty
+          ? response.body.replaceAll(RegExp(r'\s+'), ' ').trim()
+          : 'Could not download script PDF (${response.statusCode}).';
+      final ct = response.headers['content-type'] ?? '';
+      if (ct.contains('application/json')) {
+        try {
+          final decoded = json.decode(response.body);
+          final m =
+              decoded is Map ? decoded['message']?.toString().trim() : null;
+          if (m != null && m.isNotEmpty) detail = m;
+        } catch (_) {}
+      }
+      if (detail.length > 260) detail = '${detail.substring(0, 259)}…';
+      throw ApiException(
+        detail,
+        statusCode: response.statusCode,
+        responseBody: response.body,
+      );
+    }
+
+    final bytes = response.bodyBytes;
+    if (bytes.isEmpty) {
+      throw ApiException(
+        'Script PDF response was empty.',
+        statusCode: response.statusCode,
+      );
+    }
+    return Uint8List.fromList(bytes);
+  }
+
   Future<List<Map<String, dynamic>>> getActorSubmissions({
     required String actorToken,
   }) async {
@@ -120,6 +186,18 @@ class CastingApi {
       headers: _authHeaders(actorToken),
     );
     return _decodeJsonList(response, 'Failed to fetch actor submissions.');
+  }
+
+  /// `GET /api/v1/casting/actor/auditions` — every audition row (casting DB
+  /// `findAll`), newest first. Actor JWT required.
+  Future<List<Map<String, dynamic>>> getActorAuditionsCatalog({
+    required String actorToken,
+  }) async {
+    final response = await _client.get(
+      _uri('/api/v1/casting/actor/auditions'),
+      headers: _authHeaders(actorToken),
+    );
+    return _decodeJsonList(response, 'Failed to fetch auditions catalog.');
   }
 
   Future<List<Map<String, dynamic>>> getDirectorAuditionSubmissions({
@@ -131,6 +209,251 @@ class CastingApi {
       headers: _authHeaders(directorToken),
     );
     return _decodeJsonList(response, 'Failed to fetch director submissions.');
+  }
+
+  /// `GET /api/v1/casting/director/auditions` — every audition the signed-in
+  /// director owns. Server returns a bare JSON array of rows.
+  Future<List<Map<String, dynamic>>> getDirectorAuditions({
+    required String directorToken,
+  }) async {
+    final response = await _client.get(
+      _uri('/api/v1/casting/director/auditions'),
+      headers: _authHeaders(directorToken),
+    );
+    return _decodeJsonList(response, 'Failed to fetch director auditions.');
+  }
+
+  /// `GET /api/v1/casting/director/auditions/:id/invitations/pending`
+  /// — pending invitations the director sent for one audition.
+  Future<List<Map<String, dynamic>>> getDirectorAuditionPendingInvitations({
+    required String directorToken,
+    required String auditionId,
+  }) async {
+    final response = await _client.get(
+      _uri('/api/v1/casting/director/auditions/$auditionId/invitations/pending'),
+      headers: _authHeaders(directorToken),
+    );
+    return _decodeJsonList(response, 'Failed to fetch pending invitations.');
+  }
+
+  /// `GET /api/v1/casting/director/auditions/:id/callbacks` — callbacks
+  /// scheduled / pending / closed for one audition.
+  Future<List<Map<String, dynamic>>> getDirectorAuditionCallbacks({
+    required String directorToken,
+    required String auditionId,
+  }) async {
+    final response = await _client.get(
+      _uri('/api/v1/casting/director/auditions/$auditionId/callbacks'),
+      headers: _authHeaders(directorToken),
+    );
+    return _decodeJsonList(response, 'Failed to fetch callbacks.');
+  }
+
+  /// `DELETE /api/v1/casting/director/auditions/:id` — owner only.
+  Future<void> deleteDirectorAudition({
+    required String directorToken,
+    required String auditionId,
+  }) async {
+    final response = await _client.delete(
+      _uri('/api/v1/casting/director/auditions/$auditionId'),
+      headers: _authHeaders(directorToken),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final body = _decodeJsonMap(response);
+      throw ApiException(
+        body['message']?.toString() ?? 'Failed to delete audition.',
+        statusCode: response.statusCode,
+        responseBody: response.body,
+      );
+    }
+  }
+
+  /// `PATCH …/callbacks/:callback_id/reschedule` — updates callback time
+  /// (`callback_datetime` as MariaDB `YYYY-MM-DD HH:MM:SS` UTC).
+  Future<void> rescheduleDirectorCallback({
+    required String directorToken,
+    required String auditionId,
+    required String callbackId,
+    required String callbackDatetime,
+  }) async {
+    final response = await _client.patch(
+      _uri(
+        '/api/v1/casting/director/auditions/$auditionId/callbacks/$callbackId/reschedule',
+      ),
+      headers: _authHeaders(directorToken),
+      body: jsonEncode(<String, dynamic>{
+        'callback_datetime': callbackDatetime.trim(),
+      }),
+    );
+    final body = _decodeJsonMap(response);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(
+        _friendlyApiMessage(
+          body,
+          response,
+          fallback: 'Could not reschedule the callback.',
+        ),
+        statusCode: response.statusCode,
+        responseBody: response.body,
+      );
+    }
+  }
+
+  /// `PATCH …/callbacks/:callback_id/new_meeting` — replaces Meet link for the
+  /// existing callback time. Response includes `{ "link": "…" }`.
+  Future<String> regenerateDirectorCallbackMeeting({
+    required String directorToken,
+    required String auditionId,
+    required String callbackId,
+  }) async {
+    final response = await _client.patch(
+      _uri(
+        '/api/v1/casting/director/auditions/$auditionId/callbacks/$callbackId/new_meeting',
+      ),
+      headers: _authHeaders(directorToken),
+      body: '{}',
+    );
+    final body = _decodeJsonMap(response);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(
+        _friendlyApiMessage(
+          body,
+          response,
+          fallback: 'Could not regenerate the Meet link.',
+        ),
+        statusCode: response.statusCode,
+        responseBody: response.body,
+      );
+    }
+    final link = body['link']?.toString().trim() ?? '';
+    if (link.isEmpty) {
+      throw ApiException(
+        body['message']?.toString() ??
+            'Meet link was not returned after regeneration.',
+        statusCode: response.statusCode,
+        responseBody: response.body,
+      );
+    }
+    return link;
+  }
+
+  /// `PATCH …/callbacks/:callback_id/review` — `status`: `accepted` | `rejected`.
+  Future<void> reviewDirectorCallback({
+    required String directorToken,
+    required String auditionId,
+    required String callbackId,
+    required String status,
+    String? directorNotes,
+  }) async {
+    final payload = <String, dynamic>{
+      'status': status,
+      if (directorNotes != null && directorNotes.trim().isNotEmpty)
+        'director_notes': directorNotes.trim(),
+    };
+    final response = await _client.patch(
+      _uri(
+        '/api/v1/casting/director/auditions/$auditionId/callbacks/$callbackId/review',
+      ),
+      headers: _authHeaders(directorToken),
+      body: jsonEncode(payload),
+    );
+    final body = _decodeJsonMap(response);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(
+        body['message']?.toString() ?? 'Could not update callback.',
+        statusCode: response.statusCode,
+        responseBody: response.body,
+      );
+    }
+  }
+
+  /// `PATCH /api/v1/casting/director/auditions/:audition_id/submissions/:submission_id/review`
+  ///
+  /// For `status: accepted`, send [callbackDatetime] as MariaDB `DATETIME`
+  /// (`YYYY-MM-DD HH:MM:SS`), UTC, so the service can insert into `callbacks`.
+  Future<void> reviewDirectorSubmission({
+    required String directorToken,
+    required String auditionId,
+    required String submissionId,
+    required String status,
+    String? directorNotes,
+    String? callbackDatetime,
+  }) async {
+    final payload = <String, dynamic>{
+      'status': status,
+      if (directorNotes != null && directorNotes.trim().isNotEmpty)
+        'director_notes': directorNotes.trim(),
+      if (callbackDatetime != null && callbackDatetime.trim().isNotEmpty)
+        'callback_datetime': callbackDatetime.trim(),
+    };
+    final response = await _client.patch(
+      _uri(
+        '/api/v1/casting/director/auditions/$auditionId/submissions/$submissionId/review',
+      ),
+      headers: _authHeaders(directorToken),
+      body: jsonEncode(payload),
+    );
+    final body = _decodeJsonMap(response);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(
+        body['message']?.toString() ?? 'Could not update submission.',
+        statusCode: response.statusCode,
+        responseBody: response.body,
+      );
+    }
+  }
+
+  /// `GET /api/v1/casting/actor/invitations` — pending invitations for the
+  /// signed-in actor. Each row carries `audition_id` so callers can hydrate
+  /// the corresponding audition via [getAuditionDetails].
+  Future<List<Map<String, dynamic>>> getActorInvitations({
+    required String actorToken,
+  }) async {
+    final response = await _client.get(
+      _uri('/api/v1/casting/actor/invitations'),
+      headers: _authHeaders(actorToken),
+    );
+    return _decodeJsonList(response, 'Failed to fetch invitations.');
+  }
+
+  /// `GET /api/v1/casting/actor/callbacks` — Meet / callback rows for the actor.
+  Future<List<Map<String, dynamic>>> getActorCallbacks({
+    required String actorToken,
+  }) async {
+    final response = await _client.get(
+      _uri('/api/v1/casting/actor/callbacks'),
+      headers: _authHeaders(actorToken),
+    );
+    return _decodeJsonList(response, 'Failed to fetch actor callbacks.');
+  }
+
+  /// `GET …/director/google/connect-url` — JSON `{ "url": "…" }` for OAuth.
+  /// Works on Flutter web (no cross-origin redirect `Location` header).
+  Future<String> fetchDirectorGoogleCalendarAuthUrl({
+    required String directorToken,
+  }) async {
+    final response = await _client.get(
+      _uri('/api/v1/casting/director/google/connect-url'),
+      headers: _authHeaders(directorToken),
+    );
+    final body = _decodeJsonMap(response);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(
+        body['message']?.toString() ??
+            'Google connection failed (${response.statusCode}).',
+        statusCode: response.statusCode,
+        responseBody: response.body,
+      );
+    }
+    final url = body['url']?.toString().trim() ?? '';
+    if (url.isEmpty) {
+      throw ApiException(
+        'Server did not return a Google sign-in URL.',
+        statusCode: response.statusCode,
+        responseBody: response.body,
+      );
+    }
+    return url;
   }
 
   Future<Map<String, dynamic>> getAuditionDetails({
@@ -151,6 +474,28 @@ class CastingApi {
     }
 
     return _asMap(body['audition']);
+  }
+
+  /// `PATCH /api/v1/casting/director/auditions/:id` — owner only.
+  Future<Map<String, dynamic>> updateDirectorAudition({
+    required String directorToken,
+    required String auditionId,
+    required Map<String, dynamic> body,
+  }) async {
+    final response = await _client.patch(
+      _uri('/api/v1/casting/director/auditions/$auditionId'),
+      headers: _authHeaders(directorToken),
+      body: jsonEncode(body),
+    );
+    final decoded = _decodeJsonMap(response);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(
+        decoded['message']?.toString() ?? 'Failed to update audition.',
+        statusCode: response.statusCode,
+        responseBody: response.body,
+      );
+    }
+    return _asMap(decoded['audition']);
   }
 
   /// POST `/director/auditions/create_audition` — body must match casting service expectations.
@@ -178,9 +523,38 @@ class CastingApi {
     http.Response response,
     String fallbackMessage,
   ) {
-    final decoded = response.body.isEmpty ? null : jsonDecode(response.body);
+    final raw = response.body;
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) {
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return const <Map<String, dynamic>>[];
+      }
+      throw ApiException(
+        fallbackMessage,
+        statusCode: response.statusCode,
+        responseBody: raw,
+      );
+    }
+
+    final Object? decoded;
+    try {
+      decoded = jsonDecode(raw);
+    } on FormatException {
+      final isError = response.statusCode < 200 || response.statusCode >= 300;
+      final hint = isError
+          ? '$fallbackMessage The server returned non-JSON (often HTML from a '
+                'proxy or wrong URL). HTTP ${response.statusCode}.'
+          : '$fallbackMessage Response was not valid JSON (HTTP ${response.statusCode}). '
+                'Check SCENO_API_BASE_URL / gateway path.';
+      throw ApiException(
+        hint,
+        statusCode: response.statusCode,
+        responseBody: raw.length > 2000 ? '${raw.substring(0, 2000)}…' : raw,
+      );
+    }
+
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      final message = decoded is Map<String, dynamic>
+      final message = decoded is Map
           ? decoded['message']?.toString() ?? fallbackMessage
           : fallbackMessage;
       throw ApiException(
@@ -204,11 +578,22 @@ class CastingApi {
   }
 
   Map<String, dynamic> _decodeJsonMap(http.Response response) {
-    final decoded = response.body.isEmpty ? <String, dynamic>{} : jsonDecode(response.body);
-    if (decoded is! Map) {
+    final raw = response.body;
+    if (raw.trim().isEmpty) {
       return <String, dynamic>{};
     }
-    return decoded.map((k, v) => MapEntry(k.toString(), v));
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        return <String, dynamic>{};
+      }
+      return decoded.map((k, v) => MapEntry(k.toString(), v));
+    } on FormatException {
+      return <String, dynamic>{
+        'message':
+            'Non-JSON response (HTTP ${response.statusCode}). Check API URL / gateway.',
+      };
+    }
   }
 
   Map<String, dynamic> _asMap(Object? value) {
@@ -216,5 +601,19 @@ class CastingApi {
       return value.map((k, v) => MapEntry(k.toString(), v));
     }
     return <String, dynamic>{};
+  }
+
+  String _friendlyApiMessage(
+    Map<String, dynamic> body,
+    http.Response response, {
+    required String fallback,
+  }) {
+    final raw = body['message']?.toString().trim() ?? '';
+    if (raw.isEmpty) return '$fallback (HTTP ${response.statusCode}).';
+    final lower = raw.toLowerCase();
+    if (lower.contains('<html') || lower.contains('<!doctype')) {
+      return fallback;
+    }
+    return raw;
   }
 }

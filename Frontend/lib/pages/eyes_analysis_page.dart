@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../models/actor_audition_submission.dart';
 import '../theme/scenolytics_colors.dart';
-
-// ─── Data models ────────────────────────────────────────────────────────────
 
 class EmotionTransition {
   final int timestampSeconds;
@@ -17,11 +16,8 @@ class EmotionTransition {
   final String? dirBefore;
   final String? dirAfter;
   final String? message;
-  // Optional frame images — pass asset paths or network URLs.
-  // If null, a dark placeholder is shown instead.
   final String? beforeImagePath;
   final String? afterImagePath;
-  // Optional per-transition aspect ratio for the uploaded photo.
   final double? imageAspectRatio;
 
   const EmotionTransition({
@@ -103,8 +99,6 @@ class EyesAnalysisResult {
   });
 }
 
-// ─── Hardcoded sample data ───────────────────────────────────────────────────
-
 const _kSampleData = EyesAnalysisResult(
   score: 93.8,
   result: 'EXPRESSIVE',
@@ -145,8 +139,6 @@ const _kSampleData = EyesAnalysisResult(
   ],
 );
 
-// ─── Emotion helpers ─────────────────────────────────────────────────────────
-
 const _emotionEmoji = <String, String>{
   'angry':   '😡',
   'fearful': '😨',
@@ -157,47 +149,71 @@ const _emotionEmoji = <String, String>{
   'neutral': '😐',
 };
 
-const _emotionColor = <String, Color>{
-  'angry':     Color(0xFFDC2626),
-  'fearful':   Color(0xFF7C3AED),
-  'sad':       Color(0xFF2563EB),
-  'happy':     ScenolyticsColors.success,
-  'surprised': Color(0xFFD97706),
-  'disgusted': Color(0xFF059669),
-  'neutral':   ScenolyticsColors.textMuted,
-};
-
 String _emotionEmoji_(String e) =>
     _emotionEmoji[e.toLowerCase()] ?? '🎭';
-
-Color _emotionColor_(String e) =>
-    _emotionColor[e.toLowerCase()] ?? ScenolyticsColors.primary;
-
-// ─── Breakpoint ──────────────────────────────────────────────────────────────
 
 const double _kMobileBreak = 600;
 const double _kTransitionImageAspectRatio = 16 / 9;
 
-// ─── Page entry point ────────────────────────────────────────────────────────
-
 class EyesAnalysisPage extends StatelessWidget {
   final EyesAnalysisResult data;
 
-  const EyesAnalysisPage({super.key, this.data = _kSampleData});
+  /// When true, omits [Scaffold]/[AppBar] so this can live inside a parent
+  /// tab or scroll region without a nested app bar.
+  final bool nested;
+
+  const EyesAnalysisPage({
+    super.key,
+    this.data = _kSampleData,
+    this.nested = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     final w = MediaQuery.sizeOf(context).width;
+    final isMobile = w < _kMobileBreak;
+    final padding = isMobile
+        ? const EdgeInsets.all(16)
+        : const EdgeInsets.symmetric(horizontal: 32, vertical: 24);
+    final gapAfterScore = isMobile ? 16.0 : 24.0;
+    final gapBeforeTransitions = isMobile ? 10.0 : 14.0;
+    final transitionBottomPad = isMobile ? 12.0 : 16.0;
+
+    final list = ListView(
+      padding: padding,
+      children: [
+        _ScoreCard(data: data),
+        SizedBox(height: gapAfterScore),
+        _SectionHeader(
+          title: 'Eye Movement During Emotion Transitions',
+          icon: Icons.swap_horiz_rounded,
+          count: data.transitions.length,
+          useGradient: true,
+        ),
+        SizedBox(height: gapBeforeTransitions),
+        ...data.transitions.map(
+          (t) => Padding(
+            padding: EdgeInsets.only(bottom: transitionBottomPad),
+            child: _TransitionCard(transition: t),
+          ),
+        ),
+      ],
+    );
+
+    if (nested) {
+      return ColoredBox(
+        color: ScenolyticsColors.pageBackground,
+        child: list,
+      );
+    }
+
     return Scaffold(
       backgroundColor: ScenolyticsColors.pageBackground,
-      body: w < _kMobileBreak
-          ? _MobileLayout(data: data)
-          : _WebLayout(data: data),
+      appBar: const _AppBar(),
+      body: list,
     );
   }
 }
-
-// ─── App bar ─────────────────────────────────────────────────────────────────
 
 class _AppBar extends StatelessWidget implements PreferredSizeWidget {
   const _AppBar();
@@ -229,77 +245,17 @@ class _AppBar extends StatelessWidget implements PreferredSizeWidget {
   }
 }
 
-// ─── Mobile layout ───────────────────────────────────────────────────────────
-
-class _MobileLayout extends StatelessWidget {
-  final EyesAnalysisResult data;
-  const _MobileLayout({required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: ScenolyticsColors.pageBackground,
-      appBar: const _AppBar(),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _ScoreCard(data: data),
-          const SizedBox(height: 16),
-          _SectionHeader(
-            title: 'Eye Movement During Emotion Transitions',
-            icon: Icons.swap_horiz_rounded,
-            count: data.transitions.length,
-            useGradient: true,
-          ),
-          const SizedBox(height: 10),
-          ...data.transitions.map(
-            (t) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _TransitionCard(transition: t),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+/// Sample transitions with the submission's eyes score (rankings drill-down).
+EyesAnalysisResult eyesAnalysisResultFromSubmission(
+  ActorAuditionSubmission submission,
+) {
+  return EyesAnalysisResult(
+    score: submission.eyesAnalysisScore.clamp(0, 100).toDouble(),
+    result: _kSampleData.result,
+    message: _kSampleData.message,
+    transitions: _kSampleData.transitions,
+  );
 }
-
-// ─── Web layout ──────────────────────────────────────────────────────────────
-
-class _WebLayout extends StatelessWidget {
-  final EyesAnalysisResult data;
-  const _WebLayout({required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: ScenolyticsColors.pageBackground,
-      appBar: const _AppBar(),
-      body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-        children: [
-          _ScoreCard(data: data),
-          const SizedBox(height: 24),
-          _SectionHeader(
-            title: 'Eye Movement During Emotion Transitions',
-            icon: Icons.swap_horiz_rounded,
-            count: data.transitions.length,
-            useGradient: true,
-          ),
-          const SizedBox(height: 14),
-          ...data.transitions.map(
-            (t) => Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: _TransitionCard(transition: t),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Score card ──────────────────────────────────────────────────────────────
 
 class _ScoreCard extends StatelessWidget {
   final EyesAnalysisResult data;
@@ -469,8 +425,6 @@ class _ScoreCard extends StatelessWidget {
   }
 }
 
-// ─── Section header ──────────────────────────────────────────────────────────
-
 class _SectionHeader extends StatelessWidget {
   final String title;
   final IconData icon;
@@ -540,8 +494,6 @@ class _SectionHeader extends StatelessWidget {
     );
   }
 }
-
-// ─── Transition card ─────────────────────────────────────────────────────────
 
 class _TransitionCard extends StatelessWidget {
   final EmotionTransition transition;
@@ -703,8 +655,6 @@ class _TransitionCard extends StatelessWidget {
   }
 }
 
-// ─── Photo frame with overlaid emotion label ──────────────────────────────────
-
 class _PhotoFrame extends StatelessWidget {
   final String label;       // "BEFORE" or "AFTER"
   final String emotion;
@@ -807,8 +757,6 @@ class _PhotoFrame extends StatelessWidget {
   }
 }
 
-// ─── Small emotion chip used in the header ────────────────────────────────────
-
 class _EmotionChip extends StatelessWidget {
   final String emotion;
   final Color color;
@@ -841,6 +789,3 @@ class _EmotionChip extends StatelessWidget {
     );
   }
 }
-
-// ─── Shift chip ─────────────────────────────────────────────────────────────
-

@@ -785,6 +785,7 @@ class MLPipeline:
         self,
         video_path: str,
         script_text: Optional[str] = None,
+        audio_only: bool = False,
     ) -> Dict:
         """
         Run the full evaluation pipeline on one audition video.
@@ -808,12 +809,8 @@ class MLPipeline:
             detected_emotions_vocal     dict
             ai_feedback                 str
         """
-        logger.info("Starting evaluation for video: %s", video_path)
+        logger.info("Starting evaluation. audio_only=%s, video=%s", audio_only, video_path)
 
-        # 1. Extract frames once -- reused by emotion scorer and eye contact scorer
-        frames = self._extract_video_frames(video_path)
-
-        # 2. Extract audio once -- reused by audio emotion and script alignment
         tmp_audio = None
         try:
             tmp_dir   = tempfile.mkdtemp()
@@ -824,27 +821,24 @@ class MLPipeline:
             logger.error("Audio extraction failed: %s", e)
             tmp_audio = None
 
-        # 3. Score video emotion
-        emotional_score, emotions_detail = await self._score_emotion_video(frames)
-
-        # 4. Transcribe audio and align with script (if provided)
+        # ── Script alignment ──────────────────────────────────────────────────
         sentences_aligned = None
-        script_score = 0.0
-        alignment_data = None
+        script_score      = 0.0
+        alignment_data    = None
 
         if script_text and tmp_audio:
             script_score, alignment_data = await self._score_script_alignment_with_sentences(
-                tmp_audio,
-                script_text,
+                tmp_audio, script_text,
             )
             sentences_aligned = alignment_data.get("sentences_aligned") if alignment_data else None
+        elif not script_text:
+            logger.info("No script_text for evaluation — script_alignment_score stays 0")
+        elif not tmp_audio:
+            logger.warning("No extracted audio — script_alignment_score stays 0")
 
-        # 5. Score audio emotion (with sentence-level analysis if script was provided)
+        # ── Audio emotion ─────────────────────────────────────────────────────
         if sentences_aligned:
-            audio_result = await self._score_audio_emotion_per_sentence(
-                tmp_audio,
-                sentences_aligned,
-            )
+            audio_result = await self._score_audio_emotion_per_sentence(tmp_audio, sentences_aligned)
         else:
             audio_result = await self._score_audio_emotion(tmp_audio, expected_emotion=None)
 
@@ -854,56 +848,80 @@ class MLPipeline:
             "confidence":  audio_result["confidence"],
             "all_emotions": audio_result.get("all_emotions", {}),
         }
-
         if "sentence_results" in audio_result:
             detected_emotions_vocal["sentence_results"] = audio_result["sentence_results"]
             detected_emotions_vocal["accuracy"]         = audio_result.get("accuracy", 0.0)
 
-        # 5b. Score video emotion per sentence (if script was provided)
-        detected_emotions_video = None
-        if sentences_aligned:
-            video_emotion_result = await self._score_video_emotion_per_sentence(
-                video_path,
-                sentences_aligned,
-            )
-            detected_emotions_video = {
-                "primary": video_emotion_result["detected_emotion"],
-                "confidence": video_emotion_result["confidence"],
-                "score": video_emotion_result["score"],
-                "accuracy": video_emotion_result["accuracy"],
-            }
-            if "sentence_results" in video_emotion_result:
-                detected_emotions_video["sentence_results"] = video_emotion_result["sentence_results"]
-            logger.info(
-                "Video emotion per-sentence: score=%.2f, dominant=%s, accuracy=%.1f%%",
-                video_emotion_result["score"],
-                video_emotion_result["detected_emotion"],
-                video_emotion_result["accuracy"] * 100,
-            )
-
-        # 6. Emotion transition analysis (replaces eye contact score)
-        eye_expression_data = await self._analyze_emotion_transitions(
-            frames, video_path, sentences_aligned=sentences_aligned
-        )
-        from core.tone import analyze_tone  # or wherever you put it
-
-        # After tmp_audio is extracted, add:
+        # ── Tone analysis ─────────────────────────────────────────────────────
         tone_result = None
         if tmp_audio:
             try:
+                from core.tone import analyze_tone
                 tone_result = analyze_tone(
-                audio_path=tmp_audio,
-                sentences_aligned=sentences_aligned,
-                )
-                logger.info(
-                    "Tone analysis complete: %d segments, avg_pitch=%.1f Hz, avg_loudness=%.1f dB",
-                    len(tone_result["segments"]),
-                    tone_result["overall_pitch_variation"],
-                    tone_result["overall_loudness_variation"],
-                )
+                    audio_path=tmp_audio,
+                    sentences_aligned=sentences_aligned,
+                ) 
             except Exception as e:
                 logger.error("Tone analysis failed: %s", e)
-        # 7. Weighted overall score (using only emotional, vocal, and script)
+
+        # ── Audio-only path ───────────────────────────────────────────────────
+        if audio_only:
+            # Weights: vocal 50%, script 30%, tone 20%
+            tone_score = 0.0
+            if tone_result:
+                pitch_var    = min(tone_result.get("overall_pitch_variation", 0) / 100, 1.0)
+                loud_var     = min(tone_result.get("overall_loudness_variation", 0) / 20,  1.0)
+                tone_score   = round((pitch_var * 0.5 + loud_var * 0.5) * 100, 2)
+
+            overall = round(
+                vocal_score  * 0.50
+                + script_score * 0.30
+                + tone_score   * 0.20,
+                2,
+            )
+            overall = max(0.0, min(100.0, overall))
+            feedback = self._generate_feedback(overall, 0, vocal_score, script_score)
+
+            if tmp_audio and Path(tmp_audio).exists():
+                try:
+                    Path(tmp_audio).unlink()
+                except Exception:
+                    pass
+
+            return {
+                "mode":                      "audio_only",
+                "vocal_tone_score":          round(vocal_score, 2),
+                "script_alignment_score":    round(script_score, 2),
+                "tone_score":                tone_score,
+                "overall_performance_score": overall,
+                "tone_analysis":             tone_result,
+                "detected_emotions_vocal":   detected_emotions_vocal,
+                "script_alignment_data":     alignment_data,
+                "ai_feedback":               feedback,
+            }
+
+        # ── Full video path ───────────────────────────────────────────────────
+        frames = self._extract_video_frames(video_path)
+
+        emotional_score, emotions_detail = await self._score_emotion_video(frames)
+
+        detected_emotions_video = None
+        if sentences_aligned:
+            video_emotion_result = await self._score_video_emotion_per_sentence(
+                video_path, sentences_aligned,
+            )
+            detected_emotions_video = {
+                "primary":          video_emotion_result["detected_emotion"],
+                "confidence":       video_emotion_result["confidence"],
+                "score":            video_emotion_result["score"],
+                "accuracy":         video_emotion_result["accuracy"],
+                "sentence_results": video_emotion_result.get("sentence_results", []),
+            }
+
+        eye_expression_data = await self._analyze_emotion_transitions(
+            frames, video_path, sentences_aligned=sentences_aligned
+        )
+
         overall = round(
             emotional_score * self.weights["emotional_expression_score"]
             + vocal_score   * self.weights["vocal_tone_score"]
@@ -911,11 +929,8 @@ class MLPipeline:
             2,
         )
         overall = max(0.0, min(100.0, overall))
-
-        # 8. Human-readable feedback
         feedback = self._generate_feedback(overall, emotional_score, vocal_score, script_score)
 
-        # 9. Clean up temp audio
         if tmp_audio and Path(tmp_audio).exists():
             try:
                 Path(tmp_audio).unlink()
@@ -923,25 +938,24 @@ class MLPipeline:
                 pass
 
         logger.info(
-            "Evaluation complete -- overall=%.2f  emotion=%.2f  vocal=%.2f  "
-            "script=%.2f  transitions=%d",
-            overall, emotional_score, vocal_score, script_score, len(eye_expression_data.get("transitions", [])),
+            "Evaluation complete -- overall=%.2f  emotion=%.2f  vocal=%.2f  script=%.2f",
+            overall, emotional_score, vocal_score, script_score,
         )
 
         return {
-            "emotional_expression_score": round(emotional_score, 2),
-            "vocal_tone_score":           round(vocal_score, 2),
-            "script_alignment_score":     round(script_score, 2),
-            "overall_performance_score":  overall,
-            "eye_expression":             eye_expression_data,
-            "tone_analysis":              tone_result, 
-            "detected_emotions":          emotions_detail,
-            "detected_emotions_vocal":    detected_emotions_vocal,
-            "detected_emotions_video":    detected_emotions_video,
-            "script_alignment_data":      alignment_data,
-            "ai_feedback":                feedback,
+            "mode":                          "video",
+            "emotional_expression_score":    round(emotional_score, 2),
+            "vocal_tone_score":              round(vocal_score, 2),
+            "script_alignment_score":        round(script_score, 2),
+            "overall_performance_score":     overall,
+            "eye_expression":                eye_expression_data,
+            "tone_analysis":                 tone_result,
+            "detected_emotions":             emotions_detail,
+            "detected_emotions_vocal":       detected_emotions_vocal,
+            "detected_emotions_video":       detected_emotions_video,
+            "script_alignment_data":         alignment_data,
+            "ai_feedback":                   feedback,
         }
-
     # -----------------------------------------------------------------------
     # 1 -- Video emotion scoring
     # -----------------------------------------------------------------------
@@ -1357,9 +1371,9 @@ class MLPipeline:
 
             for sent in sentences_aligned:
                 if sent["status"] == "missing" or sent["t_start"] is None:
-                    logger.debug("Skipping missing sentence: %s...", sent["content"][:50])
+                    logger.debug("Skipping missing sentence: %s...", sent["script_sentence"][:50])
                     sentence_results.append({
-                        "sentence":         sent["content"],
+                        "sentence":         sent["script_sentence"],
                         "expected_emotion": sent.get("emotion"),
                         "detected_emotion": None,
                         "confidence":       0.0,
@@ -1386,10 +1400,10 @@ class MLPipeline:
                         "Sentence %d too short: %.2fs (%d samples) | '%s...'",
                         len(sentence_results) + 1,
                         segment_duration, len(segment),
-                        sent["content"][:40],
+                        sent["script_sentence"][:40],
                     )
                     sentence_results.append({
-                        "sentence":         sent["content"],
+                        "sentence":         sent["script_sentence"],
                         "expected_emotion": sent.get("emotion"),
                         "detected_emotion": None,
                         "confidence":       0.0,
@@ -1424,10 +1438,10 @@ class MLPipeline:
                         len(sentence_results) + 1,
                         segment_duration, len(segment),
                         sent["t_start"], sent["t_end"],
-                        sent["content"][:40],
+                        sent["script_sentence"][:40],
                     )
                     sentence_results.append({
-                        "sentence":         sent["content"],
+                        "sentence":         sent["script_sentence"],
                         "expected_emotion": sent.get("emotion"),
                         "detected_emotion": None,
                         "confidence":       0.0,
@@ -1448,7 +1462,7 @@ class MLPipeline:
                 )
 
                 sentence_results.append({
-                    "sentence":         sent["content"],
+                    "sentence":         sent["script_sentence"],
                     "expected_emotion": sent["emotion"],
                     "detected_emotion": result["detected_emotion"],
                     "confidence":       result["confidence"],
@@ -1456,6 +1470,7 @@ class MLPipeline:
                     "time_range":       f"{sent['t_start']:.1f}s-{sent['t_end']:.1f}s",
                     "coverage":         sent.get("coverage", 1.0),
                     "status":           sent["status"],
+                    "all_scores":       result.get("all_emotions", {}),
                 })
 
                 try:
@@ -1551,9 +1566,9 @@ class MLPipeline:
             
             for sent_idx, sent in enumerate(sentences_aligned):
                 if sent["status"] == "missing" or sent["t_start"] is None:
-                    logger.debug("Skipping missing sentence %d: %s...", sent_idx, sent["content"][:50])
+                    logger.debug("Skipping missing sentence %d: %s...", sent_idx, sent["script_sentence"][:50])
                     sentence_results.append({
-                        "sentence": sent["content"],
+                        "sentence": sent["script_sentence"],
                         "expected_emotion": sent.get("emotion"),
                         "detected_emotion": None,
                         "confidence": 0.0,
@@ -1572,10 +1587,10 @@ class MLPipeline:
                 if duration < 0.2:  # Too short (< 200ms)
                     logger.warning(
                         "Sentence %d too short (%.2fs): '%s...'",
-                        sent_idx, duration, sent["content"][:40]
+                        sent_idx, duration, sent["script_sentence"][:40]
                     )
                     sentence_results.append({
-                        "sentence": sent["content"],
+                        "sentence": sent["script_sentence"],
                         "expected_emotion": sent.get("emotion"),
                         "detected_emotion": None,
                         "confidence": 0.0,
@@ -1597,7 +1612,7 @@ class MLPipeline:
                         sent_idx, t_start, t_end
                     )
                     sentence_results.append({
-                        "sentence": sent["content"],
+                        "sentence": sent["script_sentence"],
                         "expected_emotion": sent.get("emotion"),
                         "detected_emotion": None,
                         "confidence": 0.0,
@@ -1638,7 +1653,7 @@ class MLPipeline:
                     )
                     
                     sentence_results.append({
-                        "sentence": sent["content"],
+                        "sentence": sent["script_sentence"],
                         "expected_emotion": sent.get("emotion"),
                         "detected_emotion": detected_emotion,
                         "confidence": round(confidence, 4),
@@ -1646,6 +1661,10 @@ class MLPipeline:
                         "time_range": f"{t_start:.1f}s-{t_end:.1f}s",
                         "coverage": sent.get("coverage", 1.0),
                         "status": sent.get("status", "ok"),
+                        "all_emotions":     {       # ← add this
+                            EMOTION_NAMES[i]: round(float(probabilities[i]), 4)
+                            for i in range(NUM_CLASSES)
+                        },
                     })
                     
                 except Exception as e:
@@ -1653,7 +1672,7 @@ class MLPipeline:
                         "Failed to score video emotion for sentence %d: %s", sent_idx, e
                     )
                     sentence_results.append({
-                        "sentence": sent["content"],
+                        "sentence": sent["script_sentence"],
                         "expected_emotion": sent.get("emotion"),
                         "detected_emotion": None,
                         "confidence": 0.0,
@@ -1799,13 +1818,14 @@ class MLPipeline:
                 return 0.0, None
 
             transcript_clean = _normalize_text(full_transcript).split()
+            sentences        = self._parse_script(script_text)
 
             sentences = self._parse_script(script_text)
 
             script_words     = []
             word_to_sentence = []
             for sent_idx, sent in enumerate(sentences):
-                words = _normalize_text(sent["content"]).split()
+                words = _normalize_text(sent["script_sentence"]).split()
                 script_words.extend(words)
                 word_to_sentence.extend([sent_idx] * len(words))
 
@@ -1814,73 +1834,107 @@ class MLPipeline:
 
             matcher = difflib.SequenceMatcher(None, script_words, transcript_clean)
 
-            sentence_coverage    = [0] * len(sentences)
             sentence_word_counts = [
-                len(_normalize_text(s["content"]).split()) for s in sentences
+                len(_normalize_text(s["script_sentence"]).split()) for s in sentences
             ]
+            sentence_coverage = [0] * len(sentences)
+
+            # Per-sentence comparison rows: each entry is a word-level diff row
+            # keyed by sentence index so they can be attached to sentences_aligned later
+            sentence_comparison_rows: list[list[dict]] = [[] for _ in sentences]
+
+            # Global word-level stats
+            matched_words_count = 0
+            changed_words_count = 0
+            skipped_words_count = 0
+            added_words_count   = 0
+            matched_words_array=[]
+            changed_words_array=[]
+            skipped_words_array=[]
+            added_words_array=[]
+            
 
             for tag, i1, i2, j1, j2 in matcher.get_opcodes():
                 if tag == "equal":
-                    for i in range(i1, i2):
-                        sentence_coverage[word_to_sentence[i]] += 1
-            # Add this loop after the existing matcher.get_opcodes() sentence_coverage loop:
-            comparison_rows = []
-            Matched_words=0
-            Changed_words=0
-            Skipped_words=0
-            Added_words=0
-            for tag, i1, i2, j1, j2 in matcher.get_opcodes():
-                if tag == "equal":
                     for k in range(i2 - i1):
-                        comparison_rows.append({
-                            "status": "match",
-                            "script_word": script_words[i1 + k],
+                        s_idx = word_to_sentence[i1 + k]
+                        sentence_coverage[s_idx] += 1
+                        sentence_comparison_rows[s_idx].append({
+                            "status":          "match",
+                            "script_word":     script_words[i1 + k],
                             "transcript_word": transcript_clean[j1 + k],
                         })
-                        Matched_words+=1
+                        matched_words_count += 1
+                        matched_words_array.append(script_words[i1 + k])
                 elif tag == "replace":
                     for k in range(max(i2 - i1, j2 - j1)):
-                        s_w = script_words[i1 + k] if i1 + k < i2 else ""
+                        s_w = script_words[i1 + k]     if i1 + k < i2 else ""
                         t_w = transcript_clean[j1 + k] if j1 + k < j2 else ""
-                        comparison_rows.append({
-                            "status": "changed" if s_w and t_w else ("skipped" if s_w else "added"),
-                            "script_word": s_w or "-",
+                        status = "changed" if s_w and t_w else ("skipped" if s_w else "added")
+                        # Attribute to the script-side sentence when available,
+                        # otherwise fall back to the last script sentence
+                        if i1 + k < i2:
+                            s_idx = word_to_sentence[i1 + k]
+                        else:
+                            s_idx = word_to_sentence[i2 - 1]
+                        sentence_comparison_rows[s_idx].append({
+                            "status":          status,
+                            "script_word":     s_w or "-",
                             "transcript_word": t_w or "-",
                         })
-                        Changed_words+=1
+                        changed_words_count += 1
+                        changed_words_array.append(f"{s_w} -> {t_w}")
                 elif tag == "delete":
                     for k in range(i2 - i1):
-                        comparison_rows.append({
-                            "status": "skipped",
-                            "script_word": script_words[i1 + k],
+                        s_idx = word_to_sentence[i1 + k]
+                        sentence_comparison_rows[s_idx].append({
+                            "status":          "skipped",
+                            "script_word":     script_words[i1 + k],
                             "transcript_word": "-",
                         })
-                        Skipped_words+=1    
+                        skipped_words_count += 1
+                        skipped_words_array.append(script_words[i1 + k])
                 elif tag == "insert":
                     for k in range(j2 - j1):
-                        comparison_rows.append({
-                        "status": "added",
-                        "script_word": "-",
-                        "transcript_word": transcript_clean[j1 + k],
-                    })
-                    Added_words+=1
-            # Fix the matched_words bug while you're here:
-            matched_words = sum(size for _, _, size in matcher.get_matching_blocks())
-            overall_coverage = matched_words / len(script_words) if script_words else 0
-            score = round(min(overall_coverage, 1.0) * 100, 2)
-            total_duration = sf.info(audio_path).duration
-
-
+                        # Inserted words have no script position; attach to the sentence
+                        # that owns the script word just before this insertion point.
+                        s_idx = word_to_sentence[i1 - 1] if i1 > 0 else 0
+                        sentence_comparison_rows[s_idx].append({
+                            "status":          "added",
+                            "script_word":     "-",
+                            "transcript_word": transcript_clean[j1 + k],
+                        })
+                        added_words_count += 1
+                        added_words_array.append(transcript_clean[j1 + k])
+            total_matched   = sum(size for _, _, size in matcher.get_matching_blocks())
+            overall_coverage = total_matched / len(script_words) if script_words else 0
+            score            = round(min(overall_coverage, 1.0) * 100, 2)
+            total_duration   = sf.info(audio_path).duration
+            
+            # ------------------------------------------------------------------ #
+            # Build sentence-level output: timestamps + per-sentence transcript  #
+            # ------------------------------------------------------------------ #
             sentences_aligned = []
             word_idx = 0  # pointer into aligned_words
 
             for s_idx, sent in enumerate(sentences):
-                sent_words    = _normalize_text(sent["content"]).split()
+                sent_words    = _normalize_text(sent["script_sentence"]).split()
                 word_count    = len(sent_words)
                 matched_count = sentence_coverage[s_idx]
                 coverage      = matched_count / word_count if word_count > 0 else 0.0
+                sent_score    = round(min(coverage, 1.0) * 100, 2)
 
-                # Collect the next `word_count` aligned word timestamps for this sentence
+                # Reconstruct what the actor actually said for this sentence's span,
+                # preserving word order from the diff rows
+                rows = sentence_comparison_rows[s_idx]
+                transcript_words_for_sentence = [
+                    r["transcript_word"]
+                    for r in rows
+                    if r["transcript_word"] != "-"
+                ]
+                sentence_transcript = " ".join(transcript_words_for_sentence)
+
+                # Collect the next `word_count` aligned word timestamps
                 sent_aligned = aligned_words[word_idx : word_idx + word_count]
                 word_idx    += word_count
 
@@ -1888,18 +1942,21 @@ class MLPipeline:
 
                 if not usable_times:
                     sentences_aligned.append({
-                        "content":  sent["content"],
-                        "emotion":  sent["emotion"],
-                        "t_start":  None,
-                        "t_end":    None,
-                        "coverage": coverage,
-                        "status":   "missing",
+                        "sentence_index":      s_idx,
+                        "script_sentence":     sent["script_sentence"],
+                        "transcript_sentence": sentence_transcript,
+                        "emotion":             sent["emotion"],
+                        "t_start":             None,
+                        "t_end":               None,
+                        "coverage":            coverage,
+                        "sentence_score":      sent_score,
+                        "status":              "missing",
+                        "word_diff":           rows,
                     })
                     continue
 
                 t_start = min(usable_times)
 
-                # t_end = midpoint between this sentence's last word and next sentence's first word
                 next_aligned = aligned_words[word_idx : word_idx + 1]
                 if next_aligned and "start" in next_aligned[0]:
                     t_end = (max(usable_times) + next_aligned[0]["start"]) / 2.0
@@ -1912,30 +1969,35 @@ class MLPipeline:
                     t_end = min(t_start + 0.5, total_duration)
 
                 sentences_aligned.append({
-                    "content":  sent["content"],
-                    "emotion":  sent["emotion"],
-                    "t_start":  round(t_start, 4),
-                    "t_end":    round(t_end,   4),
-                    "coverage": round(coverage, 3),
-                    "status":   "ok" if coverage >= 0.5 else "partial",
+                    "sentence_index":      s_idx,
+                    "script_sentence":     sent["script_sentence"],
+                    "transcript_sentence": sentence_transcript,
+                    "emotion":             sent["emotion"],
+                    "t_start":             round(t_start, 4),
+                    "t_end":               round(t_end,   4),
+                    "coverage":            round(coverage, 3),
+                    "sentence_score":      sent_score,
+                    "status":              "ok" if coverage >= 0.5 else "partial",
+                    "word_diff":           rows,
                 })
-            
-
 
             logger.info(
                 "Script alignment -- matched=%d / total=%d -> score=%.2f, %d sentences",
-                matched_words, len(script_words), score, len(sentences_aligned),
+                total_matched, len(script_words), score, len(sentences_aligned),
             )
 
             return score, {
-                "sentences_aligned": sentences_aligned,
+                "sentences_aligned": sentences_aligned,   # primary output: one entry per sentence
                 "transcript":        full_transcript,
                 "coverage":          overall_coverage,
-                "matched_words":     matched_words,
-                "added_words":       Added_words,
-                "changed_words":     Changed_words,
-                "skipped_words":     Skipped_words,
-                "comparison_rows": comparison_rows,
+                "matched_words":     matched_words_array,
+                "added_words":       added_words_array,
+                "changed_words":     changed_words_array,
+                "skipped_words":     skipped_words_array,
+                "matched_count":     matched_words_count,
+                "added_count":       added_words_count,
+                "changed_count":     changed_words_count,
+                "skipped_count":     skipped_words_count,
             }
 
         except Exception as e:
@@ -1966,7 +2028,7 @@ class MLPipeline:
                     content = str(item.get("content", "")).strip()
                     emotion = str(item.get("emotion", "neutral")).strip().lower()
                     if content:
-                        sentences.append({"content": content, "emotion": emotion})
+                        sentences.append({"script_sentence": content, "emotion": emotion})
                 if sentences:
                     logger.info("Parsed script as JSON array: %d sentences", len(sentences))
                     return sentences

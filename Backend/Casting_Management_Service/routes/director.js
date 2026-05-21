@@ -4,6 +4,7 @@ import {
   getAllDirectorAuditions,
   getDirectorPendingInvitations,
   connectGoogleMeet,
+  connectGoogleMeetAuthUrl,
   connectGoogleMeetCallBack,
 } from "../services/director.js";
 import {
@@ -50,5 +51,6 @@ router.get("/invitations/pending", getDirectorPendingInvitations);
 // ==================== GOOGLE CALENDAR ENDPOINTS ====================
 
 router.get("/google/connect", connectGoogleMeet);
+router.get("/google/connect-url", connectGoogleMeetAuthUrl);
 
 export default router;
