@@ -1,6 +1,7 @@
-import 'dart:math' as math;
+import 'dart:developer' as developer;
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' show ClientException;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -17,6 +18,7 @@ import '../../models/director_profile_ui.dart';
 import '../../utils/json_map_read.dart';
 import '../../utils/jwt_user_id.dart';
 import '../api/casting_api.dart';
+import '../api/evaluation_api.dart';
 import '../api/user_management_api.dart';
 
 /// Result of [AuditionsRepository.submitRecordedAudition]; includes raw casting
@@ -38,10 +40,16 @@ class RankingsAuditionHeader {
   const RankingsAuditionHeader({
     required this.title,
     required this.subtitle,
+    this.auditionType = '',
   });
 
   final String title;
   final String subtitle;
+
+  /// Casting `auditions.type` ('Audio' or 'Video'). Empty when unknown.
+  final String auditionType;
+
+  bool get isAudioOnly => auditionType.trim().toLowerCase() == 'audio';
 }
 
 class AuditionsRepository {
@@ -49,12 +57,15 @@ class AuditionsRepository {
     required CastingApi castingApi,
     required UserManagementApi userManagementApi,
     required String videoPublicBase,
+    EvaluationApi? evaluationApi,
   })  : _castingApi = castingApi,
         _userManagementApi = userManagementApi,
+        _evaluationApi = evaluationApi,
         _videoPublicBase = videoPublicBase;
 
   final CastingApi _castingApi;
   final UserManagementApi _userManagementApi;
+  final EvaluationApi? _evaluationApi;
   final String _videoPublicBase;
 
   /// Playback URLs saved from casting POST `uploadURL` (SigV4 stripped → GET URL).
@@ -215,14 +226,26 @@ class AuditionsRepository {
       }),
     );
 
+    final evaluationsBySubmissionId = await _fetchEvaluationsBySubmissionId(
+      submissions: submissions,
+      bearerToken: directorToken,
+    );
+
     return submissions
         .map(
           (raw) {
-            final aid = _actorUserIdFromSubmission(raw);
+            final submissionId = raw['id']?.toString().trim() ?? '';
+            final merged = _mergeEvaluationIntoSubmission(
+              raw,
+              submissionId.isNotEmpty
+                  ? evaluationsBySubmissionId[submissionId]
+                  : null,
+            );
+            final aid = _actorUserIdFromSubmission(merged);
             final profile =
                 aid != null ? profilesByActorId[aid] : null;
             return _mapSubmission(
-              source: raw,
+              source: merged,
               profile: profile,
               fallbackActorName: '',
               fallbackAge: 0,
@@ -232,6 +255,106 @@ class AuditionsRepository {
           },
         )
         .toList();
+  }
+
+  /// Loads latest AI evaluation rows keyed by casting submission id.
+  Future<Map<String, Map<String, dynamic>>> _fetchEvaluationsBySubmissionId({
+    required List<Map<String, dynamic>> submissions,
+    required String bearerToken,
+  }) async {
+    final api = _evaluationApi;
+    if (api == null) return const {};
+
+    final ids = submissions
+        .map((r) => r['id']?.toString().trim() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+    if (ids.isEmpty) return const {};
+
+    final out = <String, Map<String, dynamic>>{};
+    final submissionById = {
+      for (final row in submissions)
+        if ((row['id']?.toString().trim() ?? '').isNotEmpty)
+          row['id']!.toString().trim(): row,
+    };
+
+    await Future.wait(
+      ids.map((submissionId) async {
+        try {
+          var row = await api.getEvaluationBySubmissionId(
+            submissionId,
+            bearerToken: bearerToken,
+          );
+          if (row == null) {
+            final raw = submissionById[submissionId];
+            final mediaId = raw?['media_id']?.toString().trim() ??
+                raw?['mediaId']?.toString().trim() ??
+                '';
+            if (mediaId.isNotEmpty) {
+              row = await api.getEvaluationByMediaId(
+                mediaId,
+                bearerToken: bearerToken,
+              );
+            }
+          }
+          if (row != null) out[submissionId] = row;
+        } catch (e, st) {
+          if (kDebugMode) {
+            developer.log(
+              'Evaluation lookup failed for submission $submissionId',
+              name: 'Scenolytics',
+              error: e,
+              stackTrace: st,
+            );
+          }
+        }
+      }),
+    );
+    return out;
+  }
+
+  /// Merges AI evaluation scores into a casting submission map for [_mapSubmission].
+  Map<String, dynamic> _mergeEvaluationIntoSubmission(
+    Map<String, dynamic> submission,
+    Map<String, dynamic>? evaluation,
+  ) {
+    if (evaluation == null) return submission;
+
+    final merged = Map<String, dynamic>.from(submission);
+
+    void putScore(String key, Object? value) {
+      if (value == null) return;
+      if (value is num) merged[key] = value;
+    }
+
+    putScore('overall_performance_score', evaluation['overall_performance_score']);
+    putScore('emotional_expression_score', evaluation['emotional_expression_score']);
+    putScore('vocal_tone_score', evaluation['vocal_tone_score']);
+    putScore('script_alignment_score', evaluation['script_alignment_score']);
+
+    final eye = evaluation['eye_expression_score'];
+    if (eye is num) {
+      merged['eyes_analysis_score'] = eye.round();
+    } else if (eye is Map) {
+      final nested = eye['score'] ?? eye['overall_score'] ?? eye['eye_score'];
+      if (nested is num) merged['eyes_analysis_score'] = nested.round();
+    }
+
+    final tone = evaluation['tone_analysis'];
+    if (tone is num) {
+      merged['tone_analysis_score'] = tone.round();
+    } else if (tone is Map) {
+      final nested = tone['score'] ?? tone['overall_score'];
+      if (nested is num) merged['tone_analysis_score'] = nested.round();
+    }
+
+    final status = evaluation['evaluation_status']?.toString();
+    if (status != null && status.isNotEmpty) {
+      merged['evaluation_status'] = status;
+    }
+
+    return merged;
   }
 
   /// Loads every audition the signed-in director owns, then fans out three
@@ -326,7 +449,7 @@ class AuditionsRepository {
     for (final row in callbacks) {
       final info = ActorCallbackInfo.tryParse(row);
       if (info != null) {
-        callbackByAudition[info.auditionId] = info;
+        callbackByAudition.putIfAbsent(info.auditionId, () => info);
       }
     }
 
@@ -688,10 +811,11 @@ class AuditionsRepository {
       auditionId: auditionId,
     );
     final out = <String, DirectorAuditionCallback>{};
+    // API returns rows newest-first; keep the latest per submission only.
     for (final row in rows) {
       final parsed = DirectorAuditionCallback.tryParse(row);
       if (parsed == null) continue;
-      out[parsed.auditionSubmissionId] = parsed;
+      out.putIfAbsent(parsed.auditionSubmissionId, () => parsed);
     }
     return out;
   }
@@ -707,6 +831,32 @@ class AuditionsRepository {
     );
     return bySubmission.map((k, v) => MapEntry(k, v.status));
   }
+
+  /// Moves a scheduled callback to a new date/time (Calendar + DB).
+  Future<void> rescheduleDirectorCallback({
+    required String directorToken,
+    required String auditionId,
+    required String callbackId,
+    required String callbackDatetime,
+  }) =>
+      _castingApi.rescheduleDirectorCallback(
+        directorToken: directorToken,
+        auditionId: auditionId,
+        callbackId: callbackId,
+        callbackDatetime: callbackDatetime,
+      );
+
+  /// Creates a fresh Google Meet link for an existing scheduled callback.
+  Future<String> regenerateDirectorCallbackMeetingLink({
+    required String directorToken,
+    required String auditionId,
+    required String callbackId,
+  }) =>
+      _castingApi.regenerateDirectorCallbackMeeting(
+        directorToken: directorToken,
+        auditionId: auditionId,
+        callbackId: callbackId,
+      );
 
   /// Director decision after the callback meeting (`accepted` / `rejected`).
   Future<void> reviewDirectorCallback({
@@ -903,6 +1053,7 @@ class AuditionsRepository {
         mySubmissionCountForAudition: myRows.length,
         myLatestSubmissionStatus: myStatus,
         hasSubmissionRecord: myRows.isNotEmpty,
+        auditionType: audition['type']?.toString().trim() ?? '',
       );
     } catch (_) {
       return const ActorSubmissionAuditionUi(
@@ -1008,7 +1159,12 @@ class AuditionsRepository {
       );
       final title = _auditionTitleFromMap(audition);
       final subtitle = _auditionSubtitleFromMap(audition, '');
-      return RankingsAuditionHeader(title: title, subtitle: subtitle);
+      final type = audition['type']?.toString().trim() ?? '';
+      return RankingsAuditionHeader(
+        title: title,
+        subtitle: subtitle,
+        auditionType: type,
+      );
     } catch (_) {
       return const RankingsAuditionHeader(title: '', subtitle: '');
     }
@@ -1077,50 +1233,55 @@ class AuditionsRepository {
     String? preferredPlaybackUrl,
   }) {
     final id = source['id']?.toString() ?? 'sub_${DateTime.now().millisecondsSinceEpoch}';
-    final metrics = _metricsFromSeed(id);
 
-    final overallScore = _firstDouble(source, const <String>[
-          'overall_performance_score',
-          'overall_score',
-          'score',
-        ]) ??
-        metrics.overall;
+    final overallRaw = _firstDouble(source, const <String>[
+      'overall_performance_score',
+      'overall_score',
+      'score',
+    ]);
+    final emotionalRaw = _firstInt(source, const <String>[
+      'facial_emotion_score',
+      'facial_emotions_score',
+      'emotional_expression_score',
+      'emotional_score',
+    ]);
+    final vocalRaw = _firstInt(source, const <String>[
+      'vocal_emotion_score',
+      'vocal_tone_score',
+      'vocal_score',
+    ]);
+    final scriptRaw = _firstInt(source, const <String>[
+      'script_alignment_score',
+      'script_match_score',
+    ]);
+    final eyesRaw = _firstInt(source, const <String>[
+      'eyes_analysis_score',
+      'eye_analysis_score',
+      'gaze_analysis_score',
+      'eyes_score',
+    ]);
+    final toneRaw = _firstInt(source, const <String>[
+      'tone_analysis_score',
+      'speech_tone_score',
+      'prosody_score',
+    ]);
 
-    final emotionalScore = _firstInt(source, const <String>[
-          'facial_emotion_score',
-          'facial_emotions_score',
-          'emotional_expression_score',
-          'emotional_score',
-        ]) ??
-        metrics.emotional;
+    final evaluationStatus =
+        source['evaluation_status']?.toString().trim().toLowerCase() ?? '';
+    final evaluationCompleted = evaluationStatus == 'completed' ||
+        overallRaw != null ||
+        emotionalRaw != null ||
+        vocalRaw != null ||
+        scriptRaw != null ||
+        eyesRaw != null ||
+        toneRaw != null;
 
-    final vocalToneScore = _firstInt(source, const <String>[
-          'vocal_emotion_score',
-          'vocal_tone_score',
-          'vocal_score',
-        ]) ??
-        metrics.vocalTone;
-
-    final scriptMatchScore = _firstInt(source, const <String>[
-          'script_alignment_score',
-          'script_match_score',
-        ]) ??
-        metrics.scriptMatch;
-
-    final eyesAnalysisScore = _firstInt(source, const <String>[
-          'eyes_analysis_score',
-          'eye_analysis_score',
-          'gaze_analysis_score',
-          'eyes_score',
-        ]) ??
-        metrics.eyesAnalysis;
-
-    final toneAnalysisScore = _firstInt(source, const <String>[
-          'tone_analysis_score',
-          'speech_tone_score',
-          'prosody_score',
-        ]) ??
-        metrics.toneAnalysis;
+    final overallScore = overallRaw ?? 0.0;
+    final emotionalScore = emotionalRaw ?? 0;
+    final vocalToneScore = vocalRaw ?? 0;
+    final scriptMatchScore = scriptRaw ?? 0;
+    final eyesAnalysisScore = eyesRaw ?? 0;
+    final toneAnalysisScore = toneRaw ?? 0;
 
     final submittedAtRaw = source['submitted_at']?.toString();
     final submittedAt =
@@ -1155,8 +1316,14 @@ class AuditionsRepository {
       playback = _auditionPlaybackUrl(mediaIdRaw, videoPublicBase);
     }
 
+    final actorId = _actorUserIdFromSubmission(source);
+
     return ActorAuditionSubmission(
       id: id,
+      actorId: actorId,
+      actorProfile: profile != null && profile.isNotEmpty
+          ? Map<String, dynamic>.from(profile)
+          : null,
       actorName: actorName,
       auditionRole: source['audition_title']?.toString() ?? fallbackAuditionTitle,
       score: overallScore,
@@ -1174,6 +1341,7 @@ class AuditionsRepository {
       submissionStatus: parseAuditionSubmissionStatus(
         source['submission_status'] ?? source['submissionStatus'],
       ),
+      evaluationCompleted: evaluationCompleted,
     );
   }
 
@@ -1332,70 +1500,8 @@ class AuditionsRepository {
     return null;
   }
 
-  _SubmissionMetrics _metricsFromSeed(String seed) {
-    final seedValue = seed.codeUnits.fold<int>(0, (a, b) => a + b);
-    final random = math.Random(seedValue);
-    int nextMetric() => 65 + random.nextInt(31);
-    final emotional = nextMetric();
-    final vocalTone = nextMetric();
-    final scriptMatch = nextMetric();
-    final eyesAnalysis = nextMetric();
-    final toneAnalysis = nextMetric();
-    final overall =
-        (emotional + vocalTone + scriptMatch + eyesAnalysis + toneAnalysis) /
-            5.0;
-    return _SubmissionMetrics(
-      overall: overall,
-      emotional: emotional,
-      vocalTone: vocalTone,
-      scriptMatch: scriptMatch,
-      eyesAnalysis: eyesAnalysis,
-      toneAnalysis: toneAnalysis,
-    );
-  }
-
   String _toTitleCase(String raw) {
     if (raw.isEmpty) return raw;
     return raw[0].toUpperCase() + raw.substring(1).toLowerCase();
-  }
-}
-
-class _SubmissionMetrics {
-  const _SubmissionMetrics({
-    required this.overall,
-    required this.emotional,
-    required this.vocalTone,
-    required this.scriptMatch,
-    required this.eyesAnalysis,
-    required this.toneAnalysis,
-  });
-
-  final double overall;
-  final int emotional;
-  final int vocalTone;
-  final int scriptMatch;
-  final int eyesAnalysis;
-  final int toneAnalysis;
-}
-
-extension on ActorAuditionSubmission {
-  ActorAuditionSubmission copyWith({
-    String? id,
-  }) {
-    return ActorAuditionSubmission(
-      id: id ?? this.id,
-      actorName: actorName,
-      auditionRole: auditionRole,
-      score: score,
-      submittedAt: submittedAt,
-      age: age,
-      emotionalScore: emotionalScore,
-      vocalToneScore: vocalToneScore,
-      scriptMatchScore: scriptMatchScore,
-      eyesAnalysisScore: eyesAnalysisScore,
-      toneAnalysisScore: toneAnalysisScore,
-      recordedVideoUrl: recordedVideoUrl,
-      mediaId: mediaId,
-    );
   }
 }

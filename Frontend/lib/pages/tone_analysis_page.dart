@@ -3,13 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../theme/scenolytics_colors.dart';
 
-// BACKEND INTEGRATION GUIDE (tone_analysis.py)
-// Your Python script produces:
-//   pitch_variation:    List<double> (F0 standard deviation in Hz)
-//   loudness_variation: List<double> (Energy std in dB)
-//   seg_labels:         List<String> ("S1: first sentence...")
-// Map these to ToneSegment when building the result.
-
 const double _kMobileBreak = 600;
 const double _space8 = 8;
 const double _space12 = 12;
@@ -18,13 +11,11 @@ const double _space16 = 16;
 bool _isWide(BuildContext ctx) =>
     kIsWeb || MediaQuery.of(ctx).size.width >= _kMobileBreak;
 
-// Colors matching the Python script palette.
-const _colPitch = Color(0xFF64FFDA); // teal
-const _colLoudness = Color(0xFFFF6E40); // orange
-const _colGrid = Color(0xFF444466); // chart grid
-const _colChartBg = Color(0xFF0F0F23); // chart background
+const _colPitch = Color(0xFF64FFDA);
+const _colLoudness = Color(0xFFFF6E40);
+const _colGrid = Color(0xFF444466);
+const _colChartBg = Color(0xFF0F0F23);
 
-// Data models
 class ToneSegment {
   final String label;
   final String sentence;

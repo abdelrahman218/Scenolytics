@@ -8,13 +8,6 @@ import '../theme/scenolytics_colors.dart';
 import '../widgets/callback_status_chips.dart';
 import '../widgets/scenolytics_footer.dart';
 
-/// Director-facing dashboard. Lists every audition the signed-in director
-/// owns (`GET /api/v1/casting/director/auditions`) and decorates each row
-/// with submission / pending-invite / callback counts plus a top score.
-///
-/// Layout matches the rest of the app: web ≥ [_wideBreakpoint] gets a grid
-/// + horizontal filter toolbar, phone gets a stacked list + collapsible
-/// filter sheet. Theme is shared with `ExploreAuditionsPage`.
 class DirectorDashboardPage extends StatefulWidget {
   const DirectorDashboardPage({
     super.key,
@@ -29,16 +22,9 @@ class DirectorDashboardPage extends StatefulWidget {
   final AuditionsRepository auditionsRepository;
   final String directorToken;
   final String? directorDisplayName;
-
-  /// Called when the director taps "View rankings" on a card; the parent
-  /// shell uses the id to route to [AuditionRankingsPage].
   final ValueChanged<DirectorAuditionCard> onOpenRankings;
-
-  /// Called when the director taps the "Create audition" CTA in the empty
-  /// state or hero — parent shell switches to the creation page.
   final VoidCallback onCreateAudition;
 
-  /// Called when the director taps "Edit" on a dashboard card.
   final ValueChanged<DirectorAuditionCard> onEditAudition;
 
   @override
@@ -155,11 +141,6 @@ class DirectorDashboardPageState extends State<DirectorDashboardPage> {
     if (_sort != _SortMode.newest) n++;
     return n;
   }
-
-  // ---------------------------------------------------------------------------
-  // Derived summary metrics (always over the unfiltered set so the hero stays
-  // stable while the director plays with filters).
-  // ---------------------------------------------------------------------------
 
   int get _totalAuditions => _all.length;
   int get _totalSubmissions =>
@@ -463,10 +444,6 @@ class DirectorDashboardPageState extends State<DirectorDashboardPage> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Hero (welcome + summary metrics + create CTA)
-// ---------------------------------------------------------------------------
-
 class _DashboardHero extends StatelessWidget {
   const _DashboardHero({
     required this.directorName,
@@ -490,7 +467,6 @@ class _DashboardHero extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final b = theme.brightness;
-    final cs = theme.colorScheme;
     final onHero = ScenolyticsColors.onPrimary;
     final name = directorName?.trim();
     final greeting = name == null || name.isEmpty
@@ -526,25 +502,15 @@ class _DashboardHero extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        gradient: b == Brightness.dark
-            ? const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF021A2E),
-                  ScenolyticsColors.heroGradientStart,
-                  Color(0xFF052F45),
-                ],
-              )
-            : ScenolyticsColors.heroBarGradient,
+        gradient: ScenolyticsColors.heroBarGradientFor(b),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: onHero.withValues(alpha: b == Brightness.dark ? 0.12 : 0.2),
+          color: onHero.withValues(alpha: ScenolyticsColors.heroBorderAlpha(b)),
         ),
         boxShadow: [
           BoxShadow(
-            color: cs.shadow.withValues(
-              alpha: b == Brightness.dark ? 0.35 : 0.12,
+            color: ScenolyticsColors.heroGradientStart.withValues(
+              alpha: ScenolyticsColors.heroGlowShadowAlpha(b),
             ),
             blurRadius: 18,
             offset: const Offset(0, 6),
@@ -555,6 +521,18 @@ class _DashboardHero extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
+          // Decorative only — must not sit above the CTA or it steals taps.
+          Positioned(
+            right: -8,
+            top: -12,
+            child: IgnorePointer(
+              child: Icon(
+                Icons.auto_graph_rounded,
+                size: 96,
+                color: onHero.withValues(alpha: 0.07),
+              ),
+            ),
+          ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
@@ -592,6 +570,7 @@ class _DashboardHero extends StatelessWidget {
                       style: FilledButton.styleFrom(
                         backgroundColor: onHero,
                         foregroundColor: ScenolyticsColors.primary,
+                        minimumSize: const Size(0, 44),
                         padding: const EdgeInsets.symmetric(
                           horizontal: 16,
                           vertical: 12,
@@ -640,15 +619,6 @@ class _DashboardHero extends StatelessWidget {
                 ),
               ],
             ],
-          ),
-          Positioned(
-            right: -8,
-            top: -12,
-            child: Icon(
-              Icons.auto_graph_rounded,
-              size: 96,
-              color: onHero.withValues(alpha: 0.07),
-            ),
           ),
         ],
       ),
@@ -718,10 +688,6 @@ class _HeroMetricTile extends StatelessWidget {
     );
   }
 }
-
-// ---------------------------------------------------------------------------
-// Search + toolbar
-// ---------------------------------------------------------------------------
 
 class _SearchAndToolbar extends StatelessWidget {
   const _SearchAndToolbar({
@@ -969,9 +935,6 @@ class _FiltersToggle extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Filter bar (web: horizontal, phone: stacked)
-// ---------------------------------------------------------------------------
 
 class _FilterBar extends StatelessWidget {
   const _FilterBar({
@@ -1169,10 +1132,6 @@ class _ActivityOnlySwitch extends StatelessWidget {
     );
   }
 }
-
-// ---------------------------------------------------------------------------
-// Card
-// ---------------------------------------------------------------------------
 
 class _DashboardAuditionCard extends StatelessWidget {
   const _DashboardAuditionCard({
@@ -1588,10 +1547,6 @@ class _TagChip extends StatelessWidget {
     );
   }
 }
-
-// ---------------------------------------------------------------------------
-// Empty state
-// ---------------------------------------------------------------------------
 
 class _EmptyState extends StatelessWidget {
   const _EmptyState({

@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import '../models/actor_audition_submission.dart';
 import '../theme/scenolytics_colors.dart';
 
-// ─── Data models ────────────────────────────────────────────────────────────
-
 class EmotionTransition {
   final int timestampSeconds;
   final String fromEmotion;
@@ -18,11 +16,8 @@ class EmotionTransition {
   final String? dirBefore;
   final String? dirAfter;
   final String? message;
-  // Optional frame images — pass asset paths or network URLs.
-  // If null, a dark placeholder is shown instead.
   final String? beforeImagePath;
   final String? afterImagePath;
-  // Optional per-transition aspect ratio for the uploaded photo.
   final double? imageAspectRatio;
 
   const EmotionTransition({
@@ -104,8 +99,6 @@ class EyesAnalysisResult {
   });
 }
 
-// ─── Hardcoded sample data ───────────────────────────────────────────────────
-
 const _kSampleData = EyesAnalysisResult(
   score: 93.8,
   result: 'EXPRESSIVE',
@@ -146,8 +139,6 @@ const _kSampleData = EyesAnalysisResult(
   ],
 );
 
-// ─── Emotion helpers ─────────────────────────────────────────────────────────
-
 const _emotionEmoji = <String, String>{
   'angry':   '😡',
   'fearful': '😨',
@@ -161,12 +152,8 @@ const _emotionEmoji = <String, String>{
 String _emotionEmoji_(String e) =>
     _emotionEmoji[e.toLowerCase()] ?? '🎭';
 
-// ─── Breakpoint ──────────────────────────────────────────────────────────────
-
 const double _kMobileBreak = 600;
 const double _kTransitionImageAspectRatio = 16 / 9;
-
-// ─── Page entry point ────────────────────────────────────────────────────────
 
 class EyesAnalysisPage extends StatelessWidget {
   final EyesAnalysisResult data;
@@ -228,8 +215,6 @@ class EyesAnalysisPage extends StatelessWidget {
   }
 }
 
-// ─── App bar ─────────────────────────────────────────────────────────────────
-
 class _AppBar extends StatelessWidget implements PreferredSizeWidget {
   const _AppBar();
 
@@ -271,8 +256,6 @@ EyesAnalysisResult eyesAnalysisResultFromSubmission(
     transitions: _kSampleData.transitions,
   );
 }
-
-// ─── Score card ──────────────────────────────────────────────────────────────
 
 class _ScoreCard extends StatelessWidget {
   final EyesAnalysisResult data;
@@ -442,8 +425,6 @@ class _ScoreCard extends StatelessWidget {
   }
 }
 
-// ─── Section header ──────────────────────────────────────────────────────────
-
 class _SectionHeader extends StatelessWidget {
   final String title;
   final IconData icon;
@@ -513,8 +494,6 @@ class _SectionHeader extends StatelessWidget {
     );
   }
 }
-
-// ─── Transition card ─────────────────────────────────────────────────────────
 
 class _TransitionCard extends StatelessWidget {
   final EmotionTransition transition;
@@ -676,8 +655,6 @@ class _TransitionCard extends StatelessWidget {
   }
 }
 
-// ─── Photo frame with overlaid emotion label ──────────────────────────────────
-
 class _PhotoFrame extends StatelessWidget {
   final String label;       // "BEFORE" or "AFTER"
   final String emotion;
@@ -780,8 +757,6 @@ class _PhotoFrame extends StatelessWidget {
   }
 }
 
-// ─── Small emotion chip used in the header ────────────────────────────────────
-
 class _EmotionChip extends StatelessWidget {
   final String emotion;
   final Color color;
@@ -814,6 +789,3 @@ class _EmotionChip extends StatelessWidget {
     );
   }
 }
-
-// ─── Shift chip ─────────────────────────────────────────────────────────────
-

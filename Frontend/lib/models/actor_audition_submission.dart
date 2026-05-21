@@ -1,6 +1,5 @@
 import 'audition_submission_status.dart';
 
-/// One actor's submission for a specific audition role (from casting + profile APIs).
 class ActorAuditionSubmission {
   const ActorAuditionSubmission({
     required this.id,
@@ -17,17 +16,22 @@ class ActorAuditionSubmission {
     this.recordedVideoUrl,
     this.mediaId,
     this.submissionStatus = AuditionSubmissionStatus.pending,
+    this.actorId,
+    this.actorProfile,
+    this.evaluationCompleted = true,
   });
 
   final String id;
+  final String? actorId;
+
+  final Map<String, dynamic>? actorProfile;
   final String actorName;
   final String auditionRole;
   final double score;
+
+  final bool evaluationCompleted;
   final DateTime submittedAt;
 
-  /// Breakdown scores (0–100) for audition analytics UI.
-  /// [emotionalScore] = facial emotions; [vocalToneScore] = vocal emotion; [scriptMatchScore] = script match.
-  /// [eyesAnalysisScore] / [toneAnalysisScore] = optional breakdown rows when the API supplies them.
   final int age;
   final int emotionalScore;
   final int vocalToneScore;
@@ -59,9 +63,14 @@ class ActorAuditionSubmission {
     String? recordedVideoUrl,
     String? mediaId,
     AuditionSubmissionStatus? submissionStatus,
+    String? actorId,
+    Map<String, dynamic>? actorProfile,
+    bool? evaluationCompleted,
   }) {
     return ActorAuditionSubmission(
       id: id ?? this.id,
+      actorId: actorId ?? this.actorId,
+      actorProfile: actorProfile ?? this.actorProfile,
       actorName: actorName ?? this.actorName,
       auditionRole: auditionRole ?? this.auditionRole,
       score: score ?? this.score,
@@ -75,6 +84,7 @@ class ActorAuditionSubmission {
       recordedVideoUrl: recordedVideoUrl ?? this.recordedVideoUrl,
       mediaId: mediaId ?? this.mediaId,
       submissionStatus: submissionStatus ?? this.submissionStatus,
+      evaluationCompleted: evaluationCompleted ?? this.evaluationCompleted,
     );
   }
 }

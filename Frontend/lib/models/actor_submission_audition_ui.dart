@@ -12,25 +12,18 @@ class ActorSubmissionAuditionUi {
     this.mySubmissionCountForAudition = 0,
     this.myLatestSubmissionStatus,
     this.hasSubmissionRecord = false,
+    this.auditionType = '',
   });
 
   final String titleLine;
   final String themeLine;
   final String emotionsCsv;
   final String? directorDisplayName;
-
-  /// Casting `auditions.description`.
+  final String auditionType;
+  bool get isAudioOnly => auditionType.trim().toLowerCase() == 'audio';
   final String description;
-
-  /// Lines built from casting `audition.script` (emotion + content) for download / display.
   final String scriptPlainText;
-
-  /// Rows from `GET /api/v1/casting/actor/auditions/submissions` for this audition.
   final int mySubmissionCountForAudition;
-
-  /// Newest submission row’s status for this audition (from casting API), if any.
   final AuditionSubmissionStatus? myLatestSubmissionStatus;
-
-  /// True when at least one submission row exists for this audition id.
   final bool hasSubmissionRecord;
 }

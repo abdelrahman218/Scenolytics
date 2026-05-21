@@ -9,6 +9,7 @@ import 'branding/scenolytics_branding.dart';
 import 'config/app_env.dart';
 import 'data/api/auth_api.dart';
 import 'data/api/casting_api.dart';
+import 'data/api/evaluation_api.dart';
 import 'data/api/notifications_api.dart';
 import 'data/api/user_management_api.dart';
 import 'data/auth_controller.dart';
@@ -20,6 +21,7 @@ import 'models/actor_audition_submission.dart';
 import 'models/audition_listing.dart';
 import 'models/director_audition_card.dart';
 import 'pages/audition_rankings_page.dart';
+import 'pages/ranking_eyes_tone_details_page.dart';
 import 'pages/audition_video_submission_page.dart';
 import 'pages/director_audition_creation_page.dart';
 import 'pages/actor_dashboard_page.dart';
@@ -27,12 +29,13 @@ import 'pages/director_dashboard_page.dart';
 import 'pages/explore_auditions_page.dart';
 import 'pages/login_page.dart';
 import 'pages/missed_notifications_page.dart';
+import 'pages/profile_page.dart';
+import 'pages/settings_page.dart';
 import 'shell/main_shell.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_controller.dart';
 import 'theme/theme_scope.dart';
 import 'utils/is_flutter_web_chrome.dart';
-import 'widgets/account_menu_button.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -86,6 +89,7 @@ class ScenolyticsApp extends StatelessWidget {
               themeMode: themeController.themeMode,
               home: auth.isAuthenticated
                   ? _ScenolyticsHome(
+                      key: ValueKey(auth.user!.userId),
                       auth: auth,
                       userManagementApi: userManagementApi,
                     )
@@ -104,12 +108,16 @@ enum _ShellPage {
   actorSubmission,
   directorDashboard,
   directorRankings,
+  directorRankingsDetails,
   directorCreateAudition,
   missedNotifies,
+  profile,
+  settings,
 }
 
 class _ScenolyticsHome extends StatefulWidget {
   const _ScenolyticsHome({
+    super.key,
     required this.auth,
     required this.userManagementApi,
   });
@@ -122,8 +130,6 @@ class _ScenolyticsHome extends StatefulWidget {
 }
 
 class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
-  /// Keeps async page state when the shell calls [setState] (profile load,
-  /// rankings refresh, etc.) so the director dashboard does not reload and flash blank.
   final GlobalKey<DirectorDashboardPageState> _directorDashboardKey =
       GlobalKey<DirectorDashboardPageState>();
   final GlobalKey _actorDashboardKey = GlobalKey();
@@ -131,6 +137,7 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
 
   _ShellPage _page = _ShellPage.actorExplore;
   String? _editingAuditionId;
+  RankedAuditionSubmission? _rankingsDetailsEntry;
   final List<ActorAuditionSubmission> _submissions =
       <ActorAuditionSubmission>[];
   late final AuditionsRepository _auditionsRepository;
@@ -138,16 +145,14 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
   late final NotificationFeedController _notificationFeed;
   String _rankingsAuditionTitle = '';
   String _rankingsAuditionSubtitle = '';
+  String _rankingsAuditionType = '';
   String? _directorDisplayName;
   String? _actorDisplayName;
 
-  /// Audition the actor most recently chose from Explore. Falls back to the
-  /// compile-time [AppEnv.auditionId] so legacy single-audition runs still work.
-  String? _selectedActorAuditionId;
+  bool _profileSetupRequired = false;
+  bool _checkingProfileSetup = false;
 
-  /// Audition the director most recently picked from the dashboard. Falls
-  /// back to [AppEnv.auditionId] so the rankings page still has a target
-  /// when the director opens it directly (e.g. via the nav button).
+  String? _selectedActorAuditionId;
   String? _selectedDirectorAuditionId;
 
   AuthUser get _user => widget.auth.user!;
@@ -168,7 +173,9 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
   @override
   void initState() {
     super.initState();
-    if (_user.isDirector) {
+    widget.auth.addListener(_onAuthChanged);
+    final pendingRole = widget.auth.pendingProfileSetupRole;
+    if (pendingRole == 'director' || _user.isDirector) {
       _page = _ShellPage.directorDashboard;
     } else {
       _page = _ShellPage.actorDashboard;
@@ -176,34 +183,75 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
     _auditionsRepository = AuditionsRepository(
       castingApi: CastingApi(baseUrl: AppEnv.apiBaseUrl),
       userManagementApi: widget.userManagementApi,
+      evaluationApi: EvaluationApi(baseUrl: AppEnv.apiBaseUrl),
       videoPublicBase: AppEnv.videoPublicBase,
     );
     _notificationsApi = NotificationsApi(baseUrl: AppEnv.apiBaseUrl);
     _notificationFeed = NotificationFeedController(api: _notificationsApi);
+    _checkingProfileSetup = _mustCompleteProfileAfterSignUp;
+    _profileSetupRequired = _mustCompleteProfileAfterSignUp;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _notificationFeed.attachJwt(_user.token);
       // Defer so the first dashboard/explore load is not reset by shell setState.
       _refreshDirectorRankings();
       _loadDirectorProfileFromBackend();
       _loadActorProfileFromBackend();
+      if (_mustCompleteProfileAfterSignUp) {
+        _evaluateProfileSetupGate();
+      }
     });
+  }
 
-    if (widget.auth.consumeJustSignedUpFlag()) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        AccountMenuButton.openProfile(
-          context,
-          user: _user,
-          userManagementApi: widget.userManagementApi,
-          email: _user.email,
-          roleLabel: _roleLabel(),
-        );
+  /// Handles profile-setup flags turning on after the shell is already mounted.
+  void _onAuthChanged() {
+    final user = widget.auth.user;
+    if (!mounted || user == null || !_mustCompleteProfileAfterSignUp) return;
+    if (_profileSetupRequired || _checkingProfileSetup) return;
+    setState(() {
+      _checkingProfileSetup = true;
+      _profileSetupRequired = true;
+    });
+    _evaluateProfileSetupGate();
+  }
+
+  bool get _mustCompleteProfileAfterSignUp {
+    return widget.auth.pendingProfileSetupRole != null;
+  }
+
+  /// After sign-up, always show the profile form until the user saves required fields.
+  Future<void> _evaluateProfileSetupGate() async {
+    if (!_mustCompleteProfileAfterSignUp) {
+      if (!mounted) return;
+      setState(() {
+        _profileSetupRequired = false;
+        _checkingProfileSetup = false;
       });
+      return;
     }
+
+    if (!mounted) return;
+    setState(() {
+      _profileSetupRequired = true;
+      _checkingProfileSetup = false;
+    });
+  }
+
+  void _onProfileSetupComplete() {
+    final pending = widget.auth.pendingProfileSetupRole;
+    if (pending == 'actor' || _user.isActor) {
+      widget.auth.completeActorProfileSetup();
+      _loadActorProfileFromBackend();
+    } else if (pending == 'director' || _user.isDirector) {
+      widget.auth.completeDirectorProfileSetup();
+      _loadDirectorProfileFromBackend();
+    }
+    setState(() => _profileSetupRequired = false);
   }
 
   @override
   void dispose() {
+    widget.auth.removeListener(_onAuthChanged);
     _notificationsApi.close();
     _notificationFeed.dispose();
     super.dispose();
@@ -260,10 +308,35 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
   }
 
   void _openMissedNotifiesDetached() {
-    Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (_) => MissedNotificationsPage(feed: _notificationFeed),
-      ),
+    _goTo(_ShellPage.missedNotifies);
+  }
+
+  ProfilePage _buildProfilePage({bool mandatorySetup = false}) {
+    final setupRole = mandatorySetup
+        ? (widget.auth.pendingProfileSetupRole ?? _user.role)
+        : null;
+    return ProfilePage(
+      user: _user,
+      userManagementApi: widget.userManagementApi,
+      userEmail: _user.email,
+      accountRoleLabel:
+          setupRole != null ? _roleLabelFor(setupRole) : _roleLabel(),
+      profileSetupRole: setupRole,
+      embeddedInShell: true,
+      mandatorySetup: mandatorySetup,
+      onSetupComplete: mandatorySetup ? _onProfileSetupComplete : null,
+      onLogout: mandatorySetup ? () async => widget.auth.signOut() : null,
+    );
+  }
+
+  SettingsPage _buildSettingsPage() {
+    return SettingsPage(
+      authJwt: _user.token,
+      notificationsApi: _notificationsApi,
+      notificationFeed: _notificationFeed,
+      onDirectorConnectGoogleCalendar:
+          _user.isDirector ? _connectDirectorGoogleCalendar : null,
+      embeddedInShell: true,
     );
   }
 
@@ -277,9 +350,24 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
   void _openRankingsForCard(DirectorAuditionCard card) {
     setState(() {
       _selectedDirectorAuditionId = card.id;
+      _rankingsDetailsEntry = null;
       _page = _ShellPage.directorRankings;
     });
     _refreshDirectorRankings();
+  }
+
+  void _openSubmissionDetails(RankedAuditionSubmission entry) {
+    setState(() {
+      _rankingsDetailsEntry = entry;
+      _page = _ShellPage.directorRankingsDetails;
+    });
+  }
+
+  void _closeSubmissionDetails() {
+    setState(() {
+      _rankingsDetailsEntry = null;
+      _page = _ShellPage.directorRankings;
+    });
   }
 
   void _openCreateAudition() {
@@ -334,6 +422,7 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
       setState(() {
         _rankingsAuditionTitle = header.title;
         _rankingsAuditionSubtitle = header.subtitle;
+        _rankingsAuditionType = header.auditionType;
         _submissions
           ..clear()
           ..addAll(live);
@@ -389,19 +478,53 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
     }
   }
 
-  String _roleLabel() {
-    switch (_user.role) {
+  String _roleLabel() => _roleLabelFor(_user.role);
+
+  String _roleLabelFor(String role) {
+    switch (role.trim().toLowerCase()) {
       case 'director':
         return 'Director';
       case 'actor':
         return 'Actor';
       default:
-        return _user.role;
+        return role;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_checkingProfileSetup) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_profileSetupRequired) {
+      final setupRole = widget.auth.pendingProfileSetupRole ?? _user.role;
+      return MainShell(
+        pageTitle: 'Complete your profile',
+        currentRouteName: 'profile',
+        body: ProfilePage(
+          user: _user,
+          userManagementApi: widget.userManagementApi,
+          userEmail: _user.email,
+          accountRoleLabel: _roleLabelFor(setupRole),
+          profileSetupRole: setupRole,
+          embeddedInShell: true,
+          mandatorySetup: true,
+          onSetupComplete: _onProfileSetupComplete,
+          onLogout: () async => widget.auth.signOut(),
+        ),
+        showActorNav: false,
+        showDirectorNav: false,
+        accountEmail: _user.email,
+        accountRoleLabel: _roleLabelFor(setupRole),
+        authUser: _user,
+        userManagementApi: widget.userManagementApi,
+        onLogout: () async => widget.auth.signOut(),
+      );
+    }
+
     final body = switch (_page) {
       _ShellPage.actorDashboard => ActorDashboardPage(
         key: _actorDashboardKey,
@@ -440,6 +563,7 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
         submissions: _submissions,
         auditionTitle: _rankingsAuditionTitle,
         auditionSubtitle: _rankingsAuditionSubtitle,
+        auditionType: _rankingsAuditionType,
         directorDisplayName: _directorDisplayName,
         onRefresh: _refreshDirectorRankings,
         directorReviewToken:
@@ -450,7 +574,41 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
             : null,
         directorReviewRepository:
             _user.isDirector ? _auditionsRepository : null,
+        onBackToDashboard: _user.isDirector
+            ? () => _goTo(_ShellPage.directorDashboard)
+            : null,
+        onOpenSubmissionDetails: _openSubmissionDetails,
       ),
+      _ShellPage.directorRankingsDetails => _rankingsDetailsEntry == null
+          ? AuditionRankingsPage(
+              submissions: _submissions,
+              auditionTitle: _rankingsAuditionTitle,
+              auditionSubtitle: _rankingsAuditionSubtitle,
+              auditionType: _rankingsAuditionType,
+              directorDisplayName: _directorDisplayName,
+              onRefresh: _refreshDirectorRankings,
+              directorReviewToken: _user.isDirector && _directorToken.isNotEmpty
+                  ? _directorToken
+                  : null,
+              directorReviewAuditionId: _user.isDirector &&
+                      _activeDirectorAuditionId.trim().isNotEmpty
+                  ? _activeDirectorAuditionId
+                  : null,
+              directorReviewRepository:
+                  _user.isDirector ? _auditionsRepository : null,
+              onBackToDashboard: _user.isDirector
+                  ? () => _goTo(_ShellPage.directorDashboard)
+                  : null,
+              onOpenSubmissionDetails: _openSubmissionDetails,
+            )
+          : SubmissionEvaluationDetailsPage(
+              submission: _rankingsDetailsEntry!.submission,
+              rank: _rankingsDetailsEntry!.rank,
+              auditionTitle: _rankingsAuditionTitle,
+              auditionSubtitle: _rankingsAuditionSubtitle,
+              auditionType: _rankingsAuditionType,
+              onBack: _closeSubmissionDetails,
+            ),
       _ShellPage.directorCreateAudition => DirectorAuditionCreationPage(
         key: ValueKey<String>(
           'director-audition-form-${_editingAuditionId ?? 'new'}',
@@ -478,6 +636,8 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
         feed: _notificationFeed,
         embeddedInShell: true,
       ),
+      _ShellPage.profile => _buildProfilePage(),
+      _ShellPage.settings => _buildSettingsPage(),
     };
 
     final pageTitle = switch (_page) {
@@ -486,9 +646,12 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
       _ShellPage.actorSubmission => 'Actor portal',
       _ShellPage.directorDashboard => 'Director dashboard',
       _ShellPage.directorRankings => 'Director portal',
+      _ShellPage.directorRankingsDetails => 'AI evaluation',
       _ShellPage.directorCreateAudition =>
         _editingAuditionId != null ? 'Edit audition' : 'Create audition',
       _ShellPage.missedNotifies => 'Missed notifies',
+      _ShellPage.profile => 'Profile',
+      _ShellPage.settings => 'Settings',
     };
 
     final currentRouteName = switch (_page) {
@@ -497,8 +660,11 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
       _ShellPage.actorSubmission => 'submit-video',
       _ShellPage.directorDashboard => 'director-dashboard',
       _ShellPage.directorRankings => 'rankings',
+      _ShellPage.directorRankingsDetails => 'rankings',
       _ShellPage.directorCreateAudition => 'create-audition',
       _ShellPage.missedNotifies => 'missed-notifies',
+      _ShellPage.profile => 'profile',
+      _ShellPage.settings => 'settings',
     };
 
     return MainShell(
@@ -518,6 +684,8 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
           kIsWeb && isFlutterWebChrome && _user.token.isNotEmpty,
       onOpenMissedNotifiesDetached: _openMissedNotifiesDetached,
       onSelectMissedNotifiesShell: () => _goTo(_ShellPage.missedNotifies),
+      onSelectProfile: () => _goTo(_ShellPage.profile),
+      onSelectSettings: () => _goTo(_ShellPage.settings),
       onDirectorConnectGoogleCalendar:
           _user.isDirector ? _connectDirectorGoogleCalendar : null,
       onLogout: () async {

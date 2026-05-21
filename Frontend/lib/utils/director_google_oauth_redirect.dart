@@ -2,8 +2,6 @@ import 'director_google_oauth_redirect_stub.dart'
     if (dart.library.io) 'director_google_oauth_redirect_io.dart'
     if (dart.library.js_interop) 'director_google_oauth_redirect_web.dart';
 
-/// Reads `Location` from `GET …/director/google/connect` without following the
-/// redirect (Google OAuth URL).
 Future<String> resolveDirectorGoogleOAuthRedirect({
   required Uri uri,
   required String bearerToken,

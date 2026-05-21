@@ -2,8 +2,6 @@ import 'dart:js_interop';
 
 import 'package:web/web.dart' as web;
 
-/// Uses Fetch `redirect: manual` so the browser does **not** follow the 302 to
-/// Google (XHR/`package:http` on web follows redirects and trips Google's CORS).
 Future<String> resolveDirectorGoogleOAuthRedirect_(
   Uri uri,
   String bearerToken,

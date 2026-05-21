@@ -3,44 +3,15 @@ import 'package:flutter/material.dart';
 import '../models/actor_audition_submission.dart';
 import '../theme/scenolytics_colors.dart';
 
-// ═════════════════════════════════════════════════════════════════════════════
-// BACKEND INTEGRATION GUIDE
-// ─────────────────────────────────────────────────────────────────────────────
-// When you connect a real audio backend (e.g. just_audio, audioplayers):
-//
-// 1. ADD your audio plugin to pubspec.yaml, e.g.:
-//      just_audio: ^0.9.x
-//
-// 2. REPLACE _AudioController with a real implementation:
-//    - _AudioController._play()   → player.play()
-//    - _AudioController._pause()  → player.pause()
-//    - _AudioController.seekTo()  → player.seek(Duration(seconds: s))
-//    - _AudioController._position (stream) → player.positionStream
-//    - _AudioController._duration → player.duration
-//
-// 3. REPLACE audioUrl placeholder in _OverallAudioPlayer and _AudioPlayer:
-//    - Pass the real URL/path from your API response instead of 'AUDIO_URL_HERE'
-//
-// 4. SentenceEmotion model:
-//    - Add an `audioUrl` field and populate it from your API JSON.
-//
-// 5. VocalEmotionScorePage:
-//    - Replace the hardcoded _sentences list with data fetched from your API.
-//    - Replace 'Yousef', age: 20, score: 74 with real actor data from API.
-// ═════════════════════════════════════════════════════════════════════════════
-
 const double _kMobileBreak = 600;
 bool _isWide(BuildContext context) =>
     MediaQuery.of(context).size.width >= _kMobileBreak;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Shared audio controller — swap internals for real player on backend hookup
-// ─────────────────────────────────────────────────────────────────────────────
-
+/// Placeholder timeline-driven controller — replaced with a real audio plugin
+/// (e.g. `just_audio`) once the recording asset is wired through the API.
 class _AudioController extends ChangeNotifier {
-  // ── BACKEND: replace these with your player's streams/values ──
   final Duration totalDuration;
-  final String audioUrl; // ← BACKEND: pass real URL from API
+  final String audioUrl;
 
   _AudioController({required this.totalDuration, required this.audioUrl});
 
@@ -57,7 +28,6 @@ class _AudioController extends ChangeNotifier {
           ? 0
           : (_position.inMilliseconds / totalDuration.inMilliseconds).clamp(0.0, 1.0);
 
-  // ── BACKEND: replace body with player.play() ──
   void play() {
     if (_playing || _disposed) return;
     _playing = true;
@@ -75,7 +45,6 @@ class _AudioController extends ChangeNotifier {
     });
   }
 
-  // ── BACKEND: replace body with player.pause() ──
   void pause() {
     if (_disposed) return;
     _playing = false;
@@ -86,7 +55,6 @@ class _AudioController extends ChangeNotifier {
 
   void toggle() => _playing ? pause() : play();
 
-  // ── BACKEND: replace body with player.seek(position) ──
   void seekTo(Duration position) {
     _position = Duration(
   milliseconds: position.inMilliseconds.clamp(
@@ -109,10 +77,6 @@ class _AudioController extends ChangeNotifier {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Data model
-// ─────────────────────────────────────────────────────────────────────────────
-
 class SentenceEmotion {
   final String timestamp;
   final String text;
@@ -120,7 +84,7 @@ class SentenceEmotion {
   final String emoji;
   final double confidence;
   final Duration duration;
-  final String audioUrl; // ← BACKEND: populate from API response
+  final String audioUrl;
 
   const SentenceEmotion({
     required this.timestamp,
@@ -129,25 +93,24 @@ class SentenceEmotion {
     required this.emoji,
     required this.confidence,
     required this.duration,
-    this.audioUrl = 'AUDIO_URL_HERE', // ← BACKEND: replace with real URL
+    this.audioUrl = 'AUDIO_URL_HERE',
   });
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Page root — BACKEND: replace _sentences & actor data with API response
-// ─────────────────────────────────────────────────────────────────────────────
 
 class VocalEmotionScorePage extends StatelessWidget {
   const VocalEmotionScorePage({
     super.key,
     required this.submission,
     this.sentences = _sentences,
+    this.nested = false,
   });
 
   final ActorAuditionSubmission submission;
   final List<SentenceEmotion> sentences;
 
-  // ── BACKEND: replace with data from your API ──
+  /// When true, omits the page header so this can live inside a parent tab.
+  final bool nested;
+
   static const _sentences = [
     SentenceEmotion(
       timestamp: '0:05',
@@ -184,33 +147,45 @@ class VocalEmotionScorePage extends StatelessWidget {
     final actorName = submission.actorName.trim().isEmpty ? 'Actor' : submission.actorName.trim();
     final actorAge = submission.age;
     final actorScore = submission.vocalToneScore;
+    final pending = !submission.evaluationCompleted;
+    final body = Column(
+      children: [
+        if (!nested) _AppBar(),
+        Expanded(
+          child: pending
+              ? _PendingAnalysisView(
+                  actorName: actorName,
+                  actorAge: actorAge,
+                  label: 'Vocal emotion analysis',
+                )
+              : wide
+                  ? _WebLayout(
+                      sentences: sentences,
+                      actorName: actorName,
+                      actorAge: actorAge,
+                      actorScore: actorScore,
+                    )
+                  : _MobileLayout(
+                      sentences: sentences,
+                      actorName: actorName,
+                      actorAge: actorAge,
+                      actorScore: actorScore,
+                    ),
+        ),
+      ],
+    );
+    if (nested) {
+      return ColoredBox(
+        color: ScenolyticsColors.pageBackground,
+        child: body,
+      );
+    }
     return Scaffold(
       backgroundColor: ScenolyticsColors.pageBackground,
-      body: Column(
-        children: [
-          _AppBar(),
-          Expanded(
-            child: wide
-                ? _WebLayout(
-                    sentences: sentences,
-                    actorName: actorName,
-                    actorAge: actorAge,
-                    actorScore: actorScore,
-                  )
-                : _MobileLayout(
-                    sentences: sentences,
-                    actorName: actorName,
-                    actorAge: actorAge,
-                    actorScore: actorScore,
-                  ),
-          ),
-        ],
-      ),
+      body: body,
     );
   }
 }
-
-// ── Mobile layout ─────────────────────────────────────────────────────────────
 
 class _MobileLayout extends StatelessWidget {
   final List<SentenceEmotion> sentences;
@@ -232,7 +207,6 @@ class _MobileLayout extends StatelessWidget {
         _ActorCard(name: actorName, age: actorAge, score: actorScore),
         const SizedBox(height: 14),
         _OverallAudioPlayer(
-          // BACKEND: replace duration & audioUrl from API
           duration: const Duration(seconds: 42),
           audioUrl: 'AUDIO_URL_HERE',
         ),
@@ -250,8 +224,6 @@ class _MobileLayout extends StatelessWidget {
     );
   }
 }
-
-// ── Web layout ────────────────────────────────────────────────────────────────
 
 class _WebLayout extends StatelessWidget {
   final List<SentenceEmotion> sentences;
@@ -273,7 +245,6 @@ class _WebLayout extends StatelessWidget {
         _ActorCard(name: actorName, age: actorAge, score: actorScore),
         const SizedBox(height: 16),
         _OverallAudioPlayer(
-          // BACKEND: replace duration & audioUrl from API
           duration: const Duration(seconds: 42),
           audioUrl: 'AUDIO_URL_HERE',
         ),
@@ -317,10 +288,6 @@ class _SentenceGrid extends StatelessWidget {
     );
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// AppBar
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _AppBar extends StatelessWidget {
   @override
@@ -373,10 +340,6 @@ class _CircleIconButton extends StatelessWidget {
     );
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Actor card
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _ActorCard extends StatelessWidget {
   final String name;
@@ -452,10 +415,7 @@ class _ActorCard extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Shared seekable track widget — used by both player styles
-// ─────────────────────────────────────────────────────────────────────────────
-
+/// Reusable horizontal track that handles tap / drag seek for both players.
 class _SeekTrack extends StatelessWidget {
   final _AudioController controller;
   final Color trackColor;
@@ -505,7 +465,6 @@ class _SeekTrack extends StatelessWidget {
                 builder: (_, __) {
                   return Stack(
                     children: [
-                      // Track background
                       Container(
                         height: height,
                         decoration: BoxDecoration(
@@ -513,7 +472,6 @@ class _SeekTrack extends StatelessWidget {
                           borderRadius: BorderRadius.circular(height / 2),
                         ),
                       ),
-                      // Fill
                       FractionallySizedBox(
                         widthFactor: controller.progress,
                         child: Container(
@@ -524,7 +482,6 @@ class _SeekTrack extends StatelessWidget {
                           ),
                         ),
                       ),
-                      // Thumb
                       Positioned(
                         left: (controller.progress * box.maxWidth - 6).clamp(0.0, box.maxWidth - 12),
                         top: (height / 2) - 6,
@@ -556,13 +513,9 @@ class _SeekTrack extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Overall audio player — full gradient card with seek + skip controls
-// ─────────────────────────────────────────────────────────────────────────────
-
 class _OverallAudioPlayer extends StatefulWidget {
   final Duration duration;
-  final String audioUrl; // ← BACKEND: pass real URL
+  final String audioUrl;
 
   const _OverallAudioPlayer({
     required this.duration,
@@ -579,7 +532,6 @@ class _OverallAudioPlayerState extends State<_OverallAudioPlayer> {
   @override
   void initState() {
     super.initState();
-    // BACKEND: initialise your real player here using widget.audioUrl
     _ctrl = _AudioController(
       totalDuration: widget.duration,
       audioUrl: widget.audioUrl,
@@ -610,7 +562,6 @@ class _OverallAudioPlayerState extends State<_OverallAudioPlayer> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Label
           Text(
             'Full Recording',
             style: TextStyle(
@@ -622,13 +573,11 @@ class _OverallAudioPlayerState extends State<_OverallAudioPlayer> {
           ),
           const SizedBox(height: 16),
 
-          // Controls row
           AnimatedBuilder(
             animation: _ctrl,
             builder: (_, __) {
               return Row(
                 children: [
-                  // Skip back 10s
                   _WhiteIconBtn(
                     icon: Icons.replay_10_rounded,
                     size: 22,
@@ -636,7 +585,6 @@ class _OverallAudioPlayerState extends State<_OverallAudioPlayer> {
                   ),
                   const SizedBox(width: 10),
 
-                  // Play / Pause
                   GestureDetector(
                     onTap: _ctrl.toggle,
                     child: Container(
@@ -661,7 +609,6 @@ class _OverallAudioPlayerState extends State<_OverallAudioPlayer> {
                   ),
                   const SizedBox(width: 10),
 
-                  // Skip forward 10s
                   _WhiteIconBtn(
                     icon: Icons.forward_10_rounded,
                     size: 22,
@@ -669,7 +616,6 @@ class _OverallAudioPlayerState extends State<_OverallAudioPlayer> {
                   ),
                   const SizedBox(width: 16),
 
-                  // Timeline column
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -733,10 +679,6 @@ class _WhiteIconBtn extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Section heading
-// ─────────────────────────────────────────────────────────────────────────────
-
 class _SectionHeading extends StatelessWidget {
   final String text;
   const _SectionHeading(this.text);
@@ -754,10 +696,6 @@ class _SectionHeading extends StatelessWidget {
     );
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Sentence card
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _SentenceCard extends StatelessWidget {
   final SentenceEmotion sentence;
@@ -843,10 +781,6 @@ class _SentenceCard extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Animated confidence bar
-// ─────────────────────────────────────────────────────────────────────────────
-
 class _AnimatedProgressBar extends StatefulWidget {
   final double value;
   const _AnimatedProgressBar({required this.value});
@@ -896,10 +830,6 @@ class _AnimatedProgressBarState extends State<_AnimatedProgressBar>
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Per-sentence audio player — compact with seek support
-// ─────────────────────────────────────────────────────────────────────────────
-
 class _SentenceAudioPlayer extends StatefulWidget {
   final SentenceEmotion sentence;
   const _SentenceAudioPlayer({required this.sentence});
@@ -914,7 +844,6 @@ class _SentenceAudioPlayerState extends State<_SentenceAudioPlayer> {
   @override
   void initState() {
     super.initState();
-    // BACKEND: initialise your real player here using widget.sentence.audioUrl
     _ctrl = _AudioController(
       totalDuration: widget.sentence.duration,
       audioUrl: widget.sentence.audioUrl,
@@ -940,7 +869,6 @@ class _SentenceAudioPlayerState extends State<_SentenceAudioPlayer> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // "Audio" label
           Row(
             children: [
               Icon(Icons.volume_up_rounded,
@@ -959,7 +887,6 @@ class _SentenceAudioPlayerState extends State<_SentenceAudioPlayer> {
           ),
           const SizedBox(height: 8),
 
-          // Player container
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
@@ -971,7 +898,6 @@ class _SentenceAudioPlayerState extends State<_SentenceAudioPlayer> {
               builder: (_, __) {
                 return Row(
                   children: [
-                    // Play / pause
                     GestureDetector(
                       onTap: _ctrl.toggle,
                       child: Container(
@@ -992,7 +918,6 @@ class _SentenceAudioPlayerState extends State<_SentenceAudioPlayer> {
                     ),
                     const SizedBox(width: 10),
 
-                    // Track + times
                     Expanded(
                       child: Column(
                         children: [
@@ -1030,6 +955,164 @@ class _SentenceAudioPlayerState extends State<_SentenceAudioPlayer> {
                   ],
                 );
               },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PendingAnalysisView extends StatelessWidget {
+  final String actorName;
+  final int actorAge;
+  final String label;
+  const _PendingAnalysisView({
+    required this.actorName,
+    required this.actorAge,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      children: [
+        _ActorCardPending(name: actorName, age: actorAge),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
+          decoration: BoxDecoration(
+            color: ScenolyticsColors.surfaceCard,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: ScenolyticsColors.outlineSoft),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.4,
+                      color: cs.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      '$label is pending',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: ScenolyticsColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'The AI evaluation has not completed yet for this submission. '
+                'The detailed breakdown, scores, and sentence-level results '
+                'will appear here as soon as analysis finishes.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: ScenolyticsColors.textMuted,
+                  height: 1.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ActorCardPending extends StatelessWidget {
+  final String name;
+  final int age;
+  const _ActorCardPending({required this.name, required this.age});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: ScenolyticsColors.surfaceCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: ScenolyticsColors.outlineSoft),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  ScenolyticsColors.primary,
+                  ScenolyticsColors.accentCyan,
+                ],
+              ),
+            ),
+            child: Center(
+              child: Text(
+                name.isNotEmpty ? name[0].toUpperCase() : '?',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: ScenolyticsColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Age: $age',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: ScenolyticsColors.textMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: ScenolyticsColors.accentCyan.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: ScenolyticsColors.accentCyan.withValues(alpha: 0.4),
+              ),
+            ),
+            child: const Text(
+              'Pending',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: ScenolyticsColors.primary,
+              ),
             ),
           ),
         ],

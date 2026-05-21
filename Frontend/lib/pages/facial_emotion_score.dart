@@ -3,50 +3,15 @@ import 'package:flutter/material.dart';
 import '../models/actor_audition_submission.dart';
 import '../theme/scenolytics_colors.dart';
 
-// ═════════════════════════════════════════════════════════════════════════════
-// BACKEND INTEGRATION GUIDE
-// ─────────────────────────────────────────────────────────────────────────────
-// When you connect a real video backend (e.g. video_player, better_player):
-//
-// 1. ADD your video plugin to pubspec.yaml, e.g.:
-//      video_player: ^2.x.x
-//
-// 2. REPLACE _VideoController with a real implementation:
-//    - _VideoController.play()    → _videoPlayerController.play()
-//    - _VideoController.pause()   → _videoPlayerController.pause()
-//    - _VideoController.seekTo()  → _videoPlayerController.seekTo(position)
-//    - _VideoController.position  → _videoPlayerController.value.position
-//    - _VideoController.duration  → _videoPlayerController.value.duration
-//
-// 3. REPLACE videoUrl placeholder in _OverallVideoPlayer and _SentenceVideoPlayer:
-//    - Pass the real URL/path from your API response instead of 'VIDEO_URL_HERE'
-//
-// 4. SentenceEmotion model:
-//    - The `videoUrl` field is ready — populate it from your API JSON.
-//
-// 5. FacialEmotionScorePage:
-//    - Replace the hardcoded _sentences list with data fetched from your API.
-//    - Replace 'Yousef', age: 20, score: 74 with real actor data from API.
-//
-// 6. Video preview surface:
-//    - In _OverallVideoPlayer and _SentenceVideoPlayer, replace the placeholder
-//      Container (marked "BACKEND: swap for VideoPlayer widget") with a real
-//      VideoPlayer(controller) widget from the video_player package, wrapped
-//      in AspectRatio(aspectRatio: 16/9, child: VideoPlayer(...)).
-// ═════════════════════════════════════════════════════════════════════════════
-
 const double _kMobileBreak = 600;
 bool _isWide(BuildContext context) =>
     MediaQuery.of(context).size.width >= _kMobileBreak;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Shared video controller — swap internals for real player on backend hookup
-// ─────────────────────────────────────────────────────────────────────────────
-
+/// Placeholder timeline-driven controller — replaced with a real video plugin
+/// (e.g. `video_player`) once the recording asset is wired through the API.
 class _VideoController extends ChangeNotifier {
-  // ── BACKEND: replace these with your player's streams/values ──
   final Duration totalDuration;
-  final String videoUrl; // ← BACKEND: pass real URL from API
+  final String videoUrl;
 
   _VideoController({required this.totalDuration, required this.videoUrl});
 
@@ -64,7 +29,6 @@ class _VideoController extends ChangeNotifier {
           : (_position.inMilliseconds / totalDuration.inMilliseconds)
               .clamp(0.0, 1.0);
 
-  // ── BACKEND: replace body with videoPlayerController.play() ──
   void play() {
     if (_playing || _disposed) return;
     _playing = true;
@@ -82,7 +46,6 @@ class _VideoController extends ChangeNotifier {
     });
   }
 
-  // ── BACKEND: replace body with videoPlayerController.pause() ──
   void pause() {
     if (_disposed) return;
     _playing = false;
@@ -93,7 +56,6 @@ class _VideoController extends ChangeNotifier {
 
   void toggle() => _playing ? pause() : play();
 
-  // ── BACKEND: replace body with videoPlayerController.seekTo(position) ──
   void seekTo(Duration position) {
     _position = Duration(
       milliseconds: position.inMilliseconds.clamp(
@@ -116,10 +78,6 @@ class _VideoController extends ChangeNotifier {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Data model
-// ─────────────────────────────────────────────────────────────────────────────
-
 class SentenceEmotion {
   final String timestamp;
   final String text;
@@ -127,7 +85,7 @@ class SentenceEmotion {
   final String emoji;
   final double confidence;
   final Duration duration;
-  final String videoUrl; // ← BACKEND: populate from API response
+  final String videoUrl;
 
   const SentenceEmotion({
     required this.timestamp,
@@ -136,25 +94,24 @@ class SentenceEmotion {
     required this.emoji,
     required this.confidence,
     required this.duration,
-    this.videoUrl = 'VIDEO_URL_HERE', // ← BACKEND: replace with real URL
+    this.videoUrl = 'VIDEO_URL_HERE',
   });
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Page root — BACKEND: replace _sentences & actor data with API response
-// ─────────────────────────────────────────────────────────────────────────────
 
 class FacialEmotionScorePage extends StatelessWidget {
   const FacialEmotionScorePage({
     super.key,
     required this.submission,
     this.sentences = _sentences,
+    this.nested = false,
   });
 
   final ActorAuditionSubmission submission;
   final List<SentenceEmotion> sentences;
 
-  // ── BACKEND: replace with data from your API ──
+  /// When true, omits the page header so this can live inside a parent tab.
+  final bool nested;
+
   static const _sentences = [
     SentenceEmotion(
       timestamp: '0:05',
@@ -193,33 +150,45 @@ class FacialEmotionScorePage extends StatelessWidget {
         : submission.actorName.trim();
     final actorAge = submission.age;
     final actorScore = submission.emotionalScore;
+    final pending = !submission.evaluationCompleted;
+    final body = Column(
+      children: [
+        if (!nested) _AppBar(),
+        Expanded(
+          child: pending
+              ? _PendingAnalysisView(
+                  actorName: actorName,
+                  actorAge: actorAge,
+                  label: 'Facial emotion analysis',
+                )
+              : wide
+                  ? _WebLayout(
+                      sentences: sentences,
+                      actorName: actorName,
+                      actorAge: actorAge,
+                      actorScore: actorScore,
+                    )
+                  : _MobileLayout(
+                      sentences: sentences,
+                      actorName: actorName,
+                      actorAge: actorAge,
+                      actorScore: actorScore,
+                    ),
+        ),
+      ],
+    );
+    if (nested) {
+      return ColoredBox(
+        color: ScenolyticsColors.pageBackground,
+        child: body,
+      );
+    }
     return Scaffold(
       backgroundColor: ScenolyticsColors.pageBackground,
-      body: Column(
-        children: [
-          _AppBar(),
-          Expanded(
-            child: wide
-                ? _WebLayout(
-                    sentences: sentences,
-                    actorName: actorName,
-                    actorAge: actorAge,
-                    actorScore: actorScore,
-                  )
-                : _MobileLayout(
-                    sentences: sentences,
-                    actorName: actorName,
-                    actorAge: actorAge,
-                    actorScore: actorScore,
-                  ),
-          ),
-        ],
-      ),
+      body: body,
     );
   }
 }
-
-// ── Mobile layout ─────────────────────────────────────────────────────────────
 
 class _MobileLayout extends StatelessWidget {
   final List<SentenceEmotion> sentences;
@@ -241,7 +210,6 @@ class _MobileLayout extends StatelessWidget {
         _ActorCard(name: actorName, age: actorAge, score: actorScore),
         const SizedBox(height: 14),
         _OverallVideoPlayer(
-          // BACKEND: replace duration & videoUrl from API
           duration: const Duration(seconds: 42),
           videoUrl: 'VIDEO_URL_HERE',
         ),
@@ -259,8 +227,6 @@ class _MobileLayout extends StatelessWidget {
     );
   }
 }
-
-// ── Web layout ────────────────────────────────────────────────────────────────
 
 class _WebLayout extends StatelessWidget {
   final List<SentenceEmotion> sentences;
@@ -282,7 +248,6 @@ class _WebLayout extends StatelessWidget {
         _ActorCard(name: actorName, age: actorAge, score: actorScore),
         const SizedBox(height: 16),
         _OverallVideoPlayer(
-          // BACKEND: replace duration & videoUrl from API
           duration: const Duration(seconds: 42),
           videoUrl: 'VIDEO_URL_HERE',
         ),
@@ -326,10 +291,6 @@ class _SentenceGrid extends StatelessWidget {
     );
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// AppBar
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _AppBar extends StatelessWidget {
   @override
@@ -382,10 +343,6 @@ class _CircleIconButton extends StatelessWidget {
     );
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Actor card
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _ActorCard extends StatelessWidget {
   final String name;
@@ -461,10 +418,7 @@ class _ActorCard extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Shared seekable track widget — used by both player styles
-// ─────────────────────────────────────────────────────────────────────────────
-
+/// Reusable horizontal track that handles tap / drag seek for both players.
 class _SeekTrack extends StatelessWidget {
   final _VideoController controller;
   final Color trackColor;
@@ -513,7 +467,6 @@ class _SeekTrack extends StatelessWidget {
                 builder: (_, __) {
                   return Stack(
                     children: [
-                      // Track background
                       Container(
                         height: height,
                         decoration: BoxDecoration(
@@ -521,7 +474,6 @@ class _SeekTrack extends StatelessWidget {
                           borderRadius: BorderRadius.circular(height / 2),
                         ),
                       ),
-                      // Fill
                       FractionallySizedBox(
                         widthFactor: controller.progress,
                         child: Container(
@@ -544,13 +496,9 @@ class _SeekTrack extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Overall video player — gradient card with 16:9 preview + controls
-// ─────────────────────────────────────────────────────────────────────────────
-
 class _OverallVideoPlayer extends StatefulWidget {
   final Duration duration;
-  final String videoUrl; // ← BACKEND: pass real URL
+  final String videoUrl;
 
   const _OverallVideoPlayer({
     required this.duration,
@@ -567,7 +515,6 @@ class _OverallVideoPlayerState extends State<_OverallVideoPlayer> {
   @override
   void initState() {
     super.initState();
-    // BACKEND: initialise your real VideoPlayerController here using widget.videoUrl
     _ctrl = _VideoController(
       totalDuration: widget.duration,
       videoUrl: widget.videoUrl,
@@ -598,7 +545,6 @@ class _OverallVideoPlayerState extends State<_OverallVideoPlayer> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── 16:9 video surface ────────────────────────────────────────────
           AnimatedBuilder(
             animation: _ctrl,
             builder: (_, __) {
@@ -607,7 +553,6 @@ class _OverallVideoPlayerState extends State<_OverallVideoPlayer> {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    // ── BACKEND: replace this Container with VideoPlayer(controller) ──
                     Container(
                       color: Colors.black,
                       child: Center(
@@ -618,7 +563,6 @@ class _OverallVideoPlayerState extends State<_OverallVideoPlayer> {
                         ),
                       ),
                     ),
-                    // Tap-to-toggle play/pause overlay
                     GestureDetector(
                       onTap: _ctrl.toggle,
                       behavior: HitTestBehavior.opaque,
@@ -655,13 +599,11 @@ class _OverallVideoPlayerState extends State<_OverallVideoPlayer> {
             },
           ),
 
-          // ── Controls bar below video ──────────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Label
                 Text(
                   'Full Recording',
                   style: TextStyle(
@@ -673,7 +615,6 @@ class _OverallVideoPlayerState extends State<_OverallVideoPlayer> {
                 ),
                 const SizedBox(height: 10),
 
-                // Seek track
                 _SeekTrack(
                   controller: _ctrl,
                   trackColor: Colors.white.withValues(alpha: 0.25),
@@ -682,7 +623,6 @@ class _OverallVideoPlayerState extends State<_OverallVideoPlayer> {
                 ),
                 const SizedBox(height: 6),
 
-                // Time labels
                 AnimatedBuilder(
                   animation: _ctrl,
                   builder: (_, __) => Row(
@@ -709,7 +649,6 @@ class _OverallVideoPlayerState extends State<_OverallVideoPlayer> {
                 ),
                 const SizedBox(height: 12),
 
-                // Skip back / play-pause / skip forward
                 AnimatedBuilder(
                   animation: _ctrl,
                   builder: (_, __) => Row(
@@ -776,10 +715,6 @@ class _WhiteIconBtn extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Section heading
-// ─────────────────────────────────────────────────────────────────────────────
-
 class _SectionHeading extends StatelessWidget {
   final String text;
   const _SectionHeading(this.text);
@@ -797,10 +732,6 @@ class _SectionHeading extends StatelessWidget {
     );
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Sentence card
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _SentenceCard extends StatelessWidget {
   final SentenceEmotion sentence;
@@ -886,10 +817,6 @@ class _SentenceCard extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Animated confidence bar
-// ─────────────────────────────────────────────────────────────────────────────
-
 class _AnimatedProgressBar extends StatefulWidget {
   final double value;
   const _AnimatedProgressBar({required this.value});
@@ -939,10 +866,6 @@ class _AnimatedProgressBarState extends State<_AnimatedProgressBar>
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Per-sentence video player — 16:9 preview + compact seek controls
-// ─────────────────────────────────────────────────────────────────────────────
-
 class _SentenceVideoPlayer extends StatefulWidget {
   final SentenceEmotion sentence;
   const _SentenceVideoPlayer({required this.sentence});
@@ -957,7 +880,6 @@ class _SentenceVideoPlayerState extends State<_SentenceVideoPlayer> {
   @override
   void initState() {
     super.initState();
-    // BACKEND: initialise your real VideoPlayerController here using widget.sentence.videoUrl
     _ctrl = _VideoController(
       totalDuration: widget.sentence.duration,
       videoUrl: widget.sentence.videoUrl,
@@ -983,7 +905,6 @@ class _SentenceVideoPlayerState extends State<_SentenceVideoPlayer> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // "Video" label
           Row(
             children: [
               Icon(Icons.videocam_rounded,
@@ -1001,8 +922,6 @@ class _SentenceVideoPlayerState extends State<_SentenceVideoPlayer> {
             ],
           ),
           const SizedBox(height: 8),
-
-          // Video surface + controls
           Container(
             decoration: BoxDecoration(
               color: ScenolyticsColors.surfaceMuted,
@@ -1011,7 +930,6 @@ class _SentenceVideoPlayerState extends State<_SentenceVideoPlayer> {
             clipBehavior: Clip.antiAlias,
             child: Column(
               children: [
-                // ── 16:9 video surface ──────────────────────────────────────
                 AnimatedBuilder(
                   animation: _ctrl,
                   builder: (_, __) {
@@ -1020,7 +938,6 @@ class _SentenceVideoPlayerState extends State<_SentenceVideoPlayer> {
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
-                          // ── BACKEND: replace this Container with VideoPlayer(controller) ──
                           Container(
                             color: Colors.black,
                             child: Center(
@@ -1031,7 +948,6 @@ class _SentenceVideoPlayerState extends State<_SentenceVideoPlayer> {
                               ),
                             ),
                           ),
-                          // Tap-to-toggle overlay
                           GestureDetector(
                             onTap: _ctrl.toggle,
                             behavior: HitTestBehavior.opaque,
@@ -1064,7 +980,6 @@ class _SentenceVideoPlayerState extends State<_SentenceVideoPlayer> {
                   },
                 ),
 
-                // ── Compact seek bar + play button ──────────────────────────
                 Padding(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 14, vertical: 10),
@@ -1073,7 +988,6 @@ class _SentenceVideoPlayerState extends State<_SentenceVideoPlayer> {
                     builder: (_, __) {
                       return Row(
                         children: [
-                          // Play / pause
                           GestureDetector(
                             onTap: _ctrl.toggle,
                             child: Container(
@@ -1094,7 +1008,6 @@ class _SentenceVideoPlayerState extends State<_SentenceVideoPlayer> {
                           ),
                           const SizedBox(width: 10),
 
-                          // Track + times
                           Expanded(
                             child: Column(
                               children: [
@@ -1140,6 +1053,164 @@ class _SentenceVideoPlayerState extends State<_SentenceVideoPlayer> {
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PendingAnalysisView extends StatelessWidget {
+  final String actorName;
+  final int actorAge;
+  final String label;
+  const _PendingAnalysisView({
+    required this.actorName,
+    required this.actorAge,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      children: [
+        _ActorCardPending(name: actorName, age: actorAge),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
+          decoration: BoxDecoration(
+            color: ScenolyticsColors.surfaceCard,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: ScenolyticsColors.outlineSoft),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.4,
+                      color: cs.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      '$label is pending',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: ScenolyticsColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'The AI evaluation has not completed yet for this submission. '
+                'The detailed breakdown, scores, and sentence-level results '
+                'will appear here as soon as analysis finishes.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: ScenolyticsColors.textMuted,
+                  height: 1.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ActorCardPending extends StatelessWidget {
+  final String name;
+  final int age;
+  const _ActorCardPending({required this.name, required this.age});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: ScenolyticsColors.surfaceCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: ScenolyticsColors.outlineSoft),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  ScenolyticsColors.primary,
+                  ScenolyticsColors.accentCyan,
+                ],
+              ),
+            ),
+            child: Center(
+              child: Text(
+                name.isNotEmpty ? name[0].toUpperCase() : '?',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: ScenolyticsColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Age: $age',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: ScenolyticsColors.textMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: ScenolyticsColors.accentCyan.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: ScenolyticsColors.accentCyan.withValues(alpha: 0.4),
+              ),
+            ),
+            child: const Text(
+              'Pending',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: ScenolyticsColors.primary,
+              ),
             ),
           ),
         ],

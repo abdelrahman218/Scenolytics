@@ -35,6 +35,6 @@ RUN pip cache purge
 
 COPY . .
 
-EXPOSE 5012
+EXPOSE 5009
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5012"]
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${AI_EVALUATION_SERVICE_PORT:-5009}"]
