@@ -8,6 +8,7 @@ Endpoints for managing audition video evaluations with 4 metrics:
   - overall_performance_score: Calculated weighted average
 """
 
+import asyncio
 import logging
 import uuid
 import json
@@ -16,6 +17,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List
 import os
 import tempfile
+from botocore.exceptions import ClientError
 from core.storage import get_s3_client
 from core.rabbitmq_manager import RabbitMQManager
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Request
@@ -224,13 +226,59 @@ def _row_to_response(row: dict) -> EvaluationResponse:
 
 # ==================== Background ML Pipeline ====================
 
+def _is_s3_not_found(exc: BaseException) -> bool:
+    if isinstance(exc, ClientError):
+        code = exc.response.get("Error", {}).get("Code", "")
+        return code in ("404", "NoSuchKey", "NotFound")
+    return "404" in str(exc) and "Not Found" in str(exc)
+
+
+async def _download_video_from_minio(
+    s3,
+    bucket: str,
+    s3_key: str,
+    dest_path: str,
+    *,
+    max_attempts: int = 15,
+    initial_delay_sec: float = 2.0,
+) -> None:
+    """Wait for client-side presigned PUT to finish (casting fires audition.submitted first)."""
+    delay = initial_delay_sec
+    last_error: Optional[BaseException] = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            await asyncio.to_thread(s3.download_file, bucket, s3_key, dest_path)
+            if attempt > 1:
+                logger.info(
+                    "Video '%s' available in MinIO after %s attempts",
+                    s3_key,
+                    attempt,
+                )
+            return
+        except Exception as e:
+            if not _is_s3_not_found(e) or attempt >= max_attempts:
+                raise
+            last_error = e
+            logger.info(
+                "Video '%s' not in MinIO yet (%s/%s); retrying in %.0fs",
+                s3_key,
+                attempt,
+                max_attempts,
+                delay,
+            )
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, 30.0)
+    if last_error is not None:
+        raise last_error
+
+
 async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_text: Optional[str] = None, rabbitmq_manager: Optional[RabbitMQManager] = None, submission_id: Optional[str] = None,audio_only: bool = False,):
     """Runs all 3 ML models and writes scores back to DB.
 
     Parameters
     ----------
     evaluation_id : UUID of the evaluation row to update
-    media_id      : used to locate the video file at VIDEO_STORAGE_PATH/<media_id>.mp4
+    media_id      : MinIO key uploads/<media_id>.mp4 in S3_BUCKET_VIDEOS
     pipeline      : MLPipeline instance for running evaluations
     script_text   : optional expected script — passed to WhisperX alignment.
                     If None, script_alignment_score will be 0.
@@ -258,7 +306,7 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
             video_path = tmp.name
 
         try:
-            s3.download_file(bucket, s3_key, video_path)
+            await _download_video_from_minio(s3, bucket, s3_key, video_path)
         except Exception as e:
             error_msg = f"Failed to download video '{s3_key}' from MinIO bucket '{bucket}': {e}"
             logger.error(error_msg)
@@ -432,6 +480,74 @@ async def create_evaluation(request: CreateEvaluationRequest, background_tasks: 
 
 # FIX: /pending must be declared BEFORE /{evaluation_id} or FastAPI will treat
 #      the literal string "pending" as an evaluation_id and return a 404.
+@router.get("/by-media/{media_id}", response_model=EvaluationResponse)
+async def get_evaluation_by_media(media_id: str):
+    """Latest evaluation for a casting tape media id (fallback when submission_id unset)."""
+    try:
+        from core.database import Database
+        db = Database()
+
+        result = await db.fetch_one(
+            """
+            SELECT * FROM evaluations
+            WHERE media_id = %s
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (media_id,),
+        )
+
+        if not result:
+            raise HTTPException(status_code=404, detail="Evaluation not found for media")
+        return _row_to_response(result)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "Error retrieving evaluation for media %s: %s",
+            media_id,
+            e,
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/by-submission/{submission_id}", response_model=EvaluationResponse)
+async def get_evaluation_by_submission(submission_id: str):
+    """
+    Latest evaluation for an audition submission (director rankings / detail UI).
+    """
+    try:
+        from core.database import Database
+        db = Database()
+
+        result = await db.fetch_one(
+            """
+            SELECT * FROM evaluations
+            WHERE submission_id = %s
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (submission_id,),
+        )
+
+        if not result:
+            raise HTTPException(status_code=404, detail="Evaluation not found for submission")
+        return _row_to_response(result)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "Error retrieving evaluation for submission %s: %s",
+            submission_id,
+            e,
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/pending", response_model=List[EvaluationResponse])
 async def get_pending_evaluations():
     """

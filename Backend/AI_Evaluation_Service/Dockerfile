@@ -24,11 +24,7 @@ RUN pip install --no-cache-dir \
     keras==2.15.0 \
     h5py==3.10.0 \
     protobuf==4.25.3
-RUN apt-get update && \
-    apt-get install -y \
-        libavutil56 libavcodec58 libavformat58 \
-        libswresample3 libswscale5 \
-    && rm -rf /var/lib/apt/lists/*
+
 # Install rest
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -41,4 +37,4 @@ COPY . .
 
 EXPOSE 5009
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5009"]
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${AI_EVALUATION_SERVICE_PORT:-5009}"]
