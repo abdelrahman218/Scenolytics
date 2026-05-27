@@ -1,6 +1,0 @@
-$kind: http-request
-url: "{{base_url}}/api/v1/jobs/media/:media_id/jobs"
-method: GET
-pathVariables:
-  media_id: 770e8400-e29b-41d4-a716-446655440020
-order: 3000

@@ -21,7 +21,6 @@ The system is designed as a set of distributed microservices communicating async
 | **API Gateway** | `80` | Routes external HTTP requests to internal microservices via `/api/v1/*`. |
 | **Identity Provider Service** | `5000-5002` | Manages user identities, authentication (JWT), login, and registration. |
 | **User Management Service** | `5003-5005` | Manages expanded user profiles for actors and directors. |
-| **Audition Training Service** | `5006-5008` | Handles audition submissions, records, training sessions, and actor portfolios. |
 | **AI Evaluation Service** | `5012-5014` | Core ML hub that processes video streams for emotion recognition and performance scoring. |
 | **Casting Management Service** | `5015-5017` | Handles casting calls, callback events, and casting decisions by directors. |
 | **Notification Service** | `5018` | Routes notifications via Email (SMTP) and in-app websockets. |
@@ -51,18 +50,7 @@ Below is a comprehensive list of all implemented API endpoints grouped by their 
 - `PATCH /api/v1/directors/profile/:profile_id` - Update director profile
 - `DELETE /api/v1/directors/profile/:profile_id` - Remove director profile
 
-### 3. Audition Training Service
-**Base Route:** `/api/v1/sessions`
-- `POST /api/v1/sessions` - Launch a new training session
-- `GET /api/v1/sessions/:session_id` - Retrieve training session details
-- `GET /api/v1/sessions/:actor_id/sessions` - View all sessions for a specific actor
-- `PATCH /api/v1/sessions/:session_id/end` - Conclude an active training session
-- `POST /api/v1/sessions/:session_id/feedback` - Submit coach/peer feedback
-- `GET /api/v1/sessions/:session_id/feedback` - Read session feedback
-- `POST /api/v1/sessions/:session_id/recommendations` - Record system action recommendations
-- `GET /api/v1/sessions/:session_id/recommendations` - Read recorded recommendations
-
-### 4. AI Evaluation Service
+### 3. AI Evaluation Service
 **Base Route:** `/api/v1/evaluations`
 - `POST /api/v1/evaluations` - Submit an audition/session for automatic ML evaluation
 - `GET /api/v1/evaluations/:evaluation_id` - Retrieve processing results
@@ -71,7 +59,7 @@ Below is a comprehensive list of all implemented API endpoints grouped by their 
 - `GET /api/v1/evaluations/queue/pending` - Check pending evaluation models tasks
 - `PATCH /api/v1/evaluations/:evaluation_id/error` - Flag an evaluation error process
 
-### 5. Casting Management Service
+### 4. Casting Management Service
 **Base Route:** `/api/v1/casting`
 
 **General**
@@ -114,7 +102,7 @@ Below is a comprehensive list of all implemented API endpoints grouped by their 
 **Actor — Callbacks**
 - `GET /api/v1/casting/actor/callbacks` - Get actor's callbacks
 
-### 6. Notification Service
+### 5. Notification Service
 **Base Route:** `/api/v1/notifications`
 - `GET /api/v1/notifications/preferences` - User fetches their email/in-app notification toggles
 - `PATCH /api/v1/notifications/preferences` - Update user notification toggles

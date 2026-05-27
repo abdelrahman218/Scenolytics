@@ -210,7 +210,73 @@ class SentenceService:
 
 class EvaluationService:
     """Service for managing evaluations"""
-    
+
+    @staticmethod
+    async def resolve_script_for_submission(
+        submission_data: Dict[str, Any],
+    ) -> Optional[str]:
+        """
+        Load expected script for alignment scoring.
+
+        Auditions are keyed by casting ``audition_id``; ``submission_id`` on the
+        auditions row is usually unset until much later, so submission-only
+        lookup often misses the script entirely.
+        """
+        audition_id = submission_data.get("audition_id")
+        submission_id = submission_data.get("id")
+
+        audition = None
+        if audition_id:
+            audition = await EvaluationService.get_audition_by_id(str(audition_id))
+        if audition is None and submission_id:
+            audition = await EvaluationService.get_audition_by_submission_id(
+                str(submission_id)
+            )
+
+        if not audition:
+            logger.warning(
+                "No audition row for submission %s (audition_id=%s) — script score will be 0",
+                submission_id,
+                audition_id,
+            )
+            return None
+
+        script = audition.get("script")
+        if script is not None:
+            if isinstance(script, (dict, list)):
+                if script:
+                    return json.dumps(script)
+            else:
+                text = str(script).strip()
+                if text and text not in ("[]", "null"):
+                    return text
+
+        internal_id = audition.get("id")
+        if internal_id:
+            sentences = await SentenceService.get_sentences_by_audition_id(internal_id)
+            if sentences:
+                payload = [
+                    {
+                        "content": s.get("content", ""),
+                        "emotion": s.get("emotion", "neutral"),
+                    }
+                    for s in sentences
+                    if s.get("content")
+                ]
+                if payload:
+                    logger.info(
+                        "Built script JSON from %d sentences for audition %s",
+                        len(payload),
+                        audition_id,
+                    )
+                    return json.dumps(payload)
+
+        logger.warning(
+            "Audition %s has no script or sentences — script score will be 0",
+            audition_id or submission_id,
+        )
+        return None
+
     @staticmethod
     async def create_evaluation_for_submission(submission_data: Dict[str, Any], pipeline=None,rabbitmq_manager=None) -> Optional[str]:
         """
@@ -237,11 +303,9 @@ class EvaluationService:
                 evaluation_id = str(uuid.uuid4())
                 now = datetime.utcnow().isoformat()
                 
-                # Fetch audition to get script if available
-                audition = await EvaluationService.get_audition_by_submission_id(submission_id)
-                script = None
-                if audition:
-                    script = audition.get('script')
+                script = await EvaluationService.resolve_script_for_submission(
+                    submission_data
+                )
                 
                 query = """
                     INSERT INTO evaluations
@@ -261,7 +325,16 @@ class EvaluationService:
                     
                     for attempt in range(max_retries):
                         try:
-                            asyncio.create_task(run_ml_pipeline(eval_id, media_id, pipe, script_text, rabbitmq_manager))
+                            asyncio.create_task(
+                                run_ml_pipeline(
+                                    eval_id,
+                                    media_id,
+                                    pipe,
+                                    script_text,
+                                    rabbitmq_manager,
+                                    submission_id,
+                                )
+                            )
                             logger.debug(f"✓ ML pipeline task created for evaluation {eval_id}")
                             return
                         except Exception as e:

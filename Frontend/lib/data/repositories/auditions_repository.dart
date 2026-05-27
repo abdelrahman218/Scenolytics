@@ -1,5 +1,7 @@
+import 'dart:developer' as developer;
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' show ClientException;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -16,6 +18,7 @@ import '../../models/director_profile_ui.dart';
 import '../../utils/json_map_read.dart';
 import '../../utils/jwt_user_id.dart';
 import '../api/casting_api.dart';
+import '../api/evaluation_api.dart';
 import '../api/user_management_api.dart';
 
 /// Result of [AuditionsRepository.submitRecordedAudition]; includes raw casting
@@ -54,12 +57,15 @@ class AuditionsRepository {
     required CastingApi castingApi,
     required UserManagementApi userManagementApi,
     required String videoPublicBase,
+    EvaluationApi? evaluationApi,
   })  : _castingApi = castingApi,
         _userManagementApi = userManagementApi,
+        _evaluationApi = evaluationApi,
         _videoPublicBase = videoPublicBase;
 
   final CastingApi _castingApi;
   final UserManagementApi _userManagementApi;
+  final EvaluationApi? _evaluationApi;
   final String _videoPublicBase;
 
   /// Playback URLs saved from casting POST `uploadURL` (SigV4 stripped → GET URL).
@@ -220,14 +226,26 @@ class AuditionsRepository {
       }),
     );
 
+    final evaluationsBySubmissionId = await _fetchEvaluationsBySubmissionId(
+      submissions: submissions,
+      bearerToken: directorToken,
+    );
+
     return submissions
         .map(
           (raw) {
-            final aid = _actorUserIdFromSubmission(raw);
+            final submissionId = raw['id']?.toString().trim() ?? '';
+            final merged = _mergeEvaluationIntoSubmission(
+              raw,
+              submissionId.isNotEmpty
+                  ? evaluationsBySubmissionId[submissionId]
+                  : null,
+            );
+            final aid = _actorUserIdFromSubmission(merged);
             final profile =
                 aid != null ? profilesByActorId[aid] : null;
             return _mapSubmission(
-              source: raw,
+              source: merged,
               profile: profile,
               fallbackActorName: '',
               fallbackAge: 0,
@@ -237,6 +255,106 @@ class AuditionsRepository {
           },
         )
         .toList();
+  }
+
+  /// Loads latest AI evaluation rows keyed by casting submission id.
+  Future<Map<String, Map<String, dynamic>>> _fetchEvaluationsBySubmissionId({
+    required List<Map<String, dynamic>> submissions,
+    required String bearerToken,
+  }) async {
+    final api = _evaluationApi;
+    if (api == null) return const {};
+
+    final ids = submissions
+        .map((r) => r['id']?.toString().trim() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+    if (ids.isEmpty) return const {};
+
+    final out = <String, Map<String, dynamic>>{};
+    final submissionById = {
+      for (final row in submissions)
+        if ((row['id']?.toString().trim() ?? '').isNotEmpty)
+          row['id']!.toString().trim(): row,
+    };
+
+    await Future.wait(
+      ids.map((submissionId) async {
+        try {
+          var row = await api.getEvaluationBySubmissionId(
+            submissionId,
+            bearerToken: bearerToken,
+          );
+          if (row == null) {
+            final raw = submissionById[submissionId];
+            final mediaId = raw?['media_id']?.toString().trim() ??
+                raw?['mediaId']?.toString().trim() ??
+                '';
+            if (mediaId.isNotEmpty) {
+              row = await api.getEvaluationByMediaId(
+                mediaId,
+                bearerToken: bearerToken,
+              );
+            }
+          }
+          if (row != null) out[submissionId] = row;
+        } catch (e, st) {
+          if (kDebugMode) {
+            developer.log(
+              'Evaluation lookup failed for submission $submissionId',
+              name: 'Scenolytics',
+              error: e,
+              stackTrace: st,
+            );
+          }
+        }
+      }),
+    );
+    return out;
+  }
+
+  /// Merges AI evaluation scores into a casting submission map for [_mapSubmission].
+  Map<String, dynamic> _mergeEvaluationIntoSubmission(
+    Map<String, dynamic> submission,
+    Map<String, dynamic>? evaluation,
+  ) {
+    if (evaluation == null) return submission;
+
+    final merged = Map<String, dynamic>.from(submission);
+
+    void putScore(String key, Object? value) {
+      if (value == null) return;
+      if (value is num) merged[key] = value;
+    }
+
+    putScore('overall_performance_score', evaluation['overall_performance_score']);
+    putScore('emotional_expression_score', evaluation['emotional_expression_score']);
+    putScore('vocal_tone_score', evaluation['vocal_tone_score']);
+    putScore('script_alignment_score', evaluation['script_alignment_score']);
+
+    final eye = evaluation['eye_expression_score'];
+    if (eye is num) {
+      merged['eyes_analysis_score'] = eye.round();
+    } else if (eye is Map) {
+      final nested = eye['score'] ?? eye['overall_score'] ?? eye['eye_score'];
+      if (nested is num) merged['eyes_analysis_score'] = nested.round();
+    }
+
+    final tone = evaluation['tone_analysis'];
+    if (tone is num) {
+      merged['tone_analysis_score'] = tone.round();
+    } else if (tone is Map) {
+      final nested = tone['score'] ?? tone['overall_score'];
+      if (nested is num) merged['tone_analysis_score'] = nested.round();
+    }
+
+    final status = evaluation['evaluation_status']?.toString();
+    if (status != null && status.isNotEmpty) {
+      merged['evaluation_status'] = status;
+    }
+
+    return merged;
   }
 
   /// Loads every audition the signed-in director owns, then fans out three
@@ -1148,7 +1266,10 @@ class AuditionsRepository {
       'prosody_score',
     ]);
 
-    final evaluationCompleted = overallRaw != null ||
+    final evaluationStatus =
+        source['evaluation_status']?.toString().trim().toLowerCase() ?? '';
+    final evaluationCompleted = evaluationStatus == 'completed' ||
+        overallRaw != null ||
         emotionalRaw != null ||
         vocalRaw != null ||
         scriptRaw != null ||

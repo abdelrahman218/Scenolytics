@@ -10,7 +10,6 @@ services:
     depends_on:
       - identity-provider-service
       - user-management-service
-      - audition-training-service
       - ai-evaluation-service
       - casting-management-service
       - notification-service
@@ -136,56 +135,6 @@ services:
       - scenolytics-network
     restart: unless-stopped
 
-  # ================= AUDITION TRAINING =================
-  audition-training-mysql:
-    image: mysql:8.0
-    container_name: audition-training-mysql
-    environment:
-      MYSQL_ROOT_PASSWORD: ${ROOT_PASSWORD}
-      MYSQL_DATABASE: ${AUDITION_TRAINING_SERVICE_DATABASE_NAME}
-      MYSQL_USER: ${DATABASE_USER}
-      MYSQL_PASSWORD: ${DATABASE_PASSWORD}
-    ports:
-      - "${AUDITION_TRAINING_SERVICE_DATABASE_PORT}:3306"
-    volumes:
-      - ./Audition_Training_Service/create_database.sql:/docker-entrypoint-initdb.d/01_create_database.sql
-      - ./Audition_Training_Service/create_tables.sql:/docker-entrypoint-initdb.d/02_create_tables.sql
-      - audition_training_data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      timeout: 20s
-      retries: 10
-      interval: 10s
-    networks:
-      - scenolytics-network
-    restart: unless-stopped
-
-  audition-training-service:
-    build: ./Audition_Training_Service
-    environment:
-      NODE_ENV: ${NODE_ENV}
-      AUDITION_TRAINING_SERVICE_PORT: ${AUDITION_TRAINING_SERVICE_PORT}
-      AUDITION_TRAINING_SERVICE_DATABASE_HOST: ${AUDITION_TRAINING_SERVICE_DATABASE_HOST}
-      AUDITION_TRAINING_SERVICE_URL: ${AUDITION_TRAINING_SERVICE_URL}
-      IDENTITY_PROVIDER_SERVICE_URL: ${IDENTITY_PROVIDER_SERVICE_URL}
-      DATABASE_PORT: ${DATABASE_PORT}
-      DATABASE_USER: ${DATABASE_USER}
-      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
-      AUDITION_TRAINING_SERVICE_DATABASE_NAME: ${AUDITION_TRAINING_SERVICE_DATABASE_NAME}
-      RABBITMQ_URL: ${RABBITMQ_URL}
-    deploy:
-      replicas: 3
-    ports:
-      - "${AUDITION_TRAINING_SERVICE_PORT}-${AUDITION_TRAINING_SERVICE_END_PORT}:${AUDITION_TRAINING_SERVICE_PORT}"
-    depends_on:
-      audition-training-mysql:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    networks:
-      - scenolytics-network
-    restart: unless-stopped
-
   # ================= AI EVALUATION =================
   ai-evaluation-mysql:
     image: mysql:8.0
@@ -230,7 +179,6 @@ services:
       AWS_REGION: ${AWS_REGION}
       S3_BUCKET_VIDEOS: ${S3_BUCKET_VIDEOS}
       TORIO_USE_FFMPEG_BACKEND: "0"
-      LOG_LEVEL: "WARNING"
     deploy:
       replicas: 1
     ports:
@@ -411,8 +359,6 @@ volumes:
   identity_provider_data:
     driver: local
   user_management_data:
-    driver: local
-  audition_training_data:
     driver: local
   ai_evaluation_data:
     driver: local

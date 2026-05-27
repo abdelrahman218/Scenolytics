@@ -1,4 +1,5 @@
 $kind: http-request
+name: Create Evaluation
 url: "{{base_url}}/api/v1/evaluations"
 method: POST
 headers:
@@ -7,7 +8,25 @@ body:
   type: text
   content: |-
     {
-      "media_id": "770e8400-e29b-41d4-a716-446655440020",
-      "submission_id": "cc0e8400-e29b-41d4-a716-446655440070"
+      "media_id": "messi",
+      "submission_id": "1",
+      "script_text":[
+      {
+        "content": "We don't understand my feelings we really don't we don't understand how we could hate you so much after all this time frustration.",
+        "emotion": "angry"
+      },
+      {
+        "content": "how no matter how much i'd like not to hate you i hate you even more it grows i can't even see i can't even see you now.",
+        "emotion": "fearful"
+      },
+      {
+        "content": "all i see is this picture of you you and her i don't even know if this picture's real any more i don't even care it's a made up picture it invades my head the two of you in this picture it stings me more than if i actually see you with her.",
+        "emotion": "angry"
+      },
+      {
+        "content": "it cuts it cuts me it cuts me so deep i'll never get over it and i can't get rid of this picture either it's just crumpled uninvited kind of like a little torture And I blame you more for this little torture than I do for what you did.",
+        "emotion": "fearful"
+      }
+    ]
     }
 order: 1000

@@ -9,6 +9,7 @@ import 'branding/scenolytics_branding.dart';
 import 'config/app_env.dart';
 import 'data/api/auth_api.dart';
 import 'data/api/casting_api.dart';
+import 'data/api/evaluation_api.dart';
 import 'data/api/notifications_api.dart';
 import 'data/api/user_management_api.dart';
 import 'data/auth_controller.dart';
@@ -182,6 +183,7 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
     _auditionsRepository = AuditionsRepository(
       castingApi: CastingApi(baseUrl: AppEnv.apiBaseUrl),
       userManagementApi: widget.userManagementApi,
+      evaluationApi: EvaluationApi(baseUrl: AppEnv.apiBaseUrl),
       videoPublicBase: AppEnv.videoPublicBase,
     );
     _notificationsApi = NotificationsApi(baseUrl: AppEnv.apiBaseUrl);

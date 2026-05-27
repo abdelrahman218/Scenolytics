@@ -831,6 +831,10 @@ class MLPipeline:
                 tmp_audio, script_text,
             )
             sentences_aligned = alignment_data.get("sentences_aligned") if alignment_data else None
+        elif not script_text:
+            logger.info("No script_text for evaluation — script_alignment_score stays 0")
+        elif not tmp_audio:
+            logger.warning("No extracted audio — script_alignment_score stays 0")
 
         # ── Audio emotion ─────────────────────────────────────────────────────
         if sentences_aligned:
