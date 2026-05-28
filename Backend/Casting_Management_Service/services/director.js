@@ -364,3 +364,21 @@ export const connectGoogleMeetCallBack = async (req, res, next) => {
     res.redirect(`${frontendUrl}?google_connected=false&error=connection_failed`);
   }
 };
+
+export const disconnectGoogleMeet = async (req, res, next) => {
+  try {
+    await GoogleCalendarCredentials.deleteByDirectorId(req.user.user_id);
+    return res.status(200).json({ message: "Google connection disconnected successfully" });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getGoogleMeetConnectionStatus = async (req, res, next) => {
+  try {
+    const googleCredentials = await GoogleCalendarCredentials.findByDirectorId(req.user.user_id);
+    return res.status(200).json({ isConnectedToGoogle: googleCredentials ? true : false });
+  } catch (error) {
+    next(error);
+  }
+};
