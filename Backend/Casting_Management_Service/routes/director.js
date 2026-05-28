@@ -6,6 +6,8 @@ import {
   connectGoogleMeet,
   connectGoogleMeetAuthUrl,
   connectGoogleMeetCallBack,
+  disconnectGoogleMeet,
+  getGoogleMeetConnectionStatus
 } from "../services/director.js";
 import {
   checkDirectorOwnershipOfAudition,
@@ -52,5 +54,7 @@ router.get("/invitations/pending", getDirectorPendingInvitations);
 
 router.get("/google/connect", connectGoogleMeet);
 router.get("/google/connect-url", connectGoogleMeetAuthUrl);
+router.get("/google/connection-status", getGoogleMeetConnectionStatus);
+router.delete("/google/disconnect", disconnectGoogleMeet);
 
 export default router;
