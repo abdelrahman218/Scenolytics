@@ -29,6 +29,7 @@ export const sendEmailNotification = async(notification)=>{
             }]
         });
     } catch (error) {
-        console.error(`Error while sending notification (${notification.id}) mail:`, err);
+        console.log(`Error while sending notification (${notification.id}) mail`);
+        console.error(error);
     }
 };
