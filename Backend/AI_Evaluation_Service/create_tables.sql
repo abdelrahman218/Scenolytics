@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS auditions(
     submission_id VARCHAR(255),
     actor_id VARCHAR(36),
     director_id VARCHAR(36),
+    audio_only BOOLEAN DEFAULT FALSE,
     script TEXT,
     status VARCHAR(50) DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
