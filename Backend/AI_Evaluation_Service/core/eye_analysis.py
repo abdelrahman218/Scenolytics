@@ -78,7 +78,7 @@ def build_emotion_timeline_from_sentences(
             "start_sec": float(sent["t_start"]),
             "end_sec":   float(sent["t_end"]),
             "emotion":   sent.get("emotion", "neutral").lower(),
-            "sentence":  sent.get("content", ""),
+            "sentence":  sent.get("script_sentence") or sent.get("content", ""),
         })
 
     return timeline

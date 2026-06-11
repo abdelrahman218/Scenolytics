@@ -85,7 +85,15 @@ EMOTIONS = {
 }
 EMOTION_NAMES: List[str] = list(EMOTIONS.values())
 NUM_CLASSES = len(EMOTION_NAMES)  # 8
+EXCLUDED_EMOTIONS = {"fearful", "disgust", "neutral"}
 
+def _get_valid_emotion(all_scores: dict) -> Tuple[str, float]:
+    """Return the highest-scoring emotion that is not in EXCLUDED_EMOTIONS."""
+    sorted_emotions = sorted(all_scores.items(), key=lambda x: x[1], reverse=True)
+    for emotion, score in sorted_emotions:
+        if emotion not in EXCLUDED_EMOTIONS:
+            return emotion, score
+    return sorted_emotions[0]
 # ---------------------------------------------------------------------------
 # Video model hyper-parameters -- must match training notebook exactly
 # ---------------------------------------------------------------------------
@@ -230,7 +238,16 @@ class MLPipeline:
 
         # ---- OpenCV Haar cascade for frame extraction (lazy-loaded) ----
         self._face_cascade = None
-
+        try:
+            from retinaface import RetinaFace as _RF
+            self._use_retinaface = True
+            logger.info("RetinaFace available — using it for face detection (matches training)")
+        except ImportError:
+            self._use_retinaface = False
+            logger.warning(
+                "RetinaFace not installed — falling back to Haar cascade. "
+                "Emotion accuracy may be lower. Install with: pip install retina-face"
+            )
         # ---- Metric weights (must sum to 1.0) ----
         self.weights = {
             "emotional_expression_score": 0.40,
@@ -980,26 +997,29 @@ class MLPipeline:
             frames_norm = preprocess_input(frames * 255.0)
 
             if len(frames_norm) < FRAMES_PER_VIDEO:
-                pad = np.zeros(
-                    (FRAMES_PER_VIDEO - len(frames_norm), IMG_SIZE, IMG_SIZE, 3),
-                    dtype=np.float32,
+                last_frame = frames_norm[-1:]  # shape (1, H, W, 3)
+                pad = np.repeat(
+                    last_frame,
+                    FRAMES_PER_VIDEO - len(frames_norm),
+                    axis=0,
                 )
                 frames_norm = np.concatenate([frames_norm, pad], axis=0)
             else:
-                frames_norm = frames_norm[:FRAMES_PER_VIDEO]
+                frames_norm = frames_norm[:FRAMES_PER_VIDEO]    
 
             input_batch   = frames_norm[np.newaxis, ...]
             probabilities = self.emotion_model.predict(input_batch, verbose=0)[0]
             probabilities = np.array(probabilities, dtype=np.float64)
             probabilities = probabilities / probabilities.sum()
 
-            primary_idx   = int(np.argmax(probabilities))
-            secondary_idx = int(np.argsort(probabilities)[-2])
-
-            primary_emotion   = EMOTION_NAMES[primary_idx]
-            secondary_emotion = EMOTION_NAMES[secondary_idx]
-            confidence        = float(probabilities[primary_idx])
-            score             = round(confidence * 100, 2)
+            all_scores_dict = {EMOTION_NAMES[i]: float(probabilities[i]) for i in range(NUM_CLASSES)}
+            primary_emotion, confidence = _get_valid_emotion(all_scores_dict)
+            valid_secondary = [
+                e for e, _ in sorted(all_scores_dict.items(), key=lambda x: x[1], reverse=True)
+                if e != primary_emotion and e not in EXCLUDED_EMOTIONS
+            ]
+            secondary_emotion = valid_secondary[0] if valid_secondary else primary_emotion
+            score = round(confidence * 100, 2)
 
             emotions_detail = {
                 "primary":    primary_emotion,
@@ -1058,33 +1078,39 @@ class MLPipeline:
                 )
                 continue
 
-            h, w  = frame.shape[:2]
-            gray  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            faces = self._face_cascade.detectMultiScale(
-                gray, scaleFactor=1.1, minNeighbors=4, minSize=(30, 30)
-            )
-
+            # AFTER
+            h, w = frame.shape[:2]
             face_crop = None
-            if len(faces) > 0:
-                fx, fy, fw, fh = faces[0]
-                x1 = max(0, fx - HAAR_PADDING)
-                y1 = max(0, fy - HAAR_PADDING)
-                x2 = min(w, fx + fw + HAAR_PADDING)
-                y2 = min(h, fy + fh + HAAR_PADDING)
-                if x2 > x1 and y2 > y1:
-                    face_crop = frame[y1:y2, x1:x2]
 
-            if face_crop is None or face_crop.size == 0:
-                if last_good is not None:
-                    logger.debug("Frame %d: no face -- reusing last good crop.", idx)
-                    frames.append(last_good.copy())
-                    continue
-                else:
-                    logger.debug("Frame %d: no face and no prior crop -- using full frame.", idx)
-                    size      = min(h, w)
-                    y_off     = (h - size) // 2
-                    x_off     = (w - size) // 2
-                    face_crop = frame[y_off: y_off + size, x_off: x_off + size]
+            if self._use_retinaface:
+                try:
+                    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    faces = RetinaFace.detect_faces(rgb)
+                    if isinstance(faces, dict) and faces:
+                        first = next(iter(faces.values()))
+                        x1, y1, x2, y2 = first["facial_area"]
+                        x1 = max(0, x1 - HAAR_PADDING)
+                        y1 = max(0, y1 - HAAR_PADDING)
+                        x2 = min(w, x2 + HAAR_PADDING)
+                        y2 = min(h, y2 + HAAR_PADDING)
+                        if x2 > x1 and y2 > y1:
+                            face_crop = frame[y1:y2, x1:x2]
+                except Exception:
+                    pass  # fall through to Haar below
+
+            if face_crop is None:
+                gray  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                faces = self._face_cascade.detectMultiScale(
+                    gray, scaleFactor=1.1, minNeighbors=4, minSize=(30, 30)
+                )
+                if len(faces) > 0:
+                    fx, fy, fw, fh = faces[0]
+                    x1 = max(0, fx - HAAR_PADDING)
+                    y1 = max(0, fy - HAAR_PADDING)
+                    x2 = min(w, fx + fw + HAAR_PADDING)
+                    y2 = min(h, fy + fh + HAAR_PADDING)
+                    if x2 > x1 and y2 > y1:
+                        face_crop = frame[y1:y2, x1:x2]
 
             resized    = cv2.resize(face_crop, (IMG_SIZE, IMG_SIZE))
             resized    = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
@@ -1164,33 +1190,39 @@ class MLPipeline:
                 )
                 continue
 
+            # AFTER
             h, w = frame.shape[:2]
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            faces = self._face_cascade.detectMultiScale(
-                gray, scaleFactor=1.1, minNeighbors=4, minSize=(30, 30)
-            )
-
             face_crop = None
-            if len(faces) > 0:
-                fx, fy, fw, fh = faces[0]
-                x1 = max(0, fx - HAAR_PADDING)
-                y1 = max(0, fy - HAAR_PADDING)
-                x2 = min(w, fx + fw + HAAR_PADDING)
-                y2 = min(h, fy + fh + HAAR_PADDING)
-                if x2 > x1 and y2 > y1:
-                    face_crop = frame[y1:y2, x1:x2]
 
-            if face_crop is None or face_crop.size == 0:
-                if last_good is not None:
-                    logger.debug("Frame %d: no face -- reusing last good crop.", idx)
-                    frames.append(last_good.copy())
-                    continue
-                else:
-                    logger.debug("Frame %d: no face and no prior crop -- using full frame.", idx)
-                    size = min(h, w)
-                    y_off = (h - size) // 2
-                    x_off = (w - size) // 2
-                    face_crop = frame[y_off : y_off + size, x_off : x_off + size]
+            if self._use_retinaface:
+                try:
+                    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    faces = RetinaFace.detect_faces(rgb)
+                    if isinstance(faces, dict) and faces:
+                        first = next(iter(faces.values()))
+                        x1, y1, x2, y2 = first["facial_area"]
+                        x1 = max(0, x1 - HAAR_PADDING)
+                        y1 = max(0, y1 - HAAR_PADDING)
+                        x2 = min(w, x2 + HAAR_PADDING)
+                        y2 = min(h, y2 + HAAR_PADDING)
+                        if x2 > x1 and y2 > y1:
+                            face_crop = frame[y1:y2, x1:x2]
+                except Exception:
+                    pass  # fall through to Haar below
+
+            if face_crop is None:
+                gray  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                faces = self._face_cascade.detectMultiScale(
+                    gray, scaleFactor=1.1, minNeighbors=4, minSize=(30, 30)
+                )
+                if len(faces) > 0:
+                    fx, fy, fw, fh = faces[0]
+                    x1 = max(0, fx - HAAR_PADDING)
+                    y1 = max(0, fy - HAAR_PADDING)
+                    x2 = min(w, fx + fw + HAAR_PADDING)
+                    y2 = min(h, fy + fh + HAAR_PADDING)
+                    if x2 > x1 and y2 > y1:
+                        face_crop = frame[y1:y2, x1:x2]
 
             resized = cv2.resize(face_crop, (IMG_SIZE, IMG_SIZE))
             resized = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
@@ -1280,10 +1312,8 @@ class MLPipeline:
             all_probs    = np.array(all_probs, dtype=np.float32)
             avg_probs    = np.mean(all_probs, axis=0)
             id2label     = self.audio_model.config.id2label
-            predicted_id = np.argmax(avg_probs)
-
-            detected_emotion   = id2label[predicted_id]
-            emotion_confidence = float(avg_probs[predicted_id])
+            all_scores_dict = {id2label[idx]: float(prob) for idx, prob in enumerate(avg_probs)}
+            detected_emotion, emotion_confidence = _get_valid_emotion(all_scores_dict)
 
             all_emotions = {
                 id2label[idx]: float(prob)
@@ -1301,16 +1331,7 @@ class MLPipeline:
             stability   = float(np.clip(stability, 0, 1))
 
             if expected_emotion is not None:
-                match = detected_emotion.lower() == expected_emotion.lower()
-                if match:
-                    score = emotion_confidence * 100
-                else:
-                    expected_prob = 0.0
-                    for idx, label in id2label.items():
-                        if label.lower() == expected_emotion.lower():
-                            expected_prob = float(avg_probs[idx])
-                            break
-                    score = expected_prob * 100
+                score = emotion_confidence * 100
             else:
                 score = (dominance * 0.5) + (stability * 0.3) + (consistency * 0.2)
                 score = float(np.clip(score * 100, 0, 100))
@@ -1332,6 +1353,7 @@ class MLPipeline:
                 "confidence":       emotion_confidence,
                 "all_emotions":     all_emotions,
                 "metrics":          metrics,
+                "match":            detected_emotion.lower() == expected_emotion.lower() if expected_emotion else None,
             }
 
         except Exception as e:
@@ -1371,9 +1393,9 @@ class MLPipeline:
 
             for sent in sentences_aligned:
                 if sent["status"] == "missing" or sent["t_start"] is None:
-                    logger.debug("Skipping missing sentence: %s...", sent["script_sentence"][:50])
+                    logger.debug("Skipping missing sentence: %s...", sent["content"][:50])
                     sentence_results.append({
-                        "sentence":         sent["script_sentence"],
+                        "sentence":         sent["content"],
                         "expected_emotion": sent.get("emotion"),
                         "detected_emotion": None,
                         "confidence":       0.0,
@@ -1394,26 +1416,6 @@ class MLPipeline:
                 segment_duration  = len(segment) / sr
                 expected_duration = sent["t_end"] - sent["t_start"]
                 is_mostly_complete = segment_duration >= (expected_duration * 0.5)
-
-                if len(segment) < 8000 and not is_mostly_complete:
-                    logger.warning(
-                        "Sentence %d too short: %.2fs (%d samples) | '%s...'",
-                        len(sentence_results) + 1,
-                        segment_duration, len(segment),
-                        sent["script_sentence"][:40],
-                    )
-                    sentence_results.append({
-                        "sentence":         sent["script_sentence"],
-                        "expected_emotion": sent.get("emotion"),
-                        "detected_emotion": None,
-                        "confidence":       0.0,
-                        "score":            0.0,
-                        "time_range":       f"{sent['t_start']:.4f}s-{sent['t_end']:.4f}s",
-                        "coverage":         sent.get("coverage", 1.0),
-                        "status":           "too_short",
-                    })
-                    continue
-                
                 # Calculate actual duration in seconds
                 segment_duration = len(segment) / sr
                 
@@ -1438,10 +1440,10 @@ class MLPipeline:
                         len(sentence_results) + 1,
                         segment_duration, len(segment),
                         sent["t_start"], sent["t_end"],
-                        sent["script_sentence"][:40],
+                        sent["content"][:40],
                     )
                     sentence_results.append({
-                        "sentence":         sent["script_sentence"],
+                        "sentence":         sent["content"],
                         "expected_emotion": sent.get("emotion"),
                         "detected_emotion": None,
                         "confidence":       0.0,
@@ -1462,7 +1464,7 @@ class MLPipeline:
                 )
 
                 sentence_results.append({
-                    "sentence":         sent["script_sentence"],
+                    "sentence":         sent["content"],
                     "expected_emotion": sent["emotion"],
                     "detected_emotion": result["detected_emotion"],
                     "confidence":       result["confidence"],
@@ -1493,7 +1495,7 @@ class MLPipeline:
                 avg_confidence   = 0.0
             matches = sum(
                 1 for r in sentence_results
-                if r["detected_emotion"] is not None
+                if r.get("detected_emotion") is not None
                 and r["detected_emotion"].lower() == (r["expected_emotion"] or "").lower()
             )
          
@@ -1566,9 +1568,9 @@ class MLPipeline:
             
             for sent_idx, sent in enumerate(sentences_aligned):
                 if sent["status"] == "missing" or sent["t_start"] is None:
-                    logger.debug("Skipping missing sentence %d: %s...", sent_idx, sent["script_sentence"][:50])
+                    logger.debug("Skipping missing sentence %d: %s...", sent_idx, sent["content"][:50])
                     sentence_results.append({
-                        "sentence": sent["script_sentence"],
+                        "sentence": sent["content"],
                         "expected_emotion": sent.get("emotion"),
                         "detected_emotion": None,
                         "confidence": 0.0,
@@ -1587,10 +1589,10 @@ class MLPipeline:
                 if duration < 0.2:  # Too short (< 200ms)
                     logger.warning(
                         "Sentence %d too short (%.2fs): '%s...'",
-                        sent_idx, duration, sent["script_sentence"][:40]
+                        sent_idx, duration, sent["content"][:40]
                     )
                     sentence_results.append({
-                        "sentence": sent["script_sentence"],
+                        "sentence": sent["content"],
                         "expected_emotion": sent.get("emotion"),
                         "detected_emotion": None,
                         "confidence": 0.0,
@@ -1612,7 +1614,7 @@ class MLPipeline:
                         sent_idx, t_start, t_end
                     )
                     sentence_results.append({
-                        "sentence": sent["script_sentence"],
+                        "sentence": sent["content"],
                         "expected_emotion": sent.get("emotion"),
                         "detected_emotion": None,
                         "confidence": 0.0,
@@ -1629,22 +1631,22 @@ class MLPipeline:
                     
                     # Pad or trim to FRAMES_PER_VIDEO
                     if len(frames_norm) < FRAMES_PER_VIDEO:
-                        pad = np.zeros(
-                            (FRAMES_PER_VIDEO - len(frames_norm), IMG_SIZE, IMG_SIZE, 3),
-                            dtype=np.float32,
+                        last_frame = frames_norm[-1:]  # shape (1, H, W, 3)
+                        pad = np.repeat(
+                            last_frame,
+                            FRAMES_PER_VIDEO - len(frames_norm),
+                            axis=0,
                         )
                         frames_norm = np.concatenate([frames_norm, pad], axis=0)
                     else:
                         frames_norm = frames_norm[:FRAMES_PER_VIDEO]
-                    
                     input_batch = frames_norm[np.newaxis, ...]
                     probabilities = self.emotion_model.predict(input_batch, verbose=0)[0]
                     probabilities = np.array(probabilities, dtype=np.float64)
                     probabilities = probabilities / probabilities.sum()
                     
-                    primary_idx = int(np.argmax(probabilities))
-                    detected_emotion = EMOTION_NAMES[primary_idx]
-                    confidence = float(probabilities[primary_idx])
+                    all_scores_dict = {EMOTION_NAMES[i]: float(probabilities[i]) for i in range(NUM_CLASSES)}
+                    detected_emotion, confidence = _get_valid_emotion(all_scores_dict)
                     score = round(confidence * 100, 2)
                     
                     logger.debug(
@@ -1653,7 +1655,7 @@ class MLPipeline:
                     )
                     
                     sentence_results.append({
-                        "sentence": sent["script_sentence"],
+                        "sentence": sent["content"],
                         "expected_emotion": sent.get("emotion"),
                         "detected_emotion": detected_emotion,
                         "confidence": round(confidence, 4),
@@ -1672,7 +1674,7 @@ class MLPipeline:
                         "Failed to score video emotion for sentence %d: %s", sent_idx, e
                     )
                     sentence_results.append({
-                        "sentence": sent["script_sentence"],
+                        "sentence": sent["content"],
                         "expected_emotion": sent.get("emotion"),
                         "detected_emotion": None,
                         "confidence": 0.0,
@@ -1781,7 +1783,9 @@ class MLPipeline:
                 return 0.0, None
             try:
                 async with aiohttp.ClientSession() as health_session:
-                    health_url = self.script_model.replace("/transcribe", "/health")
+                    from urllib.parse import urlparse, urljoin
+                    parsed = urlparse(self.script_model)
+                    health_url = urljoin(self.script_model, parsed.path.rsplit("/transcribe", 1)[0] + "/health")
                     async with health_session.get(
                         health_url,
                         timeout=aiohttp.ClientTimeout(connect=10, sock_read=10)
@@ -1798,6 +1802,18 @@ class MLPipeline:
                         filename="audio.wav",
                         content_type="audio/wav",
                     )
+                    import json
+                    sentences = json.loads(script_text)
+                    clean_script = "\n".join(
+                        f'{s["content"]} "{s["emotion"]}"'  
+                        for s in sentences
+                    )
+                    form.add_field(
+                        "script",
+                        clean_script.encode("utf-8"),
+                        filename="script.txt",
+                        content_type="text/plain",
+                    )
                     async with session.post(
                         self.script_model,
                         data=form,
@@ -1811,193 +1827,45 @@ class MLPipeline:
                            return 0.0, None
                         api_result = await resp.json()
 
-            full_transcript = api_result.get("text", "")
-            aligned_words   = api_result.get("aligned_words", [])
+            full_transcript   = api_result.get("text", "")
+            sentences_aligned = api_result.get("sentences_aligned", [])
+            summary           = api_result.get("summary", {})
+
             if not full_transcript:
                 logger.warning("Empty transcript from remote API")
                 return 0.0, None
 
-            transcript_clean = _normalize_text(full_transcript).split()
-            sentences        = self._parse_script(script_text)
-
-            sentences = self._parse_script(script_text)
-
-            script_words     = []
-            word_to_sentence = []
-            for sent_idx, sent in enumerate(sentences):
-                words = _normalize_text(sent["script_sentence"]).split()
-                script_words.extend(words)
-                word_to_sentence.extend([sent_idx] * len(words))
-
-            if not script_words:
-                return 0.0, None
-
-            matcher = difflib.SequenceMatcher(None, script_words, transcript_clean)
-
-            sentence_word_counts = [
-                len(_normalize_text(s["script_sentence"]).split()) for s in sentences
-            ]
-            sentence_coverage = [0] * len(sentences)
-
-            # Per-sentence comparison rows: each entry is a word-level diff row
-            # keyed by sentence index so they can be attached to sentences_aligned later
-            sentence_comparison_rows: list[list[dict]] = [[] for _ in sentences]
-
-            # Global word-level stats
-            matched_words_count = 0
-            changed_words_count = 0
-            skipped_words_count = 0
-            added_words_count   = 0
-            matched_words_array=[]
-            changed_words_array=[]
-            skipped_words_array=[]
-            added_words_array=[]
-            
-
-            for tag, i1, i2, j1, j2 in matcher.get_opcodes():
-                if tag == "equal":
-                    for k in range(i2 - i1):
-                        s_idx = word_to_sentence[i1 + k]
-                        sentence_coverage[s_idx] += 1
-                        sentence_comparison_rows[s_idx].append({
-                            "status":          "match",
-                            "script_word":     script_words[i1 + k],
-                            "transcript_word": transcript_clean[j1 + k],
-                        })
-                        matched_words_count += 1
-                        matched_words_array.append(script_words[i1 + k])
-                elif tag == "replace":
-                    for k in range(max(i2 - i1, j2 - j1)):
-                        s_w = script_words[i1 + k]     if i1 + k < i2 else ""
-                        t_w = transcript_clean[j1 + k] if j1 + k < j2 else ""
-                        status = "changed" if s_w and t_w else ("skipped" if s_w else "added")
-                        # Attribute to the script-side sentence when available,
-                        # otherwise fall back to the last script sentence
-                        if i1 + k < i2:
-                            s_idx = word_to_sentence[i1 + k]
-                        else:
-                            s_idx = word_to_sentence[i2 - 1]
-                        sentence_comparison_rows[s_idx].append({
-                            "status":          status,
-                            "script_word":     s_w or "-",
-                            "transcript_word": t_w or "-",
-                        })
-                        changed_words_count += 1
-                        changed_words_array.append(f"{s_w} -> {t_w}")
-                elif tag == "delete":
-                    for k in range(i2 - i1):
-                        s_idx = word_to_sentence[i1 + k]
-                        sentence_comparison_rows[s_idx].append({
-                            "status":          "skipped",
-                            "script_word":     script_words[i1 + k],
-                            "transcript_word": "-",
-                        })
-                        skipped_words_count += 1
-                        skipped_words_array.append(script_words[i1 + k])
-                elif tag == "insert":
-                    for k in range(j2 - j1):
-                        # Inserted words have no script position; attach to the sentence
-                        # that owns the script word just before this insertion point.
-                        s_idx = word_to_sentence[i1 - 1] if i1 > 0 else 0
-                        sentence_comparison_rows[s_idx].append({
-                            "status":          "added",
-                            "script_word":     "-",
-                            "transcript_word": transcript_clean[j1 + k],
-                        })
-                        added_words_count += 1
-                        added_words_array.append(transcript_clean[j1 + k])
-            total_matched   = sum(size for _, _, size in matcher.get_matching_blocks())
-            overall_coverage = total_matched / len(script_words) if script_words else 0
-            score            = round(min(overall_coverage, 1.0) * 100, 2)
-            total_duration   = sf.info(audio_path).duration
-            
-            # ------------------------------------------------------------------ #
-            # Build sentence-level output: timestamps + per-sentence transcript  #
-            # ------------------------------------------------------------------ #
-            sentences_aligned = []
-            word_idx = 0  # pointer into aligned_words
-
-            for s_idx, sent in enumerate(sentences):
-                sent_words    = _normalize_text(sent["script_sentence"]).split()
-                word_count    = len(sent_words)
-                matched_count = sentence_coverage[s_idx]
-                coverage      = matched_count / word_count if word_count > 0 else 0.0
-                sent_score    = round(min(coverage, 1.0) * 100, 2)
-
-                # Reconstruct what the actor actually said for this sentence's span,
-                # preserving word order from the diff rows
-                rows = sentence_comparison_rows[s_idx]
-                transcript_words_for_sentence = [
-                    r["transcript_word"]
-                    for r in rows
-                    if r["transcript_word"] != "-"
-                ]
-                sentence_transcript = " ".join(transcript_words_for_sentence)
-
-                # Collect the next `word_count` aligned word timestamps
-                sent_aligned = aligned_words[word_idx : word_idx + word_count]
-                word_idx    += word_count
-
-                usable_times = [w["start"] for w in sent_aligned if "start" in w]
-
-                if not usable_times:
-                    sentences_aligned.append({
-                        "sentence_index":      s_idx,
-                        "script_sentence":     sent["script_sentence"],
-                        "transcript_sentence": sentence_transcript,
-                        "emotion":             sent["emotion"],
-                        "t_start":             None,
-                        "t_end":               None,
-                        "coverage":            coverage,
-                        "sentence_score":      sent_score,
-                        "status":              "missing",
-                        "word_diff":           rows,
-                    })
-                    continue
-
-                t_start = min(usable_times)
-
-                next_aligned = aligned_words[word_idx : word_idx + 1]
-                if next_aligned and "start" in next_aligned[0]:
-                    t_end = (max(usable_times) + next_aligned[0]["start"]) / 2.0
-                else:
-                    t_end = total_duration
-
-                t_start = max(0.0, t_start)
-                t_end   = min(total_duration, t_end)
-                if t_end <= t_start:
-                    t_end = min(t_start + 0.5, total_duration)
-
-                sentences_aligned.append({
-                    "sentence_index":      s_idx,
-                    "script_sentence":     sent["script_sentence"],
-                    "transcript_sentence": sentence_transcript,
-                    "emotion":             sent["emotion"],
-                    "t_start":             round(t_start, 4),
-                    "t_end":               round(t_end,   4),
-                    "coverage":            round(coverage, 3),
-                    "sentence_score":      sent_score,
-                    "status":              "ok" if coverage >= 0.5 else "partial",
-                    "word_diff":           rows,
-                })
+            matched  = summary.get("matched",0)
+            changed  = summary.get("changed",0)
+            skipped  = summary.get("skipped",0)
+            added    = summary.get("added",0)
+            matched_words = summary.get("matched_words",[])
+            added_words   = summary.get("added_words",[])
+            changed_words = summary.get("changed_words",[])
+            skipped_words = summary.get("skipped_words",[])
+            total_script_words = matched + changed + skipped
+            overall_coverage   = matched / total_script_words if total_script_words else 0.0
+            score              = round(min(overall_coverage, 1.0) * 100, 2)
 
             logger.info(
-                "Script alignment -- matched=%d / total=%d -> score=%.2f, %d sentences",
-                total_matched, len(script_words), score, len(sentences_aligned),
+                "Script alignment -- matched=%d changed=%d skipped=%d added=%d -> score=%.2f",
+                 matched, changed, skipped, added, score,
             )
-
+            logger.info("API result keys: %s", list(api_result.keys()))
+            logger.info("Summary: %s", api_result.get("summary"))
+            logger.info("Transcript length: %d words", len(api_result.get("text", "").split()))
             return score, {
-                "sentences_aligned": sentences_aligned,   # primary output: one entry per sentence
+                "sentences_aligned": sentences_aligned,
                 "transcript":        full_transcript,
                 "coverage":          overall_coverage,
-                "matched_words":     matched_words_array,
-                "added_words":       added_words_array,
-                "changed_words":     changed_words_array,
-                "skipped_words":     skipped_words_array,
-                "matched_count":     matched_words_count,
-                "added_count":       added_words_count,
-                "changed_count":     changed_words_count,
-                "skipped_count":     skipped_words_count,
+                "matched_count":     matched,
+                "added_count":       added,
+                "changed_count":     changed,
+                "skipped_count":     skipped,
+                "matched_words":     matched_words,
+                "added_words":       added_words,
+                "changed_words":     changed_words,
+                "skipped_words":     skipped_words,
             }
 
         except Exception as e:
@@ -2028,7 +1896,7 @@ class MLPipeline:
                     content = str(item.get("content", "")).strip()
                     emotion = str(item.get("emotion", "neutral")).strip().lower()
                     if content:
-                        sentences.append({"script_sentence": content, "emotion": emotion})
+                        sentences.append({"content": content, "emotion": emotion})
                 if sentences:
                     logger.info("Parsed script as JSON array: %d sentences", len(sentences))
                     return sentences
