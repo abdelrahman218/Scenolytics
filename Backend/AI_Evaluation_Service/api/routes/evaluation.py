@@ -494,9 +494,10 @@ async def create_evaluation_for_audition_submission(request: CreateEvaluationReq
 
         # Look up media_id for the given audition_id
         audition = await db.fetch_one(
-            "SELECT script FROM auditions WHERE audition_id = %s",
+            "SELECT audition_id, script FROM auditions WHERE audition_id = %s",
             (audition_id,),
-        )
+        ) 
+        script_text = audition.get("script")
         if not audition:
             raise HTTPException(status_code=404, detail="Audition not found")
         
