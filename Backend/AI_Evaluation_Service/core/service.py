@@ -326,8 +326,8 @@ class EvaluationService:
                     
                 async def queue_pipeline_with_retry(eval_id, media_id, pipe, script_text):
                     """Queue pipeline with exponential backoff retry"""
-                    max_retries = 5
-                    retry_delay = 3
+                    max_retries = 10
+                    retry_delay = 5
                     
                     for attempt in range(max_retries):
                         try:
