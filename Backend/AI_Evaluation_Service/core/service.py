@@ -240,7 +240,8 @@ class EvaluationService:
                 audition_id,
             )
             return None
-
+        logger.info(f"Audition row: {audition}")
+        logger.info(f"Script field raw value: {repr(audition.get('script'))}")
         script = audition.get("script")
         if script is not None:
             if isinstance(script, (dict, list)):
@@ -301,6 +302,11 @@ class EvaluationService:
                 submission_id = submission_data.get('id')
                 media_id = submission_data.get('media_id')
                 evaluation_id = str(uuid.uuid4())
+                audition_type=submission_data.get('type')
+                if audition_type != "Video":
+                    audio_only = True
+                else:
+                    audio_only = False
                 now = datetime.utcnow().isoformat()
                 
                 script = await EvaluationService.resolve_script_for_submission(
@@ -333,6 +339,7 @@ class EvaluationService:
                                     script_text,
                                     rabbitmq_manager,
                                     submission_id,
+                                    audio_only
                                 )
                             )
                             logger.debug(f"✓ ML pipeline task created for evaluation {eval_id}")

@@ -360,8 +360,6 @@ volumes:
     driver: local
   user_management_data:
     driver: local
-  audition_training_data:
-    driver: local
   ai_evaluation_data:
     driver: local
   casting_management_data:

@@ -1,6 +1,0 @@
-$kind: http-request
-url: "{{base_url}}/api/v1/sessions/:session_id"
-method: GET
-pathVariables:
-  session_id: 990e8400-e29b-41d4-a716-446655440040
-order: 2000

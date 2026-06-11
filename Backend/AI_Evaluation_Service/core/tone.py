@@ -41,7 +41,7 @@ def analyze_tone(
             {
                 "start":   s["t_start"],
                 "end":     s["t_end"],
-                "content": s.get("content", ""),
+                "content": s.get("content") or s.get("script_sentence", ""),
                 "emotion": s.get("emotion", "neutral"),
             }
             for s in sentences_aligned
