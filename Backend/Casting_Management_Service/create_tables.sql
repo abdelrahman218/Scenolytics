@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS auditions (
 CREATE TABLE IF NOT EXISTS sentences (
   id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
   audition_id CHAR(36) NOT NULL,
-  emotion ENUM('neutral', 'calm', 'happy', 'sad', 'angry', 'fearful', 'disgust', 'surprised') NOT NULL,
+  emotion ENUM('calm', 'happy', 'sad', 'angry', 'surprised') NOT NULL,
   content TEXT NOT NULL,
   sentence_order INT NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

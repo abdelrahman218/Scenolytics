@@ -35,7 +35,7 @@
         }
       },
       "Jm1NE7Xi": {
-        "type": "task/http-request@1",
+        "type": "task/http-request@2",
         "pos": {
           "x": 432,
           "y": -240
@@ -70,7 +70,8 @@
           ],
           "scriptsModifyEnvVars": true,
           "trackGlobalEnvironment": true,
-          "requestVariables__expanded": true
+          "requestVariables__expanded": true,
+          "ignoreTestResults": true
         },
         "ui": {
           "data": {},
@@ -78,7 +79,7 @@
         }
       },
       "YAoqszqO": {
-        "type": "task/http-request@1",
+        "type": "task/http-request@2",
         "pos": {
           "x": 432,
           "y": 280
@@ -113,7 +114,8 @@
           ],
           "scriptsModifyEnvVars": true,
           "trackGlobalEnvironment": true,
-          "requestVariables__expanded": true
+          "requestVariables__expanded": true,
+          "ignoreTestResults": true
         },
         "ui": {
           "data": {},
@@ -121,7 +123,7 @@
         }
       },
       "kFGc6JbN": {
-        "type": "task/http-request@1",
+        "type": "task/http-request@2",
         "pos": {
           "x": 928,
           "y": -240
@@ -156,7 +158,8 @@
           ],
           "scriptsModifyEnvVars": true,
           "trackGlobalEnvironment": true,
-          "requestVariables__expanded": true
+          "requestVariables__expanded": true,
+          "ignoreTestResults": true
         },
         "ui": {
           "data": {},
@@ -164,7 +167,7 @@
         }
       },
       "9ZHEvNme": {
-        "type": "task/http-request@1",
+        "type": "task/http-request@2",
         "pos": {
           "x": 944,
           "y": 280
@@ -208,7 +211,8 @@
           ],
           "scriptsModifyEnvVars": true,
           "trackGlobalEnvironment": true,
-          "requestVariables__expanded": true
+          "requestVariables__expanded": true,
+          "ignoreTestResults": true
         },
         "ui": {
           "data": {},
@@ -216,7 +220,7 @@
         }
       },
       "e5vfi-Kv": {
-        "type": "task/http-request@1",
+        "type": "task/http-request@2",
         "pos": {
           "x": 1360,
           "y": 280
@@ -260,7 +264,8 @@
           ],
           "scriptsModifyEnvVars": true,
           "trackGlobalEnvironment": true,
-          "requestVariables__expanded": true
+          "requestVariables__expanded": true,
+          "ignoreTestResults": true
         },
         "ui": {
           "data": {},
@@ -415,6 +420,6 @@
   "info": {
     "_postman_id": "6a894b29-8bc7-4ff6-9038-e00e572b57a5"
   },
-  "_postman_exported_at": "2026-04-12T23:49:17.646Z",
+  "_postman_exported_at": "2026-06-12T14:18:40.989Z",
   "_postman_exported_using": "Postman/Local Mode"
 }

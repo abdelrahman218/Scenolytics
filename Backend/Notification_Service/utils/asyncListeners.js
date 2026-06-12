@@ -49,7 +49,7 @@ const handleUserEvents = async (routingKey, data) => {
 const executeAsyncListeners = () => {
   consumeMessages(QUEUES.INVITATION_EVENTS, handleInvitationEvents);
   consumeMessages(QUEUES.AUDITION_EVENTS, handleAuditionSubmission);
-  consumeMessages(QUEUES.EVALUATION_EVENTS, handleEvaluationDone);
+  //consumeMessages(QUEUES.EVALUATION_EVENTS, handleEvaluationDone);
   consumeMessages(QUEUES.USER_EVENTS, handleUserEvents);
   consumeMessages(QUEUES.CALLBACK_EVENTS, handleCallbackEvents);
 };
