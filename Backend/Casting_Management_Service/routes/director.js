@@ -5,7 +5,6 @@ import {
   getDirectorPendingInvitations,
   connectGoogleMeet,
   connectGoogleMeetAuthUrl,
-  connectGoogleMeetCallBack,
   disconnectGoogleMeet,
   getGoogleMeetConnectionStatus
 } from "../services/director.js";
@@ -13,6 +12,7 @@ import {
   checkDirectorOwnershipOfAudition,
   checkRequiredFieldsCreateAudition,
   checkValidValuesAuditionData,
+  checkValidValuesAuditionScriptEmotions,
 } from "../validators/director.js";
 import { checkAuditionExists } from "../validators/general.js";
 import directorAuditionRouter from "./director_audition_auditionId.js";
@@ -24,6 +24,7 @@ const router = express.Router();
 const createAuditionValidators = [
   checkRequiredFieldsCreateAudition,
   checkValidValuesAuditionData,
+  checkValidValuesAuditionScriptEmotions
 ];
 router.post(
   "/auditions/create_audition",
