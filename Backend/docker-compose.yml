@@ -20,7 +20,7 @@ services:
 
   # ================= MESSAGE BROKER =================
   rabbitmq:
-    image: rabbitmq:3.12-management
+    image: rabbitmq:4.3.1-management
     container_name: scenolytics-rabbitmq
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
@@ -39,7 +39,7 @@ services:
 
   # ================= IDENTITY PROVIDER =================
   identity-provider-mysql:
-    image: mysql:8.0
+    image: mysql:9.7.0
     container_name: identity-provider-mysql
     environment:
       MYSQL_DATABASE: ${IDENTITY_PROVIDER_SERVICE_DATABASE_NAME}
@@ -86,7 +86,7 @@ services:
 
   # ================= USER MANAGEMENT =================
   user-management-mysql:
-    image: mysql:8.0
+    image: mysql:9.7.0
     container_name: user-management-mysql
     environment:
       MYSQL_ROOT_PASSWORD: ${ROOT_PASSWORD}
@@ -137,7 +137,7 @@ services:
 
   # ================= AI EVALUATION =================
   ai-evaluation-mysql:
-    image: mysql:8.0
+    image: mysql:9.7.0
     container_name: ai-evaluation-mysql
     environment:
       MYSQL_ROOT_PASSWORD: ${ROOT_PASSWORD}
@@ -200,7 +200,7 @@ services:
 
   # ================= CASTING MANAGEMENT =================
   casting-management-mysql:
-    image: mysql:8.0
+    image: mysql:9.7.0
     container_name: casting-management-mysql
     environment:
       MYSQL_ROOT_PASSWORD: ${ROOT_PASSWORD}
@@ -303,7 +303,7 @@ services:
 
   # ================= NOTIFICATION =================
   notification-mysql:
-    image: mysql:8.0
+    image: mysql:9.7.0
     container_name: notification-mysql
     environment:
       MYSQL_ROOT_PASSWORD: ${ROOT_PASSWORD}
