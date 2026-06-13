@@ -57,6 +57,7 @@ import re
 import json
 import logging
 import difflib
+import math
 import subprocess
 import tempfile
 import cv2
@@ -91,11 +92,11 @@ def _get_valid_emotion(all_scores: dict) -> Tuple[str, float]:
     sorted_emotions = sorted(all_scores.items(), key=lambda x: x[1], reverse=True)
     for emotion, score in sorted_emotions:
         if emotion==EXCLUDED_EMOTIONS[0]:
-            return "sad", score
+            return "sad", all_scores["sad"]
         elif emotion==EXCLUDED_EMOTIONS[1]:
-            return "angry", score
+            return "angry", all_scores["angry"]
         elif emotion==EXCLUDED_EMOTIONS[2]:
-            return "calm", score   
+            return "calm", all_scores["calm"]   
         else:
             return emotion, score    
     return sorted_emotions[0]
@@ -692,6 +693,16 @@ class MLPipeline:
     # -----------------------------------------------------------------------
     # Public entry point
     # -----------------------------------------------------------------------
+
+    def display_score(self,score: float) -> float:
+        score = round(score, 1)  # 99.46 → 99.5, 99.74 → 99.7
+        decimal = score % 1
+        if decimal == 0.5:
+            return score
+        elif decimal > 0.5:
+            return float(math.ceil(score))
+        else:
+            return float(math.floor(score))
     async def evaluate_video(
         self,
         video_path: str,
@@ -757,7 +768,7 @@ class MLPipeline:
         detected_emotions_vocal = {
             "primary":     audio_result["detected_emotion"],
             "confidence":  audio_result["confidence"],
-            "all_emotions": audio_result.get("all_emotions", {}),
+            "score":        self.display_score(audio_result["score"]),
         }
         if "sentence_results" in audio_result:
             detected_emotions_vocal["sentence_results"] = audio_result["sentence_results"]
@@ -801,10 +812,10 @@ class MLPipeline:
 
             return {
                 "mode":                      "audio_only",
-                "vocal_tone_score":          round(vocal_score, 2),
-                "script_alignment_score":    round(script_score, 2),
-                "tone_score":                tone_score,
-                "overall_performance_score": overall,
+                "vocal_tone_score":          self.display_score(vocal_score),
+                "script_alignment_score":    self.display_score(script_score),
+                "tone_score":                self.display_score(tone_score),
+                "overall_performance_score": self.display_score(overall),
                 "tone_analysis":             tone_result,
                 "detected_emotions_vocal":   detected_emotions_vocal,
                 "script_alignment_data":     alignment_data,
@@ -824,7 +835,7 @@ class MLPipeline:
             detected_emotions_video = {
                 "primary":          video_emotion_result["detected_emotion"],
                 "confidence":       video_emotion_result["confidence"],
-                "score":            video_emotion_result["score"],
+                "score":            self.display_score(video_emotion_result["score"]),
                 "accuracy":         video_emotion_result["accuracy"],
                 "sentence_results": video_emotion_result.get("sentence_results", []),
             }
@@ -834,7 +845,7 @@ class MLPipeline:
         )
 
         overall = round(
-            emotional_score * self.weights["emotional_expression_score"]
+            self.display_score(video_emotion_result["score"]) * self.weights["emotional_expression_score"]
             + vocal_score   * self.weights["vocal_tone_score"]
             + script_score  * self.weights["script_alignment_score"],
             2,
@@ -855,10 +866,10 @@ class MLPipeline:
 
         return {
             "mode":                          "video",
-            "emotional_expression_score":    round(emotional_score, 2),
-            "vocal_tone_score":              round(vocal_score, 2),
-            "script_alignment_score":        round(script_score, 2),
-            "overall_performance_score":     overall,
+            "emotional_expression_score":    self.display_score(video_emotion_result["score"]),
+            "vocal_tone_score":              self.display_score(vocal_score),
+            "script_alignment_score":        self.display_score(script_score),
+            "overall_performance_score":     self.display_score(overall),
             "eye_expression":                eye_expression_data,
             "tone_analysis":                 tone_result,
             "detected_emotions":             emotions_detail,
@@ -886,7 +897,7 @@ class MLPipeline:
             return round(confidence * 100, 2)
     
         if detected_emotion.lower() == expected_emotion.lower():
-            return round(80.0 + confidence * 40.0, 2)
+            return round(80.0 + confidence * 20.0, 2)
         else:
             return 0.0
     # -----------------------------------------------------------------------
@@ -1376,11 +1387,11 @@ class MLPipeline:
                     "expected_emotion": sent["emotion"],
                     "detected_emotion": result["detected_emotion"],
                     "confidence":       result["confidence"],
-                    "score":            self._compute_sentence_score(
+                    "score":            self.display_score(self._compute_sentence_score(
                                             result["detected_emotion"],
                                             sent.get("emotion"),
                                             result["confidence"]
-                                        ),
+                                        )),
                     "time_range":       f"{sent['t_start']:.1f}s-{sent['t_end']:.1f}s",
                     "coverage":         sent.get("coverage", 1.0),
                     "status":           sent["status"],
@@ -1419,7 +1430,7 @@ class MLPipeline:
             )
 
             return {
-                "score":            avg_score,
+                "score":            self.display_score(avg_score),
                 "detected_emotion": dominant_emotion,
                 "confidence":       avg_confidence,
                 "sentence_results": sentence_results,
@@ -1582,11 +1593,11 @@ class MLPipeline:
                     
                     all_scores_dict = {EMOTION_NAMES[i]: float(probabilities[i]) for i in range(NUM_CLASSES)}
                     detected_emotion, confidence = _get_valid_emotion(all_scores_dict)
-                    score = self._compute_sentence_score(
+                    score = self.display_score(self._compute_sentence_score(
                         detected_emotion,
                         sent.get("emotion"),
                         confidence
-                    )
+                    ))
                     
                     logger.debug(
                         "Sentence %d emotion: %s (conf=%.2f%%), time=%.1f-%.1f",
@@ -1664,7 +1675,7 @@ class MLPipeline:
             )
             
             return {
-                "score": round(avg_score, 2),
+                "score":self.display_score(avg_score),
                 "detected_emotion": dominant_emotion,
                 "confidence": round(avg_confidence, 4),
                 "sentence_results": sentence_results,
