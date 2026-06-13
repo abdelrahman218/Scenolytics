@@ -85,14 +85,19 @@ EMOTIONS = {
 }
 EMOTION_NAMES: List[str] = list(EMOTIONS.values())
 NUM_CLASSES = len(EMOTION_NAMES)  # 8
-EXCLUDED_EMOTIONS = {"fearful", "disgust", "neutral"}
+EXCLUDED_EMOTIONS = ["fearful", "disgust", "neutral"]
 
 def _get_valid_emotion(all_scores: dict) -> Tuple[str, float]:
-    """Return the highest-scoring emotion that is not in EXCLUDED_EMOTIONS."""
     sorted_emotions = sorted(all_scores.items(), key=lambda x: x[1], reverse=True)
     for emotion, score in sorted_emotions:
-        if emotion not in EXCLUDED_EMOTIONS:
-            return emotion, score
+        if emotion==EXCLUDED_EMOTIONS[0]:
+            return "sad", score
+        elif emotion==EXCLUDED_EMOTIONS[1]:
+            return "angry", score
+        elif emotion==EXCLUDED_EMOTIONS[2]:
+            return "calm", score   
+        else:
+            return emotion, score    
     return sorted_emotions[0]
 # ---------------------------------------------------------------------------
 # Video model hyper-parameters -- must match training notebook exactly
@@ -180,12 +185,7 @@ def _extract_audio_ffmpeg(video_path: str, output_wav: str) -> str:
     return output_wav
 
 
-def _normalize_text(text: str) -> str:
-    """Lower-case and strip punctuation for fair script vs transcript comparison."""
-    text = text.lower()
-    text = re.sub(r"[^\w\s]", "", text)
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
+
 
 
 @tf.keras.utils.register_keras_serializable(package="Custom")
@@ -445,6 +445,7 @@ class MLPipeline:
         try:
             import mediapipe as mp
             mp_face_mesh = mp.solutions.face_mesh
+            from core.Eye import get_face_size, get_head_angle, check_lighting, compute_iris_ratios
         except (ImportError, AttributeError):
             logger.warning("MediaPipe not available, will use dlib fallback")
             return None, None
@@ -476,11 +477,23 @@ class MLPipeline:
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 results = face_mesh.process(rgb_frame)
 
-                if results.multi_face_landmarks:
+                face_detected     = results.multi_face_landmarks is not None
+                face_large_enough = False
+                angle_ok          = False
+                lighting_ok       = check_lighting(frame)
+
+                if face_detected:
+                    landmarks         = results.multi_face_landmarks[0].landmark
+                    face_ratio        = get_face_size(landmarks, frame_height, frame_width)
+                    face_large_enough = face_ratio >= 0.10
+                    head_angle        = get_head_angle(landmarks)
+                    angle_ok          = head_angle <= 30
+
+                if face_detected and face_large_enough and lighting_ok and angle_ok:
                     usable_frames.append({
-                        "frame_index": frame_index,
+                        "frame_index":  frame_index,
                         "timestamp_ms": timestamp_ms,
-                        "landmarks": results.multi_face_landmarks[0].landmark,
+                        "landmarks":    results.multi_face_landmarks[0].landmark,
                     })
 
                 frame_index += 1
@@ -507,44 +520,18 @@ class MLPipeline:
             }
 
             # Extract iris ratios
+           # Extract iris ratios using Eye.py's compute_iris_ratios
+            # to guarantee identical results to the standalone pipeline
+            from core.Eye import compute_iris_ratios
+
             iris_series = []
             for fd in usable_frames:
-                ts = fd["timestamp_ms"]
-                lm = fd["landmarks"]
-
-                # Iris indices: 468=left, 473=right
-                iris_left = np.array([lm[468].x, lm[468].y])
-                iris_right = np.array([lm[473].x, lm[473].y])
-
-                # Eye corner indices
-                left_inner = np.array([lm[33].x, lm[33].y])
-                left_outer = np.array([lm[133].x, lm[133].y])
-                right_inner = np.array([lm[362].x, lm[362].y])
-                right_outer = np.array([lm[263].x, lm[263].y])
-                left_top = np.array([lm[159].x, lm[159].y])
-                left_bot = np.array([lm[145].x, lm[145].y])
-                right_top = np.array([lm[386].x, lm[386].y])
-                right_bot = np.array([lm[374].x, lm[374].y])
-
-                def safe_ratio(val, lo, hi):
-                    span = hi - lo
-                    return (val - lo) / span if span != 0 else 0.5
-
-                # Horizontal: left eye → inner is left, outer is right
-                h_left = safe_ratio(iris_left[0], left_inner[0], left_outer[0])
-                h_right = safe_ratio(iris_right[0], right_outer[0], right_inner[0])
-                h_ratio = float(np.mean([h_left, h_right]))
-
-                # Vertical
-                v_left = safe_ratio(iris_left[1], left_top[1], left_bot[1])
-                v_right = safe_ratio(iris_right[1], right_top[1], right_bot[1])
-                v_ratio = float(np.mean([v_left, v_right]))
-
+                h_ratio, v_ratio = compute_iris_ratios(fd["landmarks"], frame_width, frame_height)
                 iris_series.append({
-                    "timestamp_ms": ts,
-                    "h_ratio": h_ratio,
-                    "v_ratio": v_ratio,
-                    "landmarks": lm,
+                    "timestamp_ms": fd["timestamp_ms"],
+                    "h_ratio":      h_ratio,
+                    "v_ratio":      v_ratio,
+                    "landmarks":    fd["landmarks"],
                 })
 
             logger.info(
@@ -557,46 +544,6 @@ class MLPipeline:
         except Exception as e:
             logger.error("MediaPipe extraction failed: %s", e)
             return None, None
-
-    def _calibrate_gaze_centre(self, iris_series: List[Dict]) -> Tuple[float, float, float, float]:
-        """
-        Calibrate neutral gaze centre from iris series.
-        Returns (center_h, center_v, h_tol, v_tol).
-        """
-        h_vals = np.array([f["h_ratio"] for f in iris_series])
-        v_vals = np.array([f["v_ratio"] for f in iris_series])
-
-        center_h = float(np.median(h_vals))
-        center_v = float(np.median(v_vals))
-
-        h_tol = float(np.percentile(np.abs(h_vals - center_h), 75))
-        v_tol = float(np.percentile(np.abs(v_vals - center_v), 75))
-
-        # Clamp to sensible minimum
-        h_tol = max(h_tol, 0.02)
-        v_tol = max(v_tol, 0.02)
-
-        logger.debug(
-            "Gaze centre calibrated: H=%.3f±%.3f, V=%.3f±%.3f",
-            center_h, h_tol, center_v, v_tol
-        )
-
-        return center_h, center_v, h_tol, v_tol
-
-    def _classify_gaze(self, h: float, v: float, center_h: float, center_v: float,
-                       h_tol: float, v_tol: float) -> str:
-        """Classify gaze direction as string label."""
-        h_off = h - center_h
-        v_off = v - center_v
-
-        h_dir = ("RIGHT" if h_off > h_tol else
-                "LEFT" if h_off < -h_tol else "")
-        v_dir = ("DOWN" if v_off > v_tol else
-                "UP" if v_off < -v_tol else "")
-
-        if h_dir and v_dir:
-            return f"{v_dir}-{h_dir}"
-        return h_dir or v_dir or "CENTER"
 
     async def _analyze_emotion_transitions(
         self,
@@ -742,59 +689,6 @@ class MLPipeline:
                 "message": f"Analysis failed: {str(e)}",
                 "transitions": [],
             }
-
-    def _score_eye_contact(self, frames: np.ndarray) -> float:
-        """
-        Compute Eye Aspect Ratio (EAR) per frame using dlib 68-point landmarks
-        and return a 0-100 score. Kept for backward compatibility.
-        """
-        if not self._ensure_dlib_loaded():
-            return 0.0
-
-        EAR_OPEN_THRESHOLD = 0.20
-        EAR_FULL_OPEN      = 0.35
-
-        def _ear(shape, start: int, end: int) -> float:
-            pts = np.array(
-                [[shape.part(i).x, shape.part(i).y] for i in range(start, end + 1)],
-                dtype=np.float32,
-            )
-            v1 = np.linalg.norm(pts[1] - pts[5])
-            v2 = np.linalg.norm(pts[2] - pts[4])
-            h  = np.linalg.norm(pts[0] - pts[3])
-            return float((v1 + v2) / (2.0 * h + 1e-6))
-
-        ear_scores = []
-
-        for frame in frames:
-            img_uint8 = (frame * 255).astype(np.uint8)
-            gray      = cv2.cvtColor(img_uint8, cv2.COLOR_RGB2GRAY)
-
-            faces = self._dlib_detector(gray, 0)
-            if len(faces) == 0:
-                ear_scores.append(0.0)
-                continue
-
-            face  = max(faces, key=lambda r: r.width() * r.height())
-            shape = self._dlib_predictor(gray, face)
-
-            left_ear  = _ear(shape, 36, 41)
-            right_ear = _ear(shape, 42, 47)
-            avg_ear   = (left_ear + right_ear) / 2.0
-
-            score = float(
-                np.clip(
-                    (avg_ear - EAR_OPEN_THRESHOLD) / (EAR_FULL_OPEN - EAR_OPEN_THRESHOLD),
-                    0.0,
-                    1.0,
-                )
-            )
-            ear_scores.append(score)
-
-        if not ear_scores:
-            return 0.0
-        return round(float(np.mean(ear_scores)) * 100, 2)
-
     # -----------------------------------------------------------------------
     # Public entry point
     # -----------------------------------------------------------------------
@@ -857,7 +751,7 @@ class MLPipeline:
         if sentences_aligned:
             audio_result = await self._score_audio_emotion_per_sentence(tmp_audio, sentences_aligned)
         else:
-            audio_result = await self._score_audio_emotion(tmp_audio, expected_emotion=None)
+            audio_result = await self._score_audio_emotion(tmp_audio)
 
         vocal_score = audio_result["score"]
         detected_emotions_vocal = {
@@ -886,8 +780,8 @@ class MLPipeline:
             # Weights: vocal 50%, script 30%, tone 20%
             tone_score = 0.0
             if tone_result:
-                pitch_var    = min(tone_result.get("overall_pitch_variation", 0) / 100, 1.0)
-                loud_var     = min(tone_result.get("overall_loudness_variation", 0) / 20,  1.0)
+                pitch_var = min(tone_result.get("overall_pitch_variation", 0) / 400, 1.0)
+                loud_var  = min(tone_result.get("overall_loudness_variation", 0) / 25,  1.0)
                 tone_score   = round((pitch_var * 0.5 + loud_var * 0.5) * 100, 2)
 
             overall = round(
@@ -973,6 +867,28 @@ class MLPipeline:
             "script_alignment_data":         alignment_data,
             "ai_feedback":                   feedback,
         }
+    @staticmethod
+    def _compute_sentence_score(
+        detected_emotion: str,
+        expected_emotion: Optional[str],
+        confidence: float
+    ) -> float:
+        """
+        Score a single sentence based on emotion match quality.
+    
+        Correct emotion  → 60–100 (floor rewards correct match,
+                                ceiling rewards strong expression)
+        Wrong emotion    → 0–40   (partial credit if expected emotion
+                                was present but not dominant)
+        No expected      → raw confidence × 100
+        """
+        if expected_emotion is None:
+            return round(confidence * 100, 2)
+    
+        if detected_emotion.lower() == expected_emotion.lower():
+            return round(80.0 + confidence * 40.0, 2)
+        else:
+            return 0.0
     # -----------------------------------------------------------------------
     # 1 -- Video emotion scoring
     # -----------------------------------------------------------------------
@@ -1111,7 +1027,8 @@ class MLPipeline:
                     y2 = min(h, fy + fh + HAAR_PADDING)
                     if x2 > x1 and y2 > y1:
                         face_crop = frame[y1:y2, x1:x2]
-
+            if face_crop is None:
+                face_crop = frame 
             resized    = cv2.resize(face_crop, (IMG_SIZE, IMG_SIZE))
             resized    = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
             normalized = resized.astype(np.float32) / 255.0
@@ -1223,7 +1140,8 @@ class MLPipeline:
                     y2 = min(h, fy + fh + HAAR_PADDING)
                     if x2 > x1 and y2 > y1:
                         face_crop = frame[y1:y2, x1:x2]
-
+            if face_crop is None:
+                face_crop = frame
             resized = cv2.resize(face_crop, (IMG_SIZE, IMG_SIZE))
             resized = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
             normalized = resized.astype(np.float32) / 255.0
@@ -1238,8 +1156,7 @@ class MLPipeline:
     # -----------------------------------------------------------------------
     async def _score_audio_emotion(
         self,
-        audio_path: Optional[str],
-        expected_emotion: Optional[str] = None,
+        audio_path: Optional[str]
     ) -> dict:
         """
         Feed the WAV file to the fine-tuned wav2vec2 model in segments,
@@ -1330,11 +1247,9 @@ class MLPipeline:
             consistency = float(np.clip(most_common_count / len(peaks), 0, 1))
             stability   = float(np.clip(stability, 0, 1))
 
-            if expected_emotion is not None:
-                score = emotion_confidence * 100
-            else:
-                score = (dominance * 0.5) + (stability * 0.3) + (consistency * 0.2)
-                score = float(np.clip(score * 100, 0, 100))
+
+            score = (dominance * 0.5) + (stability * 0.3) + (consistency * 0.2)
+            score = float(np.clip(score * 100, 0, 100))
 
             metrics = {
                 "dominance":   dominance,
@@ -1353,7 +1268,6 @@ class MLPipeline:
                 "confidence":       emotion_confidence,
                 "all_emotions":     all_emotions,
                 "metrics":          metrics,
-                "match":            detected_emotion.lower() == expected_emotion.lower() if expected_emotion else None,
             }
 
         except Exception as e:
@@ -1416,8 +1330,6 @@ class MLPipeline:
                 segment_duration  = len(segment) / sr
                 expected_duration = sent["t_end"] - sent["t_start"]
                 is_mostly_complete = segment_duration >= (expected_duration * 0.5)
-                # Calculate actual duration in seconds
-                segment_duration = len(segment) / sr
                 
                 logger.debug(
                     "Sentence %d slice: start_sample=%d end_sample=%d audio_len=%d segment_len=%d duration=%.2fs",
@@ -1425,11 +1337,8 @@ class MLPipeline:
                     start_sample, end_sample, len(audio_array), len(segment), segment_duration,
                 )
                 
-                # Minimum: 0.5 seconds of audio
-                # If segment is at end of file but still substantial, process it
-                expected_duration = sent["t_end"] - sent["t_start"]
+            
                 is_end_of_file = end_sample >= len(audio_array)
-                is_minimum_duration = segment_duration >= 0.5
                 is_mostly_complete = segment_duration >= (expected_duration * 0.5)
                 
                 should_skip = len(segment) < 8000 and not (is_end_of_file and is_mostly_complete)
@@ -1459,8 +1368,7 @@ class MLPipeline:
                     tmp_path = tmp.name
 
                 result = await self._score_audio_emotion(
-                    tmp_path,
-                    expected_emotion=sent.get("emotion"),
+                    tmp_path
                 )
 
                 sentence_results.append({
@@ -1468,7 +1376,11 @@ class MLPipeline:
                     "expected_emotion": sent["emotion"],
                     "detected_emotion": result["detected_emotion"],
                     "confidence":       result["confidence"],
-                    "score":            result["score"],
+                    "score":            self._compute_sentence_score(
+                                            result["detected_emotion"],
+                                            sent.get("emotion"),
+                                            result["confidence"]
+                                        ),
                     "time_range":       f"{sent['t_start']:.1f}s-{sent['t_end']:.1f}s",
                     "coverage":         sent.get("coverage", 1.0),
                     "status":           sent["status"],
@@ -1546,6 +1458,7 @@ class MLPipeline:
             - accuracy: float - percentage of sentences matching expected emotion
             - all_emotions: dict - placeholder for consistency with audio function
         """
+        CONTEXT_SECONDS = 3.0
         if self.emotion_model is None:
             logger.warning("Video emotion model not loaded -- cannot score per sentence")
             return {
@@ -1585,7 +1498,11 @@ class MLPipeline:
                 t_start = sent["t_start"]
                 t_end = sent["t_end"]
                 duration = t_end - t_start
-                
+                context_start = max(0.0, t_start - CONTEXT_SECONDS)
+                context_frames_count = max(2, int(FRAMES_PER_VIDEO * (
+                    CONTEXT_SECONDS / (CONTEXT_SECONDS + duration)
+                )))
+                sentence_frames_count = FRAMES_PER_VIDEO - context_frames_count
                 if duration < 0.2:  # Too short (< 200ms)
                     logger.warning(
                         "Sentence %d too short (%.2fs): '%s...'",
@@ -1602,13 +1519,17 @@ class MLPipeline:
                         "status": "too_short",
                     })
                     continue
-                
-                # Extract frames for this time range
-                frames = self._extract_frames_for_time_range(
-                    video_path, t_start, t_end, num_frames=FRAMES_PER_VIDEO
+                context_frames = self._extract_frames_for_time_range(
+                    video_path, context_start, t_start,
+                    num_frames=context_frames_count,
+                ) if context_start < t_start else np.array([])
+                # Extract sentence frames
+                sentence_frames = self._extract_frames_for_time_range(
+                    video_path, t_start, t_end,
+                    num_frames=sentence_frames_count,
                 )
                 
-                if len(frames) == 0:
+                if len(sentence_frames) == 0:
                     logger.warning(
                         "Sentence %d: no frames extracted for time range %.1f-%.1f",
                         sent_idx, t_start, t_end
@@ -1624,6 +1545,20 @@ class MLPipeline:
                         "status": "no_frames",
                     })
                     continue
+
+
+            # Combine: context first so LSTM sees it before sentence
+                if len(context_frames) > 0:
+                    frames = np.concatenate([context_frames, sentence_frames], axis=0)
+                else:
+                    frames = sentence_frames
+
+                # Pad/trim to exactly FRAMES_PER_VIDEO
+                if len(frames) < FRAMES_PER_VIDEO:
+                    pad = np.repeat(frames[-1:], FRAMES_PER_VIDEO - len(frames), axis=0)
+                    frames = np.concatenate([frames, pad], axis=0)
+                else:
+                    frames = frames[:FRAMES_PER_VIDEO]
                 
                 # Run emotion model on extracted frames
                 try:
@@ -1647,7 +1582,11 @@ class MLPipeline:
                     
                     all_scores_dict = {EMOTION_NAMES[i]: float(probabilities[i]) for i in range(NUM_CLASSES)}
                     detected_emotion, confidence = _get_valid_emotion(all_scores_dict)
-                    score = round(confidence * 100, 2)
+                    score = self._compute_sentence_score(
+                        detected_emotion,
+                        sent.get("emotion"),
+                        confidence
+                    )
                     
                     logger.debug(
                         "Sentence %d emotion: %s (conf=%.2f%%), time=%.1f-%.1f",
@@ -1871,56 +1810,6 @@ class MLPipeline:
         except Exception as e:
             logger.error("Script alignment scoring failed: %s", e, exc_info=True)
             return 0.0, None
-    def _parse_script(self, script_text: str) -> List[Dict]:
-        """
-        Parse script into sentences with emotion labels.
-
-        Accepts two formats:
-
-        Format 1 (preferred) -- JSON array string:
-            '[{"content": "sentence", "emotion": "angry"}, ...]'
-
-        Format 2 (legacy) -- plain text with inline emotion tags:
-            Sentence text "emotion"
-
-        Returns list of {content: str, emotion: str}
-        """
-        script_text = script_text.strip()
-
-        # ── Format 1: JSON array ─────────────────────────────────────────
-        if script_text.startswith("["):
-            try:
-                data = json.loads(script_text)
-                sentences = []
-                for item in data:
-                    content = str(item.get("content", "")).strip()
-                    emotion = str(item.get("emotion", "neutral")).strip().lower()
-                    if content:
-                        sentences.append({"content": content, "emotion": emotion})
-                if sentences:
-                    logger.info("Parsed script as JSON array: %d sentences", len(sentences))
-                    return sentences
-            except json.JSONDecodeError as e:
-                logger.warning("Script looked like JSON but failed to parse: %s", e)
-
-        # ── Format 2: Legacy plain-text with inline "emotion" tags ───────
-        sentences = []
-        for line in script_text.split("\n"):
-            if not line.strip():
-                continue
-            match = re.search(r'"([^"]+)"', line)
-            if match:
-                emotion = match.group(1).lower()
-                content = line[: match.start()].strip()
-            else:
-                content = line.strip()
-                emotion = "neutral"
-            if content:
-                sentences.append({"content": content, "emotion": emotion})
-
-        logger.info("Parsed script as plain text: %d sentences", len(sentences))
-        return sentences
-
     async def _score_script_alignment(
         self,
         audio_path: Optional[str],
