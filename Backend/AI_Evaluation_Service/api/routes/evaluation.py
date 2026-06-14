@@ -79,6 +79,7 @@ class EvaluationResponse(BaseModel):
     emotional_expression_score: Optional[float]
     vocal_tone_score: Optional[float]
     script_alignment_score: Optional[float]
+    tone_score: Optional[float]
     overall_performance_score: Optional[float]
     eye_expression_score: Optional[Dict[str, Any]]
     tone_analysis: Optional[Dict[str, Any]]
@@ -189,7 +190,7 @@ def _row_to_response(row: dict) -> EvaluationResponse:
             )
         except Exception:
             script_alignment_details = None
-
+    
     def _iso(val):
         if val is None:
             return None
@@ -202,6 +203,7 @@ def _row_to_response(row: dict) -> EvaluationResponse:
         emotional_expression_score=float(row["emotional_expression_score"]) if row.get("emotional_expression_score") is not None else None,
         vocal_tone_score=float(row["vocal_tone_score"]) if row.get("vocal_tone_score") is not None else None,
         script_alignment_score=float(row["script_alignment_score"]) if row.get("script_alignment_score") is not None else None,
+        tone_score=float(row["tone_score"]) if row.get("tone_score") is not None else None,
         overall_performance_score=float(row["overall_performance_score"]) if row.get("overall_performance_score") is not None else None,
         tone_analysis=(
             json.loads(row["tone_analysis"])            if isinstance(row["tone_analysis"], str) 
@@ -324,6 +326,7 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
         # overall is already calculated inside evaluate_video() using the
         # correct 40/35/25 weights — no need to recalculate here.
         overall = scores["overall_performance_score"]
+        tone_score = scores.get("tone_score")
         eye_expression_score = scores.get("eye_expression")
         if isinstance(eye_expression_score, dict):
             eye_expression_score = json.dumps(eye_expression_score)
@@ -361,6 +364,7 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
             SET emotional_expression_score = %s,
                 vocal_tone_score           = %s,
                 script_alignment_score     = %s,
+                tone_score                 = %s,
                 overall_performance_score  = %s,
                 eye_expression_score       = %s,
                 tone_analysis              = %s,
@@ -377,6 +381,7 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
                 scores.get("emotional_expression_score"),
                 scores["vocal_tone_score"],
                 scores["script_alignment_score"],
+                tone_score,
                 overall,
                 eye_expression_score,
                 tone_result,

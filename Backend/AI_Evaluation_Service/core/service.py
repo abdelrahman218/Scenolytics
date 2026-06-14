@@ -386,7 +386,7 @@ class EvaluationService:
             conn = await get_db()
             async with conn.cursor() as cursor:
                 query = """
-                    SELECT id, audition_id, media_id, submission_id, actor_id, director_id, script, status 
+                    SELECT id, audition_id, media_id, submission_id, actor_id, director_id, script, status, audio_only
                     FROM auditions 
                     WHERE submission_id = %s 
                     LIMIT 1
@@ -420,7 +420,7 @@ class EvaluationService:
             conn = await get_db()
             async with conn.cursor() as cursor:
                 query = """
-                    SELECT id, audition_id, media_id, submission_id, actor_id, director_id, script, status 
+                    SELECT id, audition_id, media_id, submission_id, actor_id, director_id, script, status, audio_only
                     FROM auditions 
                     WHERE audition_id = %s 
                     LIMIT 1
