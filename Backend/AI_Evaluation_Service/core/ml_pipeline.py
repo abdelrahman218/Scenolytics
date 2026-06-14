@@ -786,14 +786,12 @@ class MLPipeline:
             except Exception as e:
                 logger.error("Tone analysis failed: %s", e)
 
+            tone_score = 0.0
+            from core.tone import compute_tone_score
+            tone_score = compute_tone_score(tone_result)
         # ── Audio-only path ───────────────────────────────────────────────────
         if audio_only:
             # Weights: vocal 50%, script 30%, tone 20%
-            tone_score = 0.0
-            if tone_result:
-                pitch_var = min(tone_result.get("overall_pitch_variation", 0) / 400, 1.0)
-                loud_var  = min(tone_result.get("overall_loudness_variation", 0) / 25,  1.0)
-                tone_score   = round((pitch_var * 0.5 + loud_var * 0.5) * 100, 2)
 
             overall = round(
                 vocal_score  * 0.50
@@ -869,6 +867,7 @@ class MLPipeline:
             "emotional_expression_score":    self.display_score(video_emotion_result["score"]),
             "vocal_tone_score":              self.display_score(vocal_score),
             "script_alignment_score":        self.display_score(script_score),
+            "tone_score":                    self.display_score(tone_score),
             "overall_performance_score":     self.display_score(overall),
             "eye_expression":                eye_expression_data,
             "tone_analysis":                 tone_result,

@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS evaluations (
     emotional_expression_score DeCIMAL(5,2),
     vocal_tone_score DECIMAL(5,2),
     script_alignment_score DECIMAL(5,2),
+    tone_score DECIMAL(5,2),
     overall_performance_score DECIMAL(5,2),
 
     eye_expression_score JSON,
