@@ -22,7 +22,8 @@ const handleUserEvents = async (routingKey, data) => {
       await GoogleCalendarCredentials.deleteByDirectorId(data.user_id);
     }
   } catch (error) {
-    console.error("Couldn\'t create/delete user data. \n " + data);
+    console.log("Error handling user events");
+    console.error(error);
   }
 };
 
@@ -30,7 +31,8 @@ const handleEvaluationDone = async (routingKey, data) => {
   try {
     await AuditionSubmission.updateStatus(data.submission_id, 'under_review', null)
   } catch (error) {
-    console.error("Couldn\'t Update Submission Status. \n" + data);
+    console.log("Error handling evaluation done");
+    console.error(error);
   }
 };
 

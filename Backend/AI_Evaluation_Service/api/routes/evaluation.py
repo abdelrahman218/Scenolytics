@@ -79,6 +79,7 @@ class EvaluationResponse(BaseModel):
     emotional_expression_score: Optional[float]
     vocal_tone_score: Optional[float]
     script_alignment_score: Optional[float]
+    tone_score: Optional[float]
     overall_performance_score: Optional[float]
     eye_expression_score: Optional[Dict[str, Any]]
     tone_analysis: Optional[Dict[str, Any]]
@@ -189,7 +190,7 @@ def _row_to_response(row: dict) -> EvaluationResponse:
             )
         except Exception:
             script_alignment_details = None
-
+    
     def _iso(val):
         if val is None:
             return None
@@ -202,6 +203,7 @@ def _row_to_response(row: dict) -> EvaluationResponse:
         emotional_expression_score=float(row["emotional_expression_score"]) if row.get("emotional_expression_score") is not None else None,
         vocal_tone_score=float(row["vocal_tone_score"]) if row.get("vocal_tone_score") is not None else None,
         script_alignment_score=float(row["script_alignment_score"]) if row.get("script_alignment_score") is not None else None,
+        tone_score=float(row["tone_score"]) if row.get("tone_score") is not None else None,
         overall_performance_score=float(row["overall_performance_score"]) if row.get("overall_performance_score") is not None else None,
         tone_analysis=(
             json.loads(row["tone_analysis"])            if isinstance(row["tone_analysis"], str) 
@@ -288,7 +290,7 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
     from core.database import Database
     import os
     from pathlib import Path
-    
+    logger.info(f"script_text received: {repr(script_text)}")
     db = Database()
     video_path = None
     try:
@@ -324,6 +326,7 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
         # overall is already calculated inside evaluate_video() using the
         # correct 40/35/25 weights — no need to recalculate here.
         overall = scores["overall_performance_score"]
+        tone_score = scores.get("tone_score")
         eye_expression_score = scores.get("eye_expression")
         if isinstance(eye_expression_score, dict):
             eye_expression_score = json.dumps(eye_expression_score)
@@ -338,7 +341,8 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
         if isinstance(detected_emotions_video, dict):
             detected_emotions_video = json.dumps(detected_emotions_video)      
         script_alignment_details = None
-        alignment_data = scores.get("script_alignment_data")  # you need to add this to evaluate_video's return
+        alignment_data = scores.get("script_alignment_data")  
+        # you need to add this to evaluate_video's return
         if alignment_data:
             script_alignment_details = {
                 "transcript":       alignment_data.get("transcript", ""),
@@ -346,7 +350,10 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
                 "added_words":       alignment_data.get("added_words", []),
                 "changed_words":     alignment_data.get("changed_words", []),
                 "skipped_words":     alignment_data.get("skipped_words", []),
-                "comparison_rows":  alignment_data.get("comparison_rows", []),
+                "matched_word_count": alignment_data.get("matched_count", 0),
+                "added_word_count": alignment_data.get("added_count", 0),
+                "changed_word_count": alignment_data.get("changed_count", 0),
+                "skipped_word_count": alignment_data.get("skipped_count", 0),
                 "coverage":         alignment_data.get("coverage", 0.0),
                 "sentences_aligned": alignment_data.get("sentences_aligned", []),
             }
@@ -357,6 +364,7 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
             SET emotional_expression_score = %s,
                 vocal_tone_score           = %s,
                 script_alignment_score     = %s,
+                tone_score                 = %s,
                 overall_performance_score  = %s,
                 eye_expression_score       = %s,
                 tone_analysis              = %s,
@@ -373,6 +381,7 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
                 scores.get("emotional_expression_score"),
                 scores["vocal_tone_score"],
                 scores["script_alignment_score"],
+                tone_score,
                 overall,
                 eye_expression_score,
                 tone_result,
@@ -394,7 +403,7 @@ async def run_ml_pipeline(evaluation_id: str, media_id: str, pipeline, script_te
                     evaluation_id=evaluation_id,
                     media_id=media_id,
                     submission_id=submission_id,
-                    emotional_expression_score=scores["emotional_expression_score"],
+                    emotional_expression_score=scores["emotional_expression_score"] if scores.get("emotional_expression_score") is not None else None,
                     vocal_tone_score=scores["vocal_tone_score"],
                     script_alignment_score=scores["script_alignment_score"],
                     overall_performance_score=overall,
@@ -476,7 +485,79 @@ async def create_evaluation(request: CreateEvaluationRequest, background_tasks: 
     except Exception as e:
         logger.error(f"Error creating evaluation: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+@router.post("/audition-submission/{audition_id}", response_model=EvaluationResponse, status_code=201)
+async def create_evaluation_for_audition_submission(request: CreateEvaluationRequest,audition_id: str, background_tasks: BackgroundTasks, http_request: Request):
+    """
+    Create a new evaluation for an audition submission.
 
+    This endpoint is intended to be called by the Casting Management Service when an audition submission is made.
+    It will look up the media_id for the given audition_id and create an evaluation linked to that media.
+    """
+    try:
+        from core.database import Database
+        db = Database()
+
+        # Look up media_id for the given audition_id
+        audition = await db.fetch_one(
+            "SELECT audition_id, script FROM auditions WHERE audition_id = %s",
+            (audition_id,),
+        ) 
+        script_text = audition.get("script")
+        if not audition:
+            raise HTTPException(status_code=404, detail="Audition not found")
+        
+        media_id =  request.media_id
+        audition_type=audition.get("type") 
+        if audition_type != "Video":
+            audio_only = True
+        else:
+            audio_only = False
+        script_text = audition.get("script")
+
+        # Create evaluation row with status 'pending'
+        evaluation_id = str(uuid.uuid4())
+        now = datetime.utcnow().isoformat()
+        await db.execute(
+            """
+            INSERT INTO evaluations
+                (evaluation_id, media_id, submission_id, evaluation_status, created_at)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (evaluation_id, media_id, audition_id, "pending", now),
+        )
+
+        # Pass the pipeline instance directly — avoids any import-time resolution issues
+        pipeline = http_request.app.state.ml_pipeline
+        background_tasks.add_task(run_ml_pipeline, evaluation_id, media_id, pipeline, script_text, http_request.app.state.rabbitmq_manager, audition_id,audio_only)
+
+        logger.info(f"Created evaluation {evaluation_id} for audition submission {audition_id} and queued ML pipeline")
+
+        return EvaluationResponse(
+            id=evaluation_id,
+            media_id=media_id,
+            submission_id=audition_id,
+            emotional_expression_score=None,
+            vocal_tone_score=None,
+            script_alignment_score=None,
+            overall_performance_score=None,
+            eye_expression_score=None,
+            tone_analysis=None,
+            detected_emotions=None,
+            detected_emotions_vocal=None,
+            detected_emotions_video=None,
+            script_alignment_details=None,
+            ai_feedback=None,
+            evaluation_status="pending",
+            error_message=None,
+            created_at=now,
+            completed_at=None,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating evaluation for audition submission {audition_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 # FIX: /pending must be declared BEFORE /{evaluation_id} or FastAPI will treat
 #      the literal string "pending" as an evaluation_id and return a 404.

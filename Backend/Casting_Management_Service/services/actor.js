@@ -14,6 +14,8 @@ export const getAllAuditions = async (req, res, next) => {
         const auditions = await Audition.findAll();
         return res.status(200).json(auditions);
     } catch (error) {
+        console.log("Error getting all auditions");
+        console.error(error);
         next(error);
     }
 };
@@ -31,6 +33,8 @@ export const respondToInvitation = async (req, res, next) => {
         publishMessage(EXCHANGES.INVITATIONS, ROUTING_KEYS.INVITATION_UPDATED, { ...invitation, director_id });
         return res.status(200).json({message: `Invitation ${req.body.status}ed successfully`});
     } catch (error) {
+        console.log("Error responding to invitation");
+        console.error(error);
         next(error);
     }
 };
@@ -40,6 +44,8 @@ export const getActorPendingInvitations = async (req, res, next) => {
         const invitations = await AuditionInvitation.findByActorIdAndStatus(req.user.user_id, 'pending');
         return res.status(200).json(invitations);
     } catch (error) {
+        console.log("Error getting actor pending invitations");
+        console.error(error);
         next(error);
     }
 };
@@ -52,6 +58,8 @@ export const getAuditionPdfScript = async (req, res, next) => {
         createScriptPDF(res, audition);
         return;
     } catch (error) {
+        console.log("Error getting audition pdf script");
+        console.error(error);
         next(error);
     }
 };
@@ -61,6 +69,8 @@ export const getActorSubmissions = async (req, res, next) => {
         const submissions = await AuditionSubmission.findByActorId(req.user.user_id);
         return res.status(200).json(submissions);
     } catch (error) {
+        console.log("Error getting actor submissions");
+        console.error(error);
         next(error);
     }
 };
@@ -91,11 +101,12 @@ export const submitAuditionSubmission = async (req, res, next) => {
         });
 
         const uploadURL = await generatePresignedUploadUrl(submission.media_id);
-        console.log(uploadURL)
 
         publishMessage(EXCHANGES.AUDITIONS, ROUTING_KEYS.AUDITION_SUBMITTED, submission);
         return res.status(201).json({message: 'Submission metadata saved successfully', submission, uploadURL});
-    } catch (error) {
+    } catch (error) {   
+        console.log("Error submitting audition submission");
+        console.error(error);
         next(error);
     }
 };
@@ -105,6 +116,8 @@ export const getActorCallbacks = async (req, res, next) => {
         const callback = await Callback.findByActorId(req.user.user_id);
         return res.status(200).json(callback);
     } catch (error) {
+        console.log("Error getting actor callbacks");
+        console.error(error);
         next(error);
     }
 };

@@ -42,24 +42,26 @@ class AuditionService:
                 actor_id = audition_data.get('actor_id')
                 director_id = audition_data.get('director_id')
                 script = audition_data.get('script')
+                audio_only = audition_data.get('type', '').strip().lower() != 'video'     
                 if isinstance(script, (dict, list)):
                    script = json.dumps(script)
                 query = """
                     INSERT INTO auditions 
-                    (audition_id, media_id, submission_id, actor_id, director_id, script, status)
-                    VALUES (%s, %s, %s, %s, %s, %s, 'pending')
+                    (audition_id, media_id, submission_id, actor_id, director_id, script, audio_only ,status)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s,'pending')
                     ON DUPLICATE KEY UPDATE
                     media_id = VALUES(media_id),
                     submission_id = VALUES(submission_id),
                     actor_id = VALUES(actor_id),
                     director_id = VALUES(director_id),
                     script = VALUES(script),
+                    audio_only = VALUES(audio_only),
                     updated_at = CURRENT_TIMESTAMP
                 """
                 
                 await cursor.execute(
                     query,
-                    (audition_id, media_id, submission_id, actor_id, director_id, script)
+                    (audition_id, media_id, submission_id, actor_id, director_id, script, audio_only)
                 )
                 await conn.commit()
                 
@@ -240,7 +242,8 @@ class EvaluationService:
                 audition_id,
             )
             return None
-
+        logger.info(f"Audition row: {audition}")
+        logger.info(f"Script field raw value: {repr(audition.get('script'))}")
         script = audition.get("script")
         if script is not None:
             if isinstance(script, (dict, list)):
@@ -301,6 +304,10 @@ class EvaluationService:
                 submission_id = submission_data.get('id')
                 media_id = submission_data.get('media_id')
                 evaluation_id = str(uuid.uuid4())
+                audition = await EvaluationService.get_audition_by_id(
+                    submission_data.get("audition_id")
+                )
+                audio_only = bool(audition.get("audio_only"))
                 now = datetime.utcnow().isoformat()
                 
                 script = await EvaluationService.resolve_script_for_submission(
@@ -318,10 +325,10 @@ class EvaluationService:
                 from api.routes.evaluation import run_ml_pipeline
                 import asyncio
                     
-                async def queue_pipeline_with_retry(eval_id, media_id, pipe, script_text):
+                async def queue_pipeline_with_retry(eval_id, media_id, pipe, script_text,audio_only,submission_id):
                     """Queue pipeline with exponential backoff retry"""
-                    max_retries = 5
-                    retry_delay = 3
+                    max_retries = 10
+                    retry_delay = 5
                     
                     for attempt in range(max_retries):
                         try:
@@ -333,6 +340,7 @@ class EvaluationService:
                                     script_text,
                                     rabbitmq_manager,
                                     submission_id,
+                                    audio_only
                                 )
                             )
                             logger.debug(f"✓ ML pipeline task created for evaluation {eval_id}")
@@ -350,7 +358,7 @@ class EvaluationService:
                                     f"✗ Failed to queue ML pipeline after {max_retries} attempts: {str(e)}"
                                 )
                     
-                asyncio.create_task(queue_pipeline_with_retry(evaluation_id, media_id, pipeline, script))
+                asyncio.create_task(queue_pipeline_with_retry(evaluation_id, media_id, pipeline, script, audio_only, submission_id))
                 conn.commit()
                 logger.info(
                     f"✓ Evaluation created for submission {submission_id}: {evaluation_id}\n"
@@ -378,7 +386,7 @@ class EvaluationService:
             conn = await get_db()
             async with conn.cursor() as cursor:
                 query = """
-                    SELECT id, audition_id, media_id, submission_id, actor_id, director_id, script, status 
+                    SELECT id, audition_id, media_id, submission_id, actor_id, director_id, script, status, audio_only
                     FROM auditions 
                     WHERE submission_id = %s 
                     LIMIT 1
@@ -412,7 +420,7 @@ class EvaluationService:
             conn = await get_db()
             async with conn.cursor() as cursor:
                 query = """
-                    SELECT id, audition_id, media_id, submission_id, actor_id, director_id, script, status 
+                    SELECT id, audition_id, media_id, submission_id, actor_id, director_id, script, status, audio_only
                     FROM auditions 
                     WHERE audition_id = %s 
                     LIMIT 1

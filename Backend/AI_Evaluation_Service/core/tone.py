@@ -5,7 +5,85 @@ import numpy as np
 import librosa
 from typing import List, Dict, Optional
 
-
+EMOTION_RANGES: Dict[str, Dict[str, tuple]] = {
+    "calm":      {"pitch": (15,  45),  "loudness": (2,   8)},
+    "happy":     {"pitch": (50, 100),  "loudness": (6,  16)},
+    "sad":       {"pitch": (25,  70),  "loudness": (2,   9)},
+    "angry":     {"pitch": (55, 100),  "loudness": (10, 20)},
+    "surprised": {"pitch": (55, 110),  "loudness": (8,  20)},
+}
+ 
+# Fallback if an unknown emotion label arrives
+_DEFAULT_RANGE = {"pitch": (20, 150), "loudness": (4, 18)}
+ 
+ 
+def _range_score(value: float, low: float, high: float) -> float:
+    """
+    Score a single measured value against an expected [low, high] range.
+ 
+    - Inside the range            → 1.0  (perfect)
+    - Below low (too little)      → falls off linearly to 0 at value=0
+    - Above high (too much / too erratic) → falls off linearly, capped at 0
+      when value >= high * 2
+ 
+    Returns a float in [0.0, 1.0].
+    """
+    if low <= value <= high:
+        return 1.0
+    if value < low:
+        # linearly ramp from 0 (at value=0) to 1 (at value=low)
+        return max(0.0, value / low) if low > 0 else 0.0
+    # value > high: linearly decay from 1 (at value=high) to 0 (at value=high*2)
+    ceiling = high * 2
+    return max(0.0, 1.0 - (value - high) / (ceiling - high)) if ceiling > high else 0.0
+ 
+ 
+def _score_segment(segment: Dict) -> float:
+    """
+    Score a single tone segment against its emotion's expected ranges.
+ 
+    Pitch is weighted 60 % and loudness 40 % because pitch variation is a
+    stronger carrier of emotional expression than loudness alone.
+ 
+    Returns a float in [0.0, 1.0].
+    """
+    emotion = segment.get("emotion", "neutral").lower()
+    ranges  = EMOTION_RANGES.get(emotion, _DEFAULT_RANGE)
+ 
+    pitch_score    = _range_score(segment["pitch_variation"],    *ranges["pitch"])
+    loudness_score = _range_score(segment["loudness_variation"], *ranges["loudness"])
+ 
+    return pitch_score * 0.6 + loudness_score * 0.4
+ 
+ 
+def compute_tone_score(tone_result: Optional[Dict]) -> float:
+    """
+    Compute an overall vocal tone score (0–100) from the output of
+    analyze_tone(), using per-segment emotion-aware scoring.
+ 
+    Each segment is scored against the expected pitch/loudness ranges for its
+    emotion label.  Segments are weighted equally (can be extended to weight
+    by duration if needed).
+ 
+    Args:
+        tone_result: dict returned by analyze_tone(), or None.
+ 
+    Returns:
+        float in [0.0, 100.0], rounded to 2 decimal places.
+        Returns 0.0 if tone_result is None or has no segments.
+    """
+    if not tone_result:
+        return 0.0
+ 
+    segments = tone_result.get("segments", [])
+    if not segments:
+        return 0.0
+ 
+    segment_scores = [_score_segment(seg) for seg in segments]
+    overall = float(np.mean(segment_scores))
+    return round(overall * 100, 2)
+ 
+ 
 def analyze_tone(
     audio_path: str,
     sentences_aligned: Optional[List[Dict]] = None,
@@ -41,7 +119,7 @@ def analyze_tone(
             {
                 "start":   s["t_start"],
                 "end":     s["t_end"],
-                "content": s.get("content", ""),
+                "content": s.get("content") or s.get("script_sentence", ""),
                 "emotion": s.get("emotion", "neutral"),
             }
             for s in sentences_aligned
@@ -70,16 +148,18 @@ def analyze_tone(
         loudness_variation = float(np.std(librosa.amplitude_to_db(rms, ref=np.max)))
 
         # Pitch variation (voiced frames only)
-        f0     = librosa.yin(
+        f0, voiced_flag, _ = librosa.pyin(
             seg_audio,
             fmin=librosa.note_to_hz('C2'),
             fmax=librosa.note_to_hz('C7'),
             frame_length=FRAME_LEN,
             hop_length=HOP,
         )
-        voiced = (f0 > 60) & (rms_norm[:len(f0)] > 0.05)
-        f0v    = f0[voiced]
-        pitch_variation = float(np.std(f0v)) if len(f0v) > 1 else 0.0
+        f0v = f0[voiced_flag & ~np.isnan(f0)]
+        q1, q3 = np.percentile(f0v, [10, 90])  
+        f0_clipped = f0v[(f0v >= q1) & (f0v <= q3)]
+        pitch_variation = float(np.std(f0_clipped)) if len(f0_clipped) > 1 else 0.0
+
 
         # Label
         content = str(seg_def.get("content", "")).strip()

@@ -309,7 +309,7 @@
         }
       },
       "EZ-BACFB": {
-        "type": "task/http-request@1",
+        "type": "task/http-request@2",
         "pos": {
           "x": 2512,
           "y": -432
@@ -344,7 +344,8 @@
           ],
           "scriptsModifyEnvVars": true,
           "trackGlobalEnvironment": true,
-          "requestVariables__expanded": true
+          "requestVariables__expanded": true,
+          "ignoreTestResults": true
         },
         "ui": {
           "data": {},
@@ -352,7 +353,7 @@
         }
       },
       "68aKUl9p": {
-        "type": "task/http-request@1",
+        "type": "task/http-request@2",
         "pos": {
           "x": 2520,
           "y": 272
@@ -387,7 +388,8 @@
           ],
           "scriptsModifyEnvVars": true,
           "trackGlobalEnvironment": true,
-          "requestVariables__expanded": true
+          "requestVariables__expanded": true,
+          "ignoreTestResults": true
         },
         "ui": {
           "data": {},
@@ -607,6 +609,6 @@
   "info": {
     "_postman_id": "11f81038-ac59-4a34-9a64-641cefc063d7"
   },
-  "_postman_exported_at": "2026-05-20T13:11:16.796Z",
+  "_postman_exported_at": "2026-06-12T15:35:50.988Z",
   "_postman_exported_using": "Postman/Local Mode"
 }

@@ -20,10 +20,8 @@ const handleUserCreated = async (content) => {
   try {
     await NotificationPreference.create(content.user_id, content.email);
   } catch (error) {
-    console.error("Couldn't Create Notification Preference. \n ", {
-      user_id: content.user_id,
-      user_email: content.email,
-    });
+    console.log("Error handling user created");
+    console.error(error);
   }
 };
 
@@ -32,7 +30,8 @@ const handleUserDeleted = async (content) => {
     await NotificationPreference.deleteByUserId(content.user_id);
     await Notification.deleteByUserId(content.user_id);
   } catch (error) {
-    console.errror("Couldn't Delete User Data. \n ", { user_id: content.user_id });
+    console.log("Error handling user deleted");
+    console.error(error);
   }
 };
 
@@ -50,7 +49,7 @@ const handleUserEvents = async (routingKey, data) => {
 const executeAsyncListeners = () => {
   consumeMessages(QUEUES.INVITATION_EVENTS, handleInvitationEvents);
   consumeMessages(QUEUES.AUDITION_EVENTS, handleAuditionSubmission);
-  consumeMessages(QUEUES.EVALUATION_EVENTS, handleEvaluationDone);
+  //consumeMessages(QUEUES.EVALUATION_EVENTS, handleEvaluationDone);
   consumeMessages(QUEUES.USER_EVENTS, handleUserEvents);
   consumeMessages(QUEUES.CALLBACK_EVENTS, handleCallbackEvents);
 };
@@ -83,7 +82,8 @@ export const setupAsyncListeners = async () => {
     executeAsyncListeners();
     console.log("Event subscribers setup complete");
   } catch (error) {
-    console.error("Error setting up event subscribers:", error);
+    console.log("Error setting up event subscribers");
+    console.error(error);
     throw error;
   }
 };

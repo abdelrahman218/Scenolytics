@@ -11,6 +11,8 @@ export const setupSocketServer = (socketio) => {
       socket.user = user
       next();
     } catch (error) {
+      console.log("Error validating JWT token for socket IO");
+      console.error(error);
       const err = new Error("not authorized");
       err.data = { content: "Invalid or expired token" };
       next(err);

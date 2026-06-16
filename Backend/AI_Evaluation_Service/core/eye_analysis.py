@@ -78,7 +78,7 @@ def build_emotion_timeline_from_sentences(
             "start_sec": float(sent["t_start"]),
             "end_sec":   float(sent["t_end"]),
             "emotion":   sent.get("emotion", "neutral").lower(),
-            "sentence":  sent.get("content", ""),
+            "sentence":  sent.get("script_sentence") or sent.get("content", ""),
         })
 
     return timeline
@@ -91,76 +91,65 @@ def analyze_eye_expression(
     sentences_aligned: Optional[List[Dict]] = None,
     evaluation_id: Optional[str] = None,
 ) -> Dict:
-    """
-    Comprehensive eye expression analysis pipeline.
-
-    Orchestrates the workflow:
-    1. Calibrate gaze centre from iris series
-    2. Detect emotion transitions (if sentences provided)
-    3. Generate before/after images for each transition
-    4. Merge image paths into transitions
-    5. Score overall eye expression
-
-    Parameters
-    ----------
-    quality_report : dict
-        Video quality report from _extract_mediapipe_landmarks
-        with keys: video_is_usable, usable_ratio, frame_height, frame_width, etc.
-    iris_series : list of dicts
-        Iris movement data with keys: timestamp_ms, h_ratio, v_ratio, landmarks
-    video_path : str
-        Path to the video file
-    sentences_aligned : list of dicts, optional
-        Sentence-level alignment data from script transcription
-        Each dict has: content, emotion, t_start, t_end, coverage, status
-    evaluation_id : str, optional
-        Identifier for this evaluation (for logging/tracking)
-
-    Returns
-    -------
-    dict with keys:
-        - score: float 0-100
-        - result: str (NEUTRAL, SUBTLE, MODERATELY_EXPRESSIVE, EXPRESSIVE)
-        - message: human-readable explanation
-        - transitions: list of detected gaze/emotion transitions
-    """
     logger.info("Starting eye expression analysis (eval_id=%s)", evaluation_id or "unknown")
 
-    # Initialize defaults before try block so except can always reference them
-    transitions_result = []
-    gaze_shift_score   = 0.0
-    center_h           = 0.5
-    center_v           = 0.5
-    h_tol              = 0.02
-    v_tol              = 0.02
+    RESULT_MAP = {
+        "expressive": "EXPRESSIVE",
+        "subtle":     "SUBTLE",
+        "flat":       "NEUTRAL",
+    }
 
     try:
-        # Validate inputs
         if not quality_report or not iris_series:
-            logger.warning("Missing quality_report or iris_series")
             return _fallback_result("NEUTRAL", 0.0, "Insufficient eye tracking data")
 
-        if not quality_report.get("video_is_usable"):
-            logger.warning(
-                "Video quality too low for reliable analysis (%.1f%% usable)",
-                quality_report.get("usable_ratio", 0) * 100,
-            )
+        # ── Step 2: EAR + iris extraction ──────────────────────────────
+        ear_time_series, _ = run_ear_and_iris_extraction(quality_report)
+        if ear_time_series is None:
+            return _fallback_result("NEUTRAL", 0.0, "EAR extraction failed")
 
-        # Step 1: Calibrate gaze centre
-        center_h, center_v, h_tol, v_tol = calibrate_gaze_centre(iris_series)
+        # ── Step 3: Baseline ────────────────────────────────────────────
+        eye_profile = run_baseline_establishment(ear_time_series)
+        if eye_profile is None:
+            return _fallback_result("NEUTRAL", 0.0, "Baseline establishment failed")
+
+        # ── Step 4: Normalization ───────────────────────────────────────
+        normalized_series = run_normalization(ear_time_series, eye_profile)
+        if normalized_series is None:
+            return _fallback_result("NEUTRAL", 0.0, "Normalization failed")
+
+        # ── Step 5A: Expressiveness score (THE score) ───────────────────
+        expressive_result = run_eye_openness_scoring(normalized_series, eye_profile)
+        if expressive_result is None:
+            return _fallback_result("NEUTRAL", 0.0, "Openness scoring failed")
+
+        score   = expressive_result["score"]
+        result  = RESULT_MAP.get(expressive_result["result"].lower(), "NEUTRAL")
+        message = expressive_result["message"]
+
         logger.debug(
-            "Gaze centre: H=%.3f±%.3f, V=%.3f±%.3f",
-            center_h, h_tol, center_v, v_tol,
+            "Eye openness: score=%.1f, result=%s, avg_deviation=%.2f, "
+            "strong_threshold=%.2f, weak_threshold=%.2f",
+            score, result,
+            expressive_result["avg_deviation"],
+            expressive_result["strong_threshold"],
+            expressive_result["weak_threshold"],
         )
 
-        # Step 2: Detect emotion transitions and measure gaze shifts
+        # ── Step 5B: Gaze calibration ───────────────────────────────────
+        center_h, center_v, h_tol, v_tol = calibrate_gaze_centre(iris_series)
+
+        # ── Step 5C: Emotion transitions ────────────────────────────────
+        transitions_result = []
+        gaze_shift_score   = 0.0
+
         if sentences_aligned:
             emotion_timeline = build_emotion_timeline_from_sentences(sentences_aligned)
             if emotion_timeline:
-                logger.debug("Built emotion timeline from %d sentences", len(emotion_timeline))
-
                 emotion_transitions = find_emotion_transitions(emotion_timeline)
+
                 if emotion_transitions:
+                    # ── Step 5D: Measure gaze shifts ────────────────────
                     transitions_result, gaze_shift_score = measure_gaze_shifts(
                         iris_series,
                         emotion_transitions,
@@ -172,53 +161,45 @@ def analyze_eye_expression(
                         len(transitions_result), gaze_shift_score,
                     )
 
-        # Fall back to general gaze variability if no sentence-level data
-        if not transitions_result:
-            transitions_result = _analyze_gaze_variability(
-                iris_series, center_h, center_v, h_tol, v_tol, video_path
+        # ── Step 5E: Before/after images ────────────────────────────────
+        if transitions_result:
+            image_map = visualize_gaze_transitions(
+                report=quality_report,
+                iris_series=iris_series,
+                results=transitions_result,
+                center_h=center_h,
+                center_v=center_v,
+                h_tol=h_tol,
+                v_tol=v_tol,
+                video_path=video_path,
+                window_sec=2.0,
+                evaluation_id=evaluation_id,
             )
 
-        # Step 3: Generate before/after images for each transition
-        # (must happen AFTER transitions_result is fully populated)
-        image_map = _generate_transition_images(
-            quality_report=quality_report,
-            iris_series=iris_series,
-            transitions=transitions_result,
-            center_h=center_h,
-            center_v=center_v,
-            h_tol=h_tol,
-            v_tol=v_tol,
-            video_path=video_path,
-        )
+            fw = quality_report.get("frame_width",  1)
+            fh = quality_report.get("frame_height", 1)
+            image_aspect_ratio = round(fw / fh, 4) if fh > 0 else 1.0
 
-        # Step 4: Merge image paths into each transition dict
-        for t in transitions_result:
-            images = image_map.get(t.get("time_ms"), {})
-            t["before_image"]       = images.get("before_image")
-            t["after_image"]        = images.get("after_image")
-            t["image_aspect_ratio"] = images.get("image_aspect_ratio")
+            for t in transitions_result:
+                images = image_map.get(t.get("time_ms"), {})
+                t["before_image"]       = images.get("before_image")
+                t["after_image"]        = images.get("after_image")
+                t["image_aspect_ratio"] = image_aspect_ratio
 
-        # Step 5: Score overall expressiveness
-        score, result, message = _score_eye_expression(
-            iris_series, transitions_result, gaze_shift_score, quality_report
-        )
-
-        # Step 6: Clean transitions for UI (removes internal fields)
+        # ── Final output ─────────────────────────────────────────────────
         transitions_for_ui = _clean_transitions_for_ui(transitions_result)
-
-        final_result = {
-            "score":       round(score, 2),
-            "result":      result,
-            "message":     message,
-            "transitions": transitions_for_ui,
-        }
 
         logger.info(
             "Eye analysis complete: score=%.2f, result=%s, transitions=%d (eval_id=%s)",
             score, result, len(transitions_result), evaluation_id or "unknown",
         )
 
-        return final_result
+        return {
+            "score":       round(score, 2),
+            "result":      result,
+            "message":     message,
+            "transitions": transitions_for_ui,
+        }
 
     except Exception as e:
         logger.error("Eye expression analysis failed: %s", e, exc_info=True)
@@ -252,176 +233,6 @@ def _clean_transitions_for_ui(transitions: List[Dict]) -> List[Dict]:
     return cleaned
 
 
-def _generate_transition_images(
-    quality_report: Dict,
-    iris_series: List[Dict],
-    transitions: List[Dict],
-    center_h: float,
-    center_v: float,
-    h_tol: float,
-    v_tol: float,
-    video_path: str,
-) -> Dict:
-    """
-    Generate before/after images for transitions and return image_map.
-    Returns dict mapping time_ms to {before_image, after_image, image_aspect_ratio}.
-    """
-    try:
-        # Compute aspect ratio from quality report
-        fw = quality_report.get("frame_width",  1)
-        fh = quality_report.get("frame_height", 1)
-        image_aspect_ratio = round(fw / fh, 4) if fh > 0 else 1.0
-
-        raw_image_map = visualize_gaze_transitions(
-            report=quality_report,
-            iris_series=iris_series,
-            results=transitions,
-            center_h=center_h,
-            center_v=center_v,
-            h_tol=h_tol,
-            v_tol=v_tol,
-            video_path=video_path,
-            window_sec=2.0,
-        )
-
-        # Attach aspect ratio to every entry
-        image_map = {
-            time_ms: {
-                "before_image":       paths.get("before_image"),
-                "after_image":        paths.get("after_image"),
-                "image_aspect_ratio": image_aspect_ratio,
-            }
-            for time_ms, paths in raw_image_map.items()
-        }
-
-        logger.debug("Generated transition images for %d transitions", len(image_map))
-        return image_map
-
-    except Exception as e:
-        logger.warning("Failed to generate transition images: %s", e)
-        return {}
-
-
-def _analyze_gaze_variability(
-    iris_series: List[Dict],
-    center_h: float,
-    center_v: float,
-    h_tol: float,
-    v_tol: float,
-    video_path: str,
-) -> List[Dict]:
-    """
-    Fallback analysis based on gaze variability when no emotion timeline is provided.
-    """
-    transitions = []
-    prev_gaze    = None
-    prev_time_ms = None
-
-    for iris_data in iris_series:
-        ts_ms = iris_data["timestamp_ms"]
-        gaze  = classify_gaze(
-            iris_data["h_ratio"],
-            iris_data["v_ratio"],
-            center_h, center_v, h_tol, v_tol,
-        )
-
-        if prev_gaze is not None and gaze != prev_gaze:
-            time_sec = round(ts_ms / 1000.0, 2)
-            transitions.append({
-                "time_sec":     time_sec,
-                "time_ms":      int(ts_ms),
-                "from_emotion": prev_gaze,
-                "to_emotion":   gaze,
-                "from_sentence": None,
-                "to_sentence":   None,
-                "label":        "GAZE_CHANGE",
-                "score":        50.0,
-                "displacement": 0.01,
-                "dir_before":   prev_gaze,
-                "dir_after":    gaze,
-                "message":      f"Gaze shift from {prev_gaze} to {gaze}",
-                "before_image": None,
-                "after_image":  None,
-                "image_aspect_ratio": None,
-            })
-
-        prev_gaze    = gaze
-        prev_time_ms = ts_ms
-
-    return transitions
-
-
-def _score_eye_expression(
-    iris_series: List[Dict],
-    transitions: List[Dict],
-    gaze_shift_score: float,
-    quality_report: Dict,
-) -> Tuple[float, str, str]:
-    """
-    Compute overall eye expression score and classification.
-    """
-    h_vals = np.array([f["h_ratio"] for f in iris_series])
-    v_vals = np.array([f["v_ratio"] for f in iris_series])
-
-    h_variability     = float(np.std(h_vals))
-    v_variability     = float(np.std(v_vals))
-    total_variability = np.sqrt(h_variability**2 + v_variability**2)
-
-    num_transitions = len(transitions)
-
-    # Base score from variability
-    base_score = max(0.0, (total_variability - 0.02) * 100)
-
-    # Adjust based on transitions
-    if gaze_shift_score > 0:
-        score = (base_score * 0.3) + (gaze_shift_score * 0.7)
-    elif num_transitions == 0:
-        score = base_score * 0.5
-    else:
-        score = base_score + (num_transitions * 3)
-
-    score = float(np.clip(score, 0.0, 100.0))
-
-    # Classify result
-    if num_transitions == 0:
-        result  = "NEUTRAL"
-        message = "Eyes maintained consistent gaze — minimal expression"
-    elif num_transitions <= 2:
-        result  = "SUBTLE"
-        message = "Subtle gaze movements detected — understated expression"
-    elif num_transitions <= 5:
-        result  = "MODERATELY_EXPRESSIVE"
-        message = f"Multiple gaze movements ({num_transitions}) — moderate expression"
-    else:
-        result  = "EXPRESSIVE"
-        message = f"Frequent gaze shifts ({num_transitions}) — strong physical expression"
-
-    return score, result, message
-
-
-def _generate_overall_message(
-    score: float,
-    result: str,
-    quality_report: Dict,
-) -> str:
-    """Generate a comprehensive human-readable message."""
-    quality_str  = ""
-    usable_ratio = quality_report.get("usable_ratio", 0)
-
-    if usable_ratio < 0.5:
-        quality_str = " (Note: Low video quality may affect accuracy)"
-    elif usable_ratio < 0.7:
-        quality_str = " (Note: Moderate video quality)"
-
-    messages = {
-        "NEUTRAL":               f"Eyes showed minimal movement, indicating restrained expression.{quality_str}",
-        "SUBTLE":                f"Eyes showed subtle shifts, suggesting reserved but present expressiveness.{quality_str}",
-        "MODERATELY_EXPRESSIVE": f"Eyes demonstrated moderate movement and engagement.{quality_str}",
-        "EXPRESSIVE":            f"Eyes were highly expressive with frequent shifts, showing strong engagement.{quality_str}",
-        "ERROR":                 "Eye analysis could not be completed due to technical issues.",
-    }
-
-    return messages.get(result, f"Eye expression score: {score}/100{quality_str}")
 
 
 def _fallback_result(

@@ -57,6 +57,7 @@ import re
 import json
 import logging
 import difflib
+import math
 import subprocess
 import tempfile
 import cv2
@@ -85,7 +86,20 @@ EMOTIONS = {
 }
 EMOTION_NAMES: List[str] = list(EMOTIONS.values())
 NUM_CLASSES = len(EMOTION_NAMES)  # 8
+EXCLUDED_EMOTIONS = ["fearful", "disgust", "neutral"]
 
+def _get_valid_emotion(all_scores: dict) -> Tuple[str, float]:
+    sorted_emotions = sorted(all_scores.items(), key=lambda x: x[1], reverse=True)
+    for emotion, score in sorted_emotions:
+        if emotion==EXCLUDED_EMOTIONS[0]:
+            return "sad", all_scores["sad"]
+        elif emotion==EXCLUDED_EMOTIONS[1]:
+            return "angry", all_scores["angry"]
+        elif emotion==EXCLUDED_EMOTIONS[2]:
+            return "calm", all_scores["calm"]   
+        else:
+            return emotion, score    
+    return sorted_emotions[0]
 # ---------------------------------------------------------------------------
 # Video model hyper-parameters -- must match training notebook exactly
 # ---------------------------------------------------------------------------
@@ -172,12 +186,7 @@ def _extract_audio_ffmpeg(video_path: str, output_wav: str) -> str:
     return output_wav
 
 
-def _normalize_text(text: str) -> str:
-    """Lower-case and strip punctuation for fair script vs transcript comparison."""
-    text = text.lower()
-    text = re.sub(r"[^\w\s]", "", text)
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
+
 
 
 @tf.keras.utils.register_keras_serializable(package="Custom")
@@ -230,7 +239,16 @@ class MLPipeline:
 
         # ---- OpenCV Haar cascade for frame extraction (lazy-loaded) ----
         self._face_cascade = None
-
+        try:
+            from retinaface import RetinaFace as _RF
+            self._use_retinaface = True
+            logger.info("RetinaFace available — using it for face detection (matches training)")
+        except ImportError:
+            self._use_retinaface = False
+            logger.warning(
+                "RetinaFace not installed — falling back to Haar cascade. "
+                "Emotion accuracy may be lower. Install with: pip install retina-face"
+            )
         # ---- Metric weights (must sum to 1.0) ----
         self.weights = {
             "emotional_expression_score": 0.40,
@@ -428,6 +446,7 @@ class MLPipeline:
         try:
             import mediapipe as mp
             mp_face_mesh = mp.solutions.face_mesh
+            from core.Eye import get_face_size, get_head_angle, check_lighting, compute_iris_ratios
         except (ImportError, AttributeError):
             logger.warning("MediaPipe not available, will use dlib fallback")
             return None, None
@@ -459,11 +478,23 @@ class MLPipeline:
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 results = face_mesh.process(rgb_frame)
 
-                if results.multi_face_landmarks:
+                face_detected     = results.multi_face_landmarks is not None
+                face_large_enough = False
+                angle_ok          = False
+                lighting_ok       = check_lighting(frame)
+
+                if face_detected:
+                    landmarks         = results.multi_face_landmarks[0].landmark
+                    face_ratio        = get_face_size(landmarks, frame_height, frame_width)
+                    face_large_enough = face_ratio >= 0.10
+                    head_angle        = get_head_angle(landmarks)
+                    angle_ok          = head_angle <= 30
+
+                if face_detected and face_large_enough and lighting_ok and angle_ok:
                     usable_frames.append({
-                        "frame_index": frame_index,
+                        "frame_index":  frame_index,
                         "timestamp_ms": timestamp_ms,
-                        "landmarks": results.multi_face_landmarks[0].landmark,
+                        "landmarks":    results.multi_face_landmarks[0].landmark,
                     })
 
                 frame_index += 1
@@ -490,44 +521,18 @@ class MLPipeline:
             }
 
             # Extract iris ratios
+           # Extract iris ratios using Eye.py's compute_iris_ratios
+            # to guarantee identical results to the standalone pipeline
+            from core.Eye import compute_iris_ratios
+
             iris_series = []
             for fd in usable_frames:
-                ts = fd["timestamp_ms"]
-                lm = fd["landmarks"]
-
-                # Iris indices: 468=left, 473=right
-                iris_left = np.array([lm[468].x, lm[468].y])
-                iris_right = np.array([lm[473].x, lm[473].y])
-
-                # Eye corner indices
-                left_inner = np.array([lm[33].x, lm[33].y])
-                left_outer = np.array([lm[133].x, lm[133].y])
-                right_inner = np.array([lm[362].x, lm[362].y])
-                right_outer = np.array([lm[263].x, lm[263].y])
-                left_top = np.array([lm[159].x, lm[159].y])
-                left_bot = np.array([lm[145].x, lm[145].y])
-                right_top = np.array([lm[386].x, lm[386].y])
-                right_bot = np.array([lm[374].x, lm[374].y])
-
-                def safe_ratio(val, lo, hi):
-                    span = hi - lo
-                    return (val - lo) / span if span != 0 else 0.5
-
-                # Horizontal: left eye → inner is left, outer is right
-                h_left = safe_ratio(iris_left[0], left_inner[0], left_outer[0])
-                h_right = safe_ratio(iris_right[0], right_outer[0], right_inner[0])
-                h_ratio = float(np.mean([h_left, h_right]))
-
-                # Vertical
-                v_left = safe_ratio(iris_left[1], left_top[1], left_bot[1])
-                v_right = safe_ratio(iris_right[1], right_top[1], right_bot[1])
-                v_ratio = float(np.mean([v_left, v_right]))
-
+                h_ratio, v_ratio = compute_iris_ratios(fd["landmarks"], frame_width, frame_height)
                 iris_series.append({
-                    "timestamp_ms": ts,
-                    "h_ratio": h_ratio,
-                    "v_ratio": v_ratio,
-                    "landmarks": lm,
+                    "timestamp_ms": fd["timestamp_ms"],
+                    "h_ratio":      h_ratio,
+                    "v_ratio":      v_ratio,
+                    "landmarks":    fd["landmarks"],
                 })
 
             logger.info(
@@ -540,46 +545,6 @@ class MLPipeline:
         except Exception as e:
             logger.error("MediaPipe extraction failed: %s", e)
             return None, None
-
-    def _calibrate_gaze_centre(self, iris_series: List[Dict]) -> Tuple[float, float, float, float]:
-        """
-        Calibrate neutral gaze centre from iris series.
-        Returns (center_h, center_v, h_tol, v_tol).
-        """
-        h_vals = np.array([f["h_ratio"] for f in iris_series])
-        v_vals = np.array([f["v_ratio"] for f in iris_series])
-
-        center_h = float(np.median(h_vals))
-        center_v = float(np.median(v_vals))
-
-        h_tol = float(np.percentile(np.abs(h_vals - center_h), 75))
-        v_tol = float(np.percentile(np.abs(v_vals - center_v), 75))
-
-        # Clamp to sensible minimum
-        h_tol = max(h_tol, 0.02)
-        v_tol = max(v_tol, 0.02)
-
-        logger.debug(
-            "Gaze centre calibrated: H=%.3f±%.3f, V=%.3f±%.3f",
-            center_h, h_tol, center_v, v_tol
-        )
-
-        return center_h, center_v, h_tol, v_tol
-
-    def _classify_gaze(self, h: float, v: float, center_h: float, center_v: float,
-                       h_tol: float, v_tol: float) -> str:
-        """Classify gaze direction as string label."""
-        h_off = h - center_h
-        v_off = v - center_v
-
-        h_dir = ("RIGHT" if h_off > h_tol else
-                "LEFT" if h_off < -h_tol else "")
-        v_dir = ("DOWN" if v_off > v_tol else
-                "UP" if v_off < -v_tol else "")
-
-        if h_dir and v_dir:
-            return f"{v_dir}-{h_dir}"
-        return h_dir or v_dir or "CENTER"
 
     async def _analyze_emotion_transitions(
         self,
@@ -725,62 +690,19 @@ class MLPipeline:
                 "message": f"Analysis failed: {str(e)}",
                 "transitions": [],
             }
-
-    def _score_eye_contact(self, frames: np.ndarray) -> float:
-        """
-        Compute Eye Aspect Ratio (EAR) per frame using dlib 68-point landmarks
-        and return a 0-100 score. Kept for backward compatibility.
-        """
-        if not self._ensure_dlib_loaded():
-            return 0.0
-
-        EAR_OPEN_THRESHOLD = 0.20
-        EAR_FULL_OPEN      = 0.35
-
-        def _ear(shape, start: int, end: int) -> float:
-            pts = np.array(
-                [[shape.part(i).x, shape.part(i).y] for i in range(start, end + 1)],
-                dtype=np.float32,
-            )
-            v1 = np.linalg.norm(pts[1] - pts[5])
-            v2 = np.linalg.norm(pts[2] - pts[4])
-            h  = np.linalg.norm(pts[0] - pts[3])
-            return float((v1 + v2) / (2.0 * h + 1e-6))
-
-        ear_scores = []
-
-        for frame in frames:
-            img_uint8 = (frame * 255).astype(np.uint8)
-            gray      = cv2.cvtColor(img_uint8, cv2.COLOR_RGB2GRAY)
-
-            faces = self._dlib_detector(gray, 0)
-            if len(faces) == 0:
-                ear_scores.append(0.0)
-                continue
-
-            face  = max(faces, key=lambda r: r.width() * r.height())
-            shape = self._dlib_predictor(gray, face)
-
-            left_ear  = _ear(shape, 36, 41)
-            right_ear = _ear(shape, 42, 47)
-            avg_ear   = (left_ear + right_ear) / 2.0
-
-            score = float(
-                np.clip(
-                    (avg_ear - EAR_OPEN_THRESHOLD) / (EAR_FULL_OPEN - EAR_OPEN_THRESHOLD),
-                    0.0,
-                    1.0,
-                )
-            )
-            ear_scores.append(score)
-
-        if not ear_scores:
-            return 0.0
-        return round(float(np.mean(ear_scores)) * 100, 2)
-
     # -----------------------------------------------------------------------
     # Public entry point
     # -----------------------------------------------------------------------
+
+    def display_score(self,score: float) -> float:
+        score = round(score, 1)  # 99.46 → 99.5, 99.74 → 99.7
+        decimal = score % 1
+        if decimal == 0.5:
+            return score
+        elif decimal > 0.5:
+            return float(math.ceil(score))
+        else:
+            return float(math.floor(score))
     async def evaluate_video(
         self,
         video_path: str,
@@ -840,13 +762,13 @@ class MLPipeline:
         if sentences_aligned:
             audio_result = await self._score_audio_emotion_per_sentence(tmp_audio, sentences_aligned)
         else:
-            audio_result = await self._score_audio_emotion(tmp_audio, expected_emotion=None)
+            audio_result = await self._score_audio_emotion(tmp_audio)
 
         vocal_score = audio_result["score"]
         detected_emotions_vocal = {
             "primary":     audio_result["detected_emotion"],
             "confidence":  audio_result["confidence"],
-            "all_emotions": audio_result.get("all_emotions", {}),
+            "score":        self.display_score(audio_result["score"]),
         }
         if "sentence_results" in audio_result:
             detected_emotions_vocal["sentence_results"] = audio_result["sentence_results"]
@@ -864,14 +786,12 @@ class MLPipeline:
             except Exception as e:
                 logger.error("Tone analysis failed: %s", e)
 
+            tone_score = 0.0
+            from core.tone import compute_tone_score
+            tone_score = compute_tone_score(tone_result)
         # ── Audio-only path ───────────────────────────────────────────────────
         if audio_only:
             # Weights: vocal 50%, script 30%, tone 20%
-            tone_score = 0.0
-            if tone_result:
-                pitch_var    = min(tone_result.get("overall_pitch_variation", 0) / 100, 1.0)
-                loud_var     = min(tone_result.get("overall_loudness_variation", 0) / 20,  1.0)
-                tone_score   = round((pitch_var * 0.5 + loud_var * 0.5) * 100, 2)
 
             overall = round(
                 vocal_score  * 0.50
@@ -890,10 +810,10 @@ class MLPipeline:
 
             return {
                 "mode":                      "audio_only",
-                "vocal_tone_score":          round(vocal_score, 2),
-                "script_alignment_score":    round(script_score, 2),
-                "tone_score":                tone_score,
-                "overall_performance_score": overall,
+                "vocal_tone_score":          self.display_score(vocal_score),
+                "script_alignment_score":    self.display_score(script_score),
+                "tone_score":                self.display_score(tone_score),
+                "overall_performance_score": self.display_score(overall),
                 "tone_analysis":             tone_result,
                 "detected_emotions_vocal":   detected_emotions_vocal,
                 "script_alignment_data":     alignment_data,
@@ -913,7 +833,7 @@ class MLPipeline:
             detected_emotions_video = {
                 "primary":          video_emotion_result["detected_emotion"],
                 "confidence":       video_emotion_result["confidence"],
-                "score":            video_emotion_result["score"],
+                "score":            self.display_score(video_emotion_result["score"]),
                 "accuracy":         video_emotion_result["accuracy"],
                 "sentence_results": video_emotion_result.get("sentence_results", []),
             }
@@ -923,7 +843,7 @@ class MLPipeline:
         )
 
         overall = round(
-            emotional_score * self.weights["emotional_expression_score"]
+            self.display_score(video_emotion_result["score"]) * self.weights["emotional_expression_score"]
             + vocal_score   * self.weights["vocal_tone_score"]
             + script_score  * self.weights["script_alignment_score"],
             2,
@@ -944,10 +864,11 @@ class MLPipeline:
 
         return {
             "mode":                          "video",
-            "emotional_expression_score":    round(emotional_score, 2),
-            "vocal_tone_score":              round(vocal_score, 2),
-            "script_alignment_score":        round(script_score, 2),
-            "overall_performance_score":     overall,
+            "emotional_expression_score":    self.display_score(video_emotion_result["score"]),
+            "vocal_tone_score":              self.display_score(vocal_score),
+            "script_alignment_score":        self.display_score(script_score),
+            "tone_score":                    self.display_score(tone_score),
+            "overall_performance_score":     self.display_score(overall),
             "eye_expression":                eye_expression_data,
             "tone_analysis":                 tone_result,
             "detected_emotions":             emotions_detail,
@@ -956,6 +877,28 @@ class MLPipeline:
             "script_alignment_data":         alignment_data,
             "ai_feedback":                   feedback,
         }
+    @staticmethod
+    def _compute_sentence_score(
+        detected_emotion: str,
+        expected_emotion: Optional[str],
+        confidence: float
+    ) -> float:
+        """
+        Score a single sentence based on emotion match quality.
+    
+        Correct emotion  → 60–100 (floor rewards correct match,
+                                ceiling rewards strong expression)
+        Wrong emotion    → 0–40   (partial credit if expected emotion
+                                was present but not dominant)
+        No expected      → raw confidence × 100
+        """
+        if expected_emotion is None:
+            return round(confidence * 100, 2)
+    
+        if detected_emotion.lower() == expected_emotion.lower():
+            return round(80.0 + confidence * 20.0, 2)
+        else:
+            return 0.0
     # -----------------------------------------------------------------------
     # 1 -- Video emotion scoring
     # -----------------------------------------------------------------------
@@ -980,26 +923,29 @@ class MLPipeline:
             frames_norm = preprocess_input(frames * 255.0)
 
             if len(frames_norm) < FRAMES_PER_VIDEO:
-                pad = np.zeros(
-                    (FRAMES_PER_VIDEO - len(frames_norm), IMG_SIZE, IMG_SIZE, 3),
-                    dtype=np.float32,
+                last_frame = frames_norm[-1:]  # shape (1, H, W, 3)
+                pad = np.repeat(
+                    last_frame,
+                    FRAMES_PER_VIDEO - len(frames_norm),
+                    axis=0,
                 )
                 frames_norm = np.concatenate([frames_norm, pad], axis=0)
             else:
-                frames_norm = frames_norm[:FRAMES_PER_VIDEO]
+                frames_norm = frames_norm[:FRAMES_PER_VIDEO]    
 
             input_batch   = frames_norm[np.newaxis, ...]
             probabilities = self.emotion_model.predict(input_batch, verbose=0)[0]
             probabilities = np.array(probabilities, dtype=np.float64)
             probabilities = probabilities / probabilities.sum()
 
-            primary_idx   = int(np.argmax(probabilities))
-            secondary_idx = int(np.argsort(probabilities)[-2])
-
-            primary_emotion   = EMOTION_NAMES[primary_idx]
-            secondary_emotion = EMOTION_NAMES[secondary_idx]
-            confidence        = float(probabilities[primary_idx])
-            score             = round(confidence * 100, 2)
+            all_scores_dict = {EMOTION_NAMES[i]: float(probabilities[i]) for i in range(NUM_CLASSES)}
+            primary_emotion, confidence = _get_valid_emotion(all_scores_dict)
+            valid_secondary = [
+                e for e, _ in sorted(all_scores_dict.items(), key=lambda x: x[1], reverse=True)
+                if e != primary_emotion and e not in EXCLUDED_EMOTIONS
+            ]
+            secondary_emotion = valid_secondary[0] if valid_secondary else primary_emotion
+            score = round(confidence * 100, 2)
 
             emotions_detail = {
                 "primary":    primary_emotion,
@@ -1058,34 +1004,41 @@ class MLPipeline:
                 )
                 continue
 
-            h, w  = frame.shape[:2]
-            gray  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            faces = self._face_cascade.detectMultiScale(
-                gray, scaleFactor=1.1, minNeighbors=4, minSize=(30, 30)
-            )
-
+            # AFTER
+            h, w = frame.shape[:2]
             face_crop = None
-            if len(faces) > 0:
-                fx, fy, fw, fh = faces[0]
-                x1 = max(0, fx - HAAR_PADDING)
-                y1 = max(0, fy - HAAR_PADDING)
-                x2 = min(w, fx + fw + HAAR_PADDING)
-                y2 = min(h, fy + fh + HAAR_PADDING)
-                if x2 > x1 and y2 > y1:
-                    face_crop = frame[y1:y2, x1:x2]
 
-            if face_crop is None or face_crop.size == 0:
-                if last_good is not None:
-                    logger.debug("Frame %d: no face -- reusing last good crop.", idx)
-                    frames.append(last_good.copy())
-                    continue
-                else:
-                    logger.debug("Frame %d: no face and no prior crop -- using full frame.", idx)
-                    size      = min(h, w)
-                    y_off     = (h - size) // 2
-                    x_off     = (w - size) // 2
-                    face_crop = frame[y_off: y_off + size, x_off: x_off + size]
+            if self._use_retinaface:
+                try:
+                    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    faces = RetinaFace.detect_faces(rgb)
+                    if isinstance(faces, dict) and faces:
+                        first = next(iter(faces.values()))
+                        x1, y1, x2, y2 = first["facial_area"]
+                        x1 = max(0, x1 - HAAR_PADDING)
+                        y1 = max(0, y1 - HAAR_PADDING)
+                        x2 = min(w, x2 + HAAR_PADDING)
+                        y2 = min(h, y2 + HAAR_PADDING)
+                        if x2 > x1 and y2 > y1:
+                            face_crop = frame[y1:y2, x1:x2]
+                except Exception:
+                    pass  # fall through to Haar below
 
+            if face_crop is None:
+                gray  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                faces = self._face_cascade.detectMultiScale(
+                    gray, scaleFactor=1.1, minNeighbors=4, minSize=(30, 30)
+                )
+                if len(faces) > 0:
+                    fx, fy, fw, fh = faces[0]
+                    x1 = max(0, fx - HAAR_PADDING)
+                    y1 = max(0, fy - HAAR_PADDING)
+                    x2 = min(w, fx + fw + HAAR_PADDING)
+                    y2 = min(h, fy + fh + HAAR_PADDING)
+                    if x2 > x1 and y2 > y1:
+                        face_crop = frame[y1:y2, x1:x2]
+            if face_crop is None:
+                face_crop = frame 
             resized    = cv2.resize(face_crop, (IMG_SIZE, IMG_SIZE))
             resized    = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
             normalized = resized.astype(np.float32) / 255.0
@@ -1164,34 +1117,41 @@ class MLPipeline:
                 )
                 continue
 
+            # AFTER
             h, w = frame.shape[:2]
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            faces = self._face_cascade.detectMultiScale(
-                gray, scaleFactor=1.1, minNeighbors=4, minSize=(30, 30)
-            )
-
             face_crop = None
-            if len(faces) > 0:
-                fx, fy, fw, fh = faces[0]
-                x1 = max(0, fx - HAAR_PADDING)
-                y1 = max(0, fy - HAAR_PADDING)
-                x2 = min(w, fx + fw + HAAR_PADDING)
-                y2 = min(h, fy + fh + HAAR_PADDING)
-                if x2 > x1 and y2 > y1:
-                    face_crop = frame[y1:y2, x1:x2]
 
-            if face_crop is None or face_crop.size == 0:
-                if last_good is not None:
-                    logger.debug("Frame %d: no face -- reusing last good crop.", idx)
-                    frames.append(last_good.copy())
-                    continue
-                else:
-                    logger.debug("Frame %d: no face and no prior crop -- using full frame.", idx)
-                    size = min(h, w)
-                    y_off = (h - size) // 2
-                    x_off = (w - size) // 2
-                    face_crop = frame[y_off : y_off + size, x_off : x_off + size]
+            if self._use_retinaface:
+                try:
+                    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    faces = RetinaFace.detect_faces(rgb)
+                    if isinstance(faces, dict) and faces:
+                        first = next(iter(faces.values()))
+                        x1, y1, x2, y2 = first["facial_area"]
+                        x1 = max(0, x1 - HAAR_PADDING)
+                        y1 = max(0, y1 - HAAR_PADDING)
+                        x2 = min(w, x2 + HAAR_PADDING)
+                        y2 = min(h, y2 + HAAR_PADDING)
+                        if x2 > x1 and y2 > y1:
+                            face_crop = frame[y1:y2, x1:x2]
+                except Exception:
+                    pass  # fall through to Haar below
 
+            if face_crop is None:
+                gray  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                faces = self._face_cascade.detectMultiScale(
+                    gray, scaleFactor=1.1, minNeighbors=4, minSize=(30, 30)
+                )
+                if len(faces) > 0:
+                    fx, fy, fw, fh = faces[0]
+                    x1 = max(0, fx - HAAR_PADDING)
+                    y1 = max(0, fy - HAAR_PADDING)
+                    x2 = min(w, fx + fw + HAAR_PADDING)
+                    y2 = min(h, fy + fh + HAAR_PADDING)
+                    if x2 > x1 and y2 > y1:
+                        face_crop = frame[y1:y2, x1:x2]
+            if face_crop is None:
+                face_crop = frame
             resized = cv2.resize(face_crop, (IMG_SIZE, IMG_SIZE))
             resized = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
             normalized = resized.astype(np.float32) / 255.0
@@ -1206,8 +1166,7 @@ class MLPipeline:
     # -----------------------------------------------------------------------
     async def _score_audio_emotion(
         self,
-        audio_path: Optional[str],
-        expected_emotion: Optional[str] = None,
+        audio_path: Optional[str]
     ) -> dict:
         """
         Feed the WAV file to the fine-tuned wav2vec2 model in segments,
@@ -1280,10 +1239,8 @@ class MLPipeline:
             all_probs    = np.array(all_probs, dtype=np.float32)
             avg_probs    = np.mean(all_probs, axis=0)
             id2label     = self.audio_model.config.id2label
-            predicted_id = np.argmax(avg_probs)
-
-            detected_emotion   = id2label[predicted_id]
-            emotion_confidence = float(avg_probs[predicted_id])
+            all_scores_dict = {id2label[idx]: float(prob) for idx, prob in enumerate(avg_probs)}
+            detected_emotion, emotion_confidence = _get_valid_emotion(all_scores_dict)
 
             all_emotions = {
                 id2label[idx]: float(prob)
@@ -1300,20 +1257,9 @@ class MLPipeline:
             consistency = float(np.clip(most_common_count / len(peaks), 0, 1))
             stability   = float(np.clip(stability, 0, 1))
 
-            if expected_emotion is not None:
-                match = detected_emotion.lower() == expected_emotion.lower()
-                if match:
-                    score = emotion_confidence * 100
-                else:
-                    expected_prob = 0.0
-                    for idx, label in id2label.items():
-                        if label.lower() == expected_emotion.lower():
-                            expected_prob = float(avg_probs[idx])
-                            break
-                    score = expected_prob * 100
-            else:
-                score = (dominance * 0.5) + (stability * 0.3) + (consistency * 0.2)
-                score = float(np.clip(score * 100, 0, 100))
+
+            score = (dominance * 0.5) + (stability * 0.3) + (consistency * 0.2)
+            score = float(np.clip(score * 100, 0, 100))
 
             metrics = {
                 "dominance":   dominance,
@@ -1371,9 +1317,9 @@ class MLPipeline:
 
             for sent in sentences_aligned:
                 if sent["status"] == "missing" or sent["t_start"] is None:
-                    logger.debug("Skipping missing sentence: %s...", sent["script_sentence"][:50])
+                    logger.debug("Skipping missing sentence: %s...", sent["content"][:50])
                     sentence_results.append({
-                        "sentence":         sent["script_sentence"],
+                        "sentence":         sent["content"],
                         "expected_emotion": sent.get("emotion"),
                         "detected_emotion": None,
                         "confidence":       0.0,
@@ -1394,28 +1340,6 @@ class MLPipeline:
                 segment_duration  = len(segment) / sr
                 expected_duration = sent["t_end"] - sent["t_start"]
                 is_mostly_complete = segment_duration >= (expected_duration * 0.5)
-
-                if len(segment) < 8000 and not is_mostly_complete:
-                    logger.warning(
-                        "Sentence %d too short: %.2fs (%d samples) | '%s...'",
-                        len(sentence_results) + 1,
-                        segment_duration, len(segment),
-                        sent["script_sentence"][:40],
-                    )
-                    sentence_results.append({
-                        "sentence":         sent["script_sentence"],
-                        "expected_emotion": sent.get("emotion"),
-                        "detected_emotion": None,
-                        "confidence":       0.0,
-                        "score":            0.0,
-                        "time_range":       f"{sent['t_start']:.4f}s-{sent['t_end']:.4f}s",
-                        "coverage":         sent.get("coverage", 1.0),
-                        "status":           "too_short",
-                    })
-                    continue
-                
-                # Calculate actual duration in seconds
-                segment_duration = len(segment) / sr
                 
                 logger.debug(
                     "Sentence %d slice: start_sample=%d end_sample=%d audio_len=%d segment_len=%d duration=%.2fs",
@@ -1423,11 +1347,8 @@ class MLPipeline:
                     start_sample, end_sample, len(audio_array), len(segment), segment_duration,
                 )
                 
-                # Minimum: 0.5 seconds of audio
-                # If segment is at end of file but still substantial, process it
-                expected_duration = sent["t_end"] - sent["t_start"]
+            
                 is_end_of_file = end_sample >= len(audio_array)
-                is_minimum_duration = segment_duration >= 0.5
                 is_mostly_complete = segment_duration >= (expected_duration * 0.5)
                 
                 should_skip = len(segment) < 8000 and not (is_end_of_file and is_mostly_complete)
@@ -1438,10 +1359,10 @@ class MLPipeline:
                         len(sentence_results) + 1,
                         segment_duration, len(segment),
                         sent["t_start"], sent["t_end"],
-                        sent["script_sentence"][:40],
+                        sent["content"][:40],
                     )
                     sentence_results.append({
-                        "sentence":         sent["script_sentence"],
+                        "sentence":         sent["content"],
                         "expected_emotion": sent.get("emotion"),
                         "detected_emotion": None,
                         "confidence":       0.0,
@@ -1457,16 +1378,19 @@ class MLPipeline:
                     tmp_path = tmp.name
 
                 result = await self._score_audio_emotion(
-                    tmp_path,
-                    expected_emotion=sent.get("emotion"),
+                    tmp_path
                 )
 
                 sentence_results.append({
-                    "sentence":         sent["script_sentence"],
+                    "sentence":         sent["content"],
                     "expected_emotion": sent["emotion"],
                     "detected_emotion": result["detected_emotion"],
                     "confidence":       result["confidence"],
-                    "score":            result["score"],
+                    "score":            self.display_score(self._compute_sentence_score(
+                                            result["detected_emotion"],
+                                            sent.get("emotion"),
+                                            result["confidence"]
+                                        )),
                     "time_range":       f"{sent['t_start']:.1f}s-{sent['t_end']:.1f}s",
                     "coverage":         sent.get("coverage", 1.0),
                     "status":           sent["status"],
@@ -1493,7 +1417,7 @@ class MLPipeline:
                 avg_confidence   = 0.0
             matches = sum(
                 1 for r in sentence_results
-                if r["detected_emotion"] is not None
+                if r.get("detected_emotion") is not None
                 and r["detected_emotion"].lower() == (r["expected_emotion"] or "").lower()
             )
          
@@ -1505,7 +1429,7 @@ class MLPipeline:
             )
 
             return {
-                "score":            avg_score,
+                "score":            self.display_score(avg_score),
                 "detected_emotion": dominant_emotion,
                 "confidence":       avg_confidence,
                 "sentence_results": sentence_results,
@@ -1544,6 +1468,7 @@ class MLPipeline:
             - accuracy: float - percentage of sentences matching expected emotion
             - all_emotions: dict - placeholder for consistency with audio function
         """
+        CONTEXT_SECONDS = 3.0
         if self.emotion_model is None:
             logger.warning("Video emotion model not loaded -- cannot score per sentence")
             return {
@@ -1566,9 +1491,9 @@ class MLPipeline:
             
             for sent_idx, sent in enumerate(sentences_aligned):
                 if sent["status"] == "missing" or sent["t_start"] is None:
-                    logger.debug("Skipping missing sentence %d: %s...", sent_idx, sent["script_sentence"][:50])
+                    logger.debug("Skipping missing sentence %d: %s...", sent_idx, sent["content"][:50])
                     sentence_results.append({
-                        "sentence": sent["script_sentence"],
+                        "sentence": sent["content"],
                         "expected_emotion": sent.get("emotion"),
                         "detected_emotion": None,
                         "confidence": 0.0,
@@ -1583,14 +1508,18 @@ class MLPipeline:
                 t_start = sent["t_start"]
                 t_end = sent["t_end"]
                 duration = t_end - t_start
-                
+                context_start = max(0.0, t_start - CONTEXT_SECONDS)
+                context_frames_count = max(2, int(FRAMES_PER_VIDEO * (
+                    CONTEXT_SECONDS / (CONTEXT_SECONDS + duration)
+                )))
+                sentence_frames_count = FRAMES_PER_VIDEO - context_frames_count
                 if duration < 0.2:  # Too short (< 200ms)
                     logger.warning(
                         "Sentence %d too short (%.2fs): '%s...'",
-                        sent_idx, duration, sent["script_sentence"][:40]
+                        sent_idx, duration, sent["content"][:40]
                     )
                     sentence_results.append({
-                        "sentence": sent["script_sentence"],
+                        "sentence": sent["content"],
                         "expected_emotion": sent.get("emotion"),
                         "detected_emotion": None,
                         "confidence": 0.0,
@@ -1600,19 +1529,23 @@ class MLPipeline:
                         "status": "too_short",
                     })
                     continue
-                
-                # Extract frames for this time range
-                frames = self._extract_frames_for_time_range(
-                    video_path, t_start, t_end, num_frames=FRAMES_PER_VIDEO
+                context_frames = self._extract_frames_for_time_range(
+                    video_path, context_start, t_start,
+                    num_frames=context_frames_count,
+                ) if context_start < t_start else np.array([])
+                # Extract sentence frames
+                sentence_frames = self._extract_frames_for_time_range(
+                    video_path, t_start, t_end,
+                    num_frames=sentence_frames_count,
                 )
                 
-                if len(frames) == 0:
+                if len(sentence_frames) == 0:
                     logger.warning(
                         "Sentence %d: no frames extracted for time range %.1f-%.1f",
                         sent_idx, t_start, t_end
                     )
                     sentence_results.append({
-                        "sentence": sent["script_sentence"],
+                        "sentence": sent["content"],
                         "expected_emotion": sent.get("emotion"),
                         "detected_emotion": None,
                         "confidence": 0.0,
@@ -1622,6 +1555,20 @@ class MLPipeline:
                         "status": "no_frames",
                     })
                     continue
+
+
+            # Combine: context first so LSTM sees it before sentence
+                if len(context_frames) > 0:
+                    frames = np.concatenate([context_frames, sentence_frames], axis=0)
+                else:
+                    frames = sentence_frames
+
+                # Pad/trim to exactly FRAMES_PER_VIDEO
+                if len(frames) < FRAMES_PER_VIDEO:
+                    pad = np.repeat(frames[-1:], FRAMES_PER_VIDEO - len(frames), axis=0)
+                    frames = np.concatenate([frames, pad], axis=0)
+                else:
+                    frames = frames[:FRAMES_PER_VIDEO]
                 
                 # Run emotion model on extracted frames
                 try:
@@ -1629,23 +1576,27 @@ class MLPipeline:
                     
                     # Pad or trim to FRAMES_PER_VIDEO
                     if len(frames_norm) < FRAMES_PER_VIDEO:
-                        pad = np.zeros(
-                            (FRAMES_PER_VIDEO - len(frames_norm), IMG_SIZE, IMG_SIZE, 3),
-                            dtype=np.float32,
+                        last_frame = frames_norm[-1:]  # shape (1, H, W, 3)
+                        pad = np.repeat(
+                            last_frame,
+                            FRAMES_PER_VIDEO - len(frames_norm),
+                            axis=0,
                         )
                         frames_norm = np.concatenate([frames_norm, pad], axis=0)
                     else:
                         frames_norm = frames_norm[:FRAMES_PER_VIDEO]
-                    
                     input_batch = frames_norm[np.newaxis, ...]
                     probabilities = self.emotion_model.predict(input_batch, verbose=0)[0]
                     probabilities = np.array(probabilities, dtype=np.float64)
                     probabilities = probabilities / probabilities.sum()
                     
-                    primary_idx = int(np.argmax(probabilities))
-                    detected_emotion = EMOTION_NAMES[primary_idx]
-                    confidence = float(probabilities[primary_idx])
-                    score = round(confidence * 100, 2)
+                    all_scores_dict = {EMOTION_NAMES[i]: float(probabilities[i]) for i in range(NUM_CLASSES)}
+                    detected_emotion, confidence = _get_valid_emotion(all_scores_dict)
+                    score = self.display_score(self._compute_sentence_score(
+                        detected_emotion,
+                        sent.get("emotion"),
+                        confidence
+                    ))
                     
                     logger.debug(
                         "Sentence %d emotion: %s (conf=%.2f%%), time=%.1f-%.1f",
@@ -1653,7 +1604,7 @@ class MLPipeline:
                     )
                     
                     sentence_results.append({
-                        "sentence": sent["script_sentence"],
+                        "sentence": sent["content"],
                         "expected_emotion": sent.get("emotion"),
                         "detected_emotion": detected_emotion,
                         "confidence": round(confidence, 4),
@@ -1672,7 +1623,7 @@ class MLPipeline:
                         "Failed to score video emotion for sentence %d: %s", sent_idx, e
                     )
                     sentence_results.append({
-                        "sentence": sent["script_sentence"],
+                        "sentence": sent["content"],
                         "expected_emotion": sent.get("emotion"),
                         "detected_emotion": None,
                         "confidence": 0.0,
@@ -1723,7 +1674,7 @@ class MLPipeline:
             )
             
             return {
-                "score": round(avg_score, 2),
+                "score":self.display_score(avg_score),
                 "detected_emotion": dominant_emotion,
                 "confidence": round(avg_confidence, 4),
                 "sentence_results": sentence_results,
@@ -1781,7 +1732,9 @@ class MLPipeline:
                 return 0.0, None
             try:
                 async with aiohttp.ClientSession() as health_session:
-                    health_url = self.script_model.replace("/transcribe", "/health")
+                    from urllib.parse import urlparse, urljoin
+                    parsed = urlparse(self.script_model)
+                    health_url = urljoin(self.script_model, parsed.path.rsplit("/transcribe", 1)[0] + "/health")
                     async with health_session.get(
                         health_url,
                         timeout=aiohttp.ClientTimeout(connect=10, sock_read=10)
@@ -1798,6 +1751,18 @@ class MLPipeline:
                         filename="audio.wav",
                         content_type="audio/wav",
                     )
+                    import json
+                    sentences = json.loads(script_text)
+                    clean_script = "\n".join(
+                        f'{s["content"]} "{s["emotion"]}"'  
+                        for s in sentences
+                    )
+                    form.add_field(
+                        "script",
+                        clean_script.encode("utf-8"),
+                        filename="script.txt",
+                        content_type="text/plain",
+                    )
                     async with session.post(
                         self.script_model,
                         data=form,
@@ -1811,248 +1776,50 @@ class MLPipeline:
                            return 0.0, None
                         api_result = await resp.json()
 
-            full_transcript = api_result.get("text", "")
-            aligned_words   = api_result.get("aligned_words", [])
+            full_transcript   = api_result.get("text", "")
+            sentences_aligned = api_result.get("sentences_aligned", [])
+            summary           = api_result.get("summary", {})
+
             if not full_transcript:
                 logger.warning("Empty transcript from remote API")
                 return 0.0, None
 
-            transcript_clean = _normalize_text(full_transcript).split()
-            sentences        = self._parse_script(script_text)
-
-            sentences = self._parse_script(script_text)
-
-            script_words     = []
-            word_to_sentence = []
-            for sent_idx, sent in enumerate(sentences):
-                words = _normalize_text(sent["script_sentence"]).split()
-                script_words.extend(words)
-                word_to_sentence.extend([sent_idx] * len(words))
-
-            if not script_words:
-                return 0.0, None
-
-            matcher = difflib.SequenceMatcher(None, script_words, transcript_clean)
-
-            sentence_word_counts = [
-                len(_normalize_text(s["script_sentence"]).split()) for s in sentences
-            ]
-            sentence_coverage = [0] * len(sentences)
-
-            # Per-sentence comparison rows: each entry is a word-level diff row
-            # keyed by sentence index so they can be attached to sentences_aligned later
-            sentence_comparison_rows: list[list[dict]] = [[] for _ in sentences]
-
-            # Global word-level stats
-            matched_words_count = 0
-            changed_words_count = 0
-            skipped_words_count = 0
-            added_words_count   = 0
-            matched_words_array=[]
-            changed_words_array=[]
-            skipped_words_array=[]
-            added_words_array=[]
-            
-
-            for tag, i1, i2, j1, j2 in matcher.get_opcodes():
-                if tag == "equal":
-                    for k in range(i2 - i1):
-                        s_idx = word_to_sentence[i1 + k]
-                        sentence_coverage[s_idx] += 1
-                        sentence_comparison_rows[s_idx].append({
-                            "status":          "match",
-                            "script_word":     script_words[i1 + k],
-                            "transcript_word": transcript_clean[j1 + k],
-                        })
-                        matched_words_count += 1
-                        matched_words_array.append(script_words[i1 + k])
-                elif tag == "replace":
-                    for k in range(max(i2 - i1, j2 - j1)):
-                        s_w = script_words[i1 + k]     if i1 + k < i2 else ""
-                        t_w = transcript_clean[j1 + k] if j1 + k < j2 else ""
-                        status = "changed" if s_w and t_w else ("skipped" if s_w else "added")
-                        # Attribute to the script-side sentence when available,
-                        # otherwise fall back to the last script sentence
-                        if i1 + k < i2:
-                            s_idx = word_to_sentence[i1 + k]
-                        else:
-                            s_idx = word_to_sentence[i2 - 1]
-                        sentence_comparison_rows[s_idx].append({
-                            "status":          status,
-                            "script_word":     s_w or "-",
-                            "transcript_word": t_w or "-",
-                        })
-                        changed_words_count += 1
-                        changed_words_array.append(f"{s_w} -> {t_w}")
-                elif tag == "delete":
-                    for k in range(i2 - i1):
-                        s_idx = word_to_sentence[i1 + k]
-                        sentence_comparison_rows[s_idx].append({
-                            "status":          "skipped",
-                            "script_word":     script_words[i1 + k],
-                            "transcript_word": "-",
-                        })
-                        skipped_words_count += 1
-                        skipped_words_array.append(script_words[i1 + k])
-                elif tag == "insert":
-                    for k in range(j2 - j1):
-                        # Inserted words have no script position; attach to the sentence
-                        # that owns the script word just before this insertion point.
-                        s_idx = word_to_sentence[i1 - 1] if i1 > 0 else 0
-                        sentence_comparison_rows[s_idx].append({
-                            "status":          "added",
-                            "script_word":     "-",
-                            "transcript_word": transcript_clean[j1 + k],
-                        })
-                        added_words_count += 1
-                        added_words_array.append(transcript_clean[j1 + k])
-            total_matched   = sum(size for _, _, size in matcher.get_matching_blocks())
-            overall_coverage = total_matched / len(script_words) if script_words else 0
-            score            = round(min(overall_coverage, 1.0) * 100, 2)
-            total_duration   = sf.info(audio_path).duration
-            
-            # ------------------------------------------------------------------ #
-            # Build sentence-level output: timestamps + per-sentence transcript  #
-            # ------------------------------------------------------------------ #
-            sentences_aligned = []
-            word_idx = 0  # pointer into aligned_words
-
-            for s_idx, sent in enumerate(sentences):
-                sent_words    = _normalize_text(sent["script_sentence"]).split()
-                word_count    = len(sent_words)
-                matched_count = sentence_coverage[s_idx]
-                coverage      = matched_count / word_count if word_count > 0 else 0.0
-                sent_score    = round(min(coverage, 1.0) * 100, 2)
-
-                # Reconstruct what the actor actually said for this sentence's span,
-                # preserving word order from the diff rows
-                rows = sentence_comparison_rows[s_idx]
-                transcript_words_for_sentence = [
-                    r["transcript_word"]
-                    for r in rows
-                    if r["transcript_word"] != "-"
-                ]
-                sentence_transcript = " ".join(transcript_words_for_sentence)
-
-                # Collect the next `word_count` aligned word timestamps
-                sent_aligned = aligned_words[word_idx : word_idx + word_count]
-                word_idx    += word_count
-
-                usable_times = [w["start"] for w in sent_aligned if "start" in w]
-
-                if not usable_times:
-                    sentences_aligned.append({
-                        "sentence_index":      s_idx,
-                        "script_sentence":     sent["script_sentence"],
-                        "transcript_sentence": sentence_transcript,
-                        "emotion":             sent["emotion"],
-                        "t_start":             None,
-                        "t_end":               None,
-                        "coverage":            coverage,
-                        "sentence_score":      sent_score,
-                        "status":              "missing",
-                        "word_diff":           rows,
-                    })
-                    continue
-
-                t_start = min(usable_times)
-
-                next_aligned = aligned_words[word_idx : word_idx + 1]
-                if next_aligned and "start" in next_aligned[0]:
-                    t_end = (max(usable_times) + next_aligned[0]["start"]) / 2.0
-                else:
-                    t_end = total_duration
-
-                t_start = max(0.0, t_start)
-                t_end   = min(total_duration, t_end)
-                if t_end <= t_start:
-                    t_end = min(t_start + 0.5, total_duration)
-
-                sentences_aligned.append({
-                    "sentence_index":      s_idx,
-                    "script_sentence":     sent["script_sentence"],
-                    "transcript_sentence": sentence_transcript,
-                    "emotion":             sent["emotion"],
-                    "t_start":             round(t_start, 4),
-                    "t_end":               round(t_end,   4),
-                    "coverage":            round(coverage, 3),
-                    "sentence_score":      sent_score,
-                    "status":              "ok" if coverage >= 0.5 else "partial",
-                    "word_diff":           rows,
-                })
+            matched  = summary.get("matched",0)
+            changed  = summary.get("changed",0)
+            skipped  = summary.get("skipped",0)
+            added    = summary.get("added",0)
+            matched_words = summary.get("matched_words",[])
+            added_words   = summary.get("added_words",[])
+            changed_words = summary.get("changed_words",[])
+            skipped_words = summary.get("skipped_words",[])
+            total_script_words = matched + changed + skipped
+            overall_coverage   = matched / total_script_words if total_script_words else 0.0
+            score              = round(min(overall_coverage, 1.0) * 100, 2)
 
             logger.info(
-                "Script alignment -- matched=%d / total=%d -> score=%.2f, %d sentences",
-                total_matched, len(script_words), score, len(sentences_aligned),
+                "Script alignment -- matched=%d changed=%d skipped=%d added=%d -> score=%.2f",
+                 matched, changed, skipped, added, score,
             )
-
+            logger.info("API result keys: %s", list(api_result.keys()))
+            logger.info("Summary: %s", api_result.get("summary"))
+            logger.info("Transcript length: %d words", len(api_result.get("text", "").split()))
             return score, {
-                "sentences_aligned": sentences_aligned,   # primary output: one entry per sentence
+                "sentences_aligned": sentences_aligned,
                 "transcript":        full_transcript,
                 "coverage":          overall_coverage,
-                "matched_words":     matched_words_array,
-                "added_words":       added_words_array,
-                "changed_words":     changed_words_array,
-                "skipped_words":     skipped_words_array,
-                "matched_count":     matched_words_count,
-                "added_count":       added_words_count,
-                "changed_count":     changed_words_count,
-                "skipped_count":     skipped_words_count,
+                "matched_count":     matched,
+                "added_count":       added,
+                "changed_count":     changed,
+                "skipped_count":     skipped,
+                "matched_words":     matched_words,
+                "added_words":       added_words,
+                "changed_words":     changed_words,
+                "skipped_words":     skipped_words,
             }
 
         except Exception as e:
             logger.error("Script alignment scoring failed: %s", e, exc_info=True)
             return 0.0, None
-    def _parse_script(self, script_text: str) -> List[Dict]:
-        """
-        Parse script into sentences with emotion labels.
-
-        Accepts two formats:
-
-        Format 1 (preferred) -- JSON array string:
-            '[{"content": "sentence", "emotion": "angry"}, ...]'
-
-        Format 2 (legacy) -- plain text with inline emotion tags:
-            Sentence text "emotion"
-
-        Returns list of {content: str, emotion: str}
-        """
-        script_text = script_text.strip()
-
-        # ── Format 1: JSON array ─────────────────────────────────────────
-        if script_text.startswith("["):
-            try:
-                data = json.loads(script_text)
-                sentences = []
-                for item in data:
-                    content = str(item.get("content", "")).strip()
-                    emotion = str(item.get("emotion", "neutral")).strip().lower()
-                    if content:
-                        sentences.append({"script_sentence": content, "emotion": emotion})
-                if sentences:
-                    logger.info("Parsed script as JSON array: %d sentences", len(sentences))
-                    return sentences
-            except json.JSONDecodeError as e:
-                logger.warning("Script looked like JSON but failed to parse: %s", e)
-
-        # ── Format 2: Legacy plain-text with inline "emotion" tags ───────
-        sentences = []
-        for line in script_text.split("\n"):
-            if not line.strip():
-                continue
-            match = re.search(r'"([^"]+)"', line)
-            if match:
-                emotion = match.group(1).lower()
-                content = line[: match.start()].strip()
-            else:
-                content = line.strip()
-                emotion = "neutral"
-            if content:
-                sentences.append({"content": content, "emotion": emotion})
-
-        logger.info("Parsed script as plain text: %d sentences", len(sentences))
-        return sentences
-
     async def _score_script_alignment(
         self,
         audio_path: Optional[str],

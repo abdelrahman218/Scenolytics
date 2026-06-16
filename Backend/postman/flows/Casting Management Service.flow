@@ -73,8 +73,8 @@
       "2XZtJrxG": {
         "type": "portal/in@1",
         "pos": {
-          "x": 256,
-          "y": 376
+          "x": -32,
+          "y": 392
         },
         "config": {
           "value": "director_token"
@@ -83,13 +83,13 @@
           "color": "teal",
           "data": {}
         },
-        "group": null
+        "group": "x6r7bmFn"
       },
       "8BJXk4A2": {
-        "type": "task/http-request@1",
+        "type": "task/http-request@2",
         "pos": {
-          "x": 72,
-          "y": 16
+          "x": 152,
+          "y": 56
         },
         "config": {
           "element": {
@@ -122,7 +122,8 @@
           ],
           "scriptsModifyEnvVars": true,
           "trackGlobalEnvironment": true,
-          "requestVariables__expanded": true
+          "requestVariables__expanded": true,
+          "ignoreTestResults": true
         },
         "ui": {
           "data": {},
@@ -131,10 +132,10 @@
         "group": "x6r7bmFn"
       },
       "DRHV2cfn": {
-        "type": "task/http-request@1",
+        "type": "task/http-request@2",
         "pos": {
-          "x": 584,
-          "y": 8
+          "x": 616,
+          "y": 48
         },
         "config": {
           "element": {
@@ -184,7 +185,8 @@
           ],
           "scriptsModifyEnvVars": true,
           "trackGlobalEnvironment": true,
-          "requestVariables__expanded": true
+          "requestVariables__expanded": true,
+          "ignoreTestResults": true
         },
         "ui": {
           "data": {},
@@ -193,10 +195,10 @@
         "group": "x6r7bmFn"
       },
       "5WSnC5X4": {
-        "type": "task/http-request@1",
+        "type": "task/http-request@2",
         "pos": {
-          "x": 640,
-          "y": 448
+          "x": 616,
+          "y": 408
         },
         "config": {
           "element": {
@@ -229,7 +231,8 @@
           ],
           "scriptsModifyEnvVars": true,
           "trackGlobalEnvironment": true,
-          "requestVariables__expanded": true
+          "requestVariables__expanded": true,
+          "ignoreTestResults": true
         },
         "ui": {
           "data": {},
@@ -238,10 +241,10 @@
         "group": "rCLDoy8V"
       },
       "GiiXj5SM": {
-        "type": "task/http-request@1",
+        "type": "task/http-request@2",
         "pos": {
-          "x": 1192,
-          "y": 704
+          "x": 1136,
+          "y": 776
         },
         "config": {
           "element": {
@@ -282,7 +285,8 @@
           ],
           "scriptsModifyEnvVars": true,
           "trackGlobalEnvironment": true,
-          "requestVariables__expanded": true
+          "requestVariables__expanded": true,
+          "ignoreTestResults": true
         },
         "ui": {
           "data": {},
@@ -291,10 +295,10 @@
         "group": "rCLDoy8V"
       },
       "7ejgbssO": {
-        "type": "task/http-request@1",
+        "type": "task/http-request@2",
         "pos": {
-          "x": 1616,
-          "y": 704
+          "x": 1560,
+          "y": 776
         },
         "config": {
           "element": {
@@ -335,7 +339,8 @@
           ],
           "scriptsModifyEnvVars": true,
           "trackGlobalEnvironment": true,
-          "requestVariables__expanded": true
+          "requestVariables__expanded": true,
+          "ignoreTestResults": true
         },
         "ui": {
           "data": {},
@@ -344,10 +349,10 @@
         "group": "rCLDoy8V"
       },
       "9GoGUCeV": {
-        "type": "task/http-request@1",
+        "type": "task/http-request@2",
         "pos": {
-          "x": 576,
-          "y": 848
+          "x": 264,
+          "y": 872
         },
         "config": {
           "element": {
@@ -388,7 +393,8 @@
           ],
           "scriptsModifyEnvVars": true,
           "trackGlobalEnvironment": true,
-          "requestVariables__expanded": true
+          "requestVariables__expanded": true,
+          "ignoreTestResults": true
         },
         "ui": {
           "data": {},
@@ -397,10 +403,10 @@
         "group": "x6r7bmFn"
       },
       "WXV2EZOj": {
-        "type": "task/http-request@1",
+        "type": "task/http-request@2",
         "pos": {
-          "x": 1312,
-          "y": 656
+          "x": 1000,
+          "y": 680
         },
         "config": {
           "element": {
@@ -432,7 +438,8 @@
           ],
           "scriptsModifyEnvVars": true,
           "trackGlobalEnvironment": true,
-          "requestVariables__expanded": true
+          "requestVariables__expanded": true,
+          "ignoreTestResults": true
         },
         "ui": {
           "data": {},
@@ -441,10 +448,10 @@
         "group": "x6r7bmFn"
       },
       "xiqLyuxM": {
-        "type": "task/http-request@1",
+        "type": "task/http-request@2",
         "pos": {
-          "x": 1320,
-          "y": 1064
+          "x": 1008,
+          "y": 1088
         },
         "config": {
           "element": {
@@ -485,7 +492,8 @@
           ],
           "scriptsModifyEnvVars": true,
           "trackGlobalEnvironment": true,
-          "requestVariables__expanded": true
+          "requestVariables__expanded": true,
+          "ignoreTestResults": true
         },
         "ui": {
           "data": {},
@@ -494,10 +502,10 @@
         "group": "x6r7bmFn"
       },
       "tv3sZYDP": {
-        "type": "task/http-request@1",
+        "type": "task/http-request@2",
         "pos": {
-          "x": 2160,
-          "y": 704
+          "x": 2136,
+          "y": 824
         },
         "config": {
           "element": {
@@ -529,7 +537,8 @@
           ],
           "scriptsModifyEnvVars": true,
           "trackGlobalEnvironment": true,
-          "requestVariables__expanded": true
+          "requestVariables__expanded": true,
+          "ignoreTestResults": true
         },
         "ui": {
           "data": {},
@@ -538,10 +547,10 @@
         "group": "rCLDoy8V"
       },
       "hJRkklSt": {
-        "type": "task/http-request@1",
+        "type": "task/http-request@2",
         "pos": {
-          "x": 1304,
-          "y": 256
+          "x": 992,
+          "y": 280
         },
         "config": {
           "element": {
@@ -582,7 +591,8 @@
           ],
           "scriptsModifyEnvVars": true,
           "trackGlobalEnvironment": true,
-          "requestVariables__expanded": true
+          "requestVariables__expanded": true,
+          "ignoreTestResults": true
         },
         "ui": {
           "data": {},
@@ -591,10 +601,10 @@
         "group": "x6r7bmFn"
       },
       "612fyUrB": {
-        "type": "task/http-request@1",
+        "type": "task/http-request@2",
         "pos": {
-          "x": 576,
-          "y": 1208
+          "x": 264,
+          "y": 1232
         },
         "config": {
           "element": {
@@ -635,7 +645,8 @@
           ],
           "scriptsModifyEnvVars": true,
           "trackGlobalEnvironment": true,
-          "requestVariables__expanded": true
+          "requestVariables__expanded": true,
+          "ignoreTestResults": true
         },
         "ui": {
           "data": {},
@@ -644,10 +655,10 @@
         "group": "x6r7bmFn"
       },
       "p4LIVcXH": {
-        "type": "task/http-request@1",
+        "type": "task/http-request@2",
         "pos": {
           "x": 96,
-          "y": 760
+          "y": 848
         },
         "config": {
           "element": {
@@ -689,7 +700,8 @@
           ],
           "scriptsModifyEnvVars": true,
           "trackGlobalEnvironment": true,
-          "requestVariables__expanded": true
+          "requestVariables__expanded": true,
+          "ignoreTestResults": true
         },
         "ui": {
           "data": {},
@@ -761,10 +773,10 @@
         "group": "x6r7bmFn"
       },
       "LSoPKTCg": {
-        "type": "task/http-request@1",
+        "type": "task/http-request@2",
         "pos": {
-          "x": 584,
-          "y": 424
+          "x": 272,
+          "y": 448
         },
         "config": {
           "element": {
@@ -796,7 +808,8 @@
           ],
           "scriptsModifyEnvVars": true,
           "trackGlobalEnvironment": true,
-          "requestVariables__expanded": true
+          "requestVariables__expanded": true,
+          "ignoreTestResults": true
         },
         "ui": {
           "data": {},
@@ -805,10 +818,10 @@
         "group": "x6r7bmFn"
       },
       "8N_WwPwy": {
-        "type": "task/http-request@1",
+        "type": "task/http-request@2",
         "pos": {
-          "x": 5048,
-          "y": 48
+          "x": 5008,
+          "y": 128
         },
         "config": {
           "element": {
@@ -849,7 +862,8 @@
           ],
           "scriptsModifyEnvVars": true,
           "trackGlobalEnvironment": true,
-          "requestVariables__expanded": true
+          "requestVariables__expanded": true,
+          "ignoreTestResults": true
         },
         "ui": {
           "data": {},
@@ -888,10 +902,10 @@
         "group": null
       },
       "3oDWFDbf": {
-        "type": "task/http-request@1",
+        "type": "task/http-request@2",
         "pos": {
-          "x": 2160,
-          "y": 352
+          "x": 2144,
+          "y": 408
         },
         "config": {
           "element": {
@@ -916,7 +930,8 @@
           ],
           "scriptsModifyEnvVars": true,
           "trackGlobalEnvironment": true,
-          "requestVariables__expanded": true
+          "requestVariables__expanded": true,
+          "ignoreTestResults": true
         },
         "ui": {
           "data": {},
@@ -925,10 +940,10 @@
         "group": "rCLDoy8V"
       },
       "AOmtOvOr": {
-        "type": "task/http-request@1",
+        "type": "task/http-request@2",
         "pos": {
           "x": 3104,
-          "y": 648
+          "y": 688
         },
         "config": {
           "element": {
@@ -969,7 +984,8 @@
           ],
           "scriptsModifyEnvVars": true,
           "trackGlobalEnvironment": true,
-          "requestVariables__expanded": true
+          "requestVariables__expanded": true,
+          "ignoreTestResults": true
         },
         "ui": {
           "data": {},
@@ -978,10 +994,10 @@
         "group": "x6r7bmFn"
       },
       "h12RwSLW": {
-        "type": "task/http-request@1",
+        "type": "task/http-request@2",
         "pos": {
           "x": 88,
-          "y": 312
+          "y": 408
         },
         "config": {
           "element": {
@@ -1022,7 +1038,8 @@
           ],
           "scriptsModifyEnvVars": true,
           "trackGlobalEnvironment": true,
-          "requestVariables__expanded": true
+          "requestVariables__expanded": true,
+          "ignoreTestResults": true
         },
         "ui": {
           "data": {},
@@ -1780,8 +1797,8 @@
       "x6r7bmFn": {
         "ui": {
           "pos": {
-            "x": 288,
-            "y": -16
+            "x": 312,
+            "y": -24
           },
           "size": {
             "width": 5356,
@@ -1869,6 +1886,6 @@
   "info": {
     "_postman_id": "61ee2713-5ef1-457f-99e2-37c74aa63bf8"
   },
-  "_postman_exported_at": "2026-05-19T08:33:05.281Z",
+  "_postman_exported_at": "2026-06-12T15:35:51.538Z",
   "_postman_exported_using": "Postman/Local Mode"
 }

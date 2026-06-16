@@ -14,6 +14,8 @@ export const getAudition = async (req, res, next) => {
         audition = {...audition, script };
         return res.status(200).json({audition});
     } catch (error) {
+        console.log("Error getting audition");
+        console.error(error);
         next(error);
     }
 };

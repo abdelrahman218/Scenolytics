@@ -36,6 +36,21 @@ export const checkValidValuesReviewSubmission = checkValidValues({status: ['acce
 
 export const checkValidValuesReviewCallback = checkValidValues({status: ['accepted', 'rejected']});
 
+export const checkValidValuesAuditionScriptEmotions = async(req, res, next) => {
+    const script = req.body.script;
+    if (!script) {
+        next();
+        return;
+    }
+    const validValues = ['calm', 'happy', 'sad', 'angry', 'surprised'];
+    for (const sentence of script) {
+        if (!validValues.includes(sentence.emotion)) {
+            return res.status(400).json({ message: 'Invalid sentence emotion' });
+        }
+    }
+    next();
+};
+
 // Other Validators
 
 export const checkCallbackExists = async(req, res, next) => {

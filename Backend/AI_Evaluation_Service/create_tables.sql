@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS evaluations (
     emotional_expression_score DeCIMAL(5,2),
     vocal_tone_score DECIMAL(5,2),
     script_alignment_score DECIMAL(5,2),
+    tone_score DECIMAL(5,2),
     overall_performance_score DECIMAL(5,2),
 
     eye_expression_score JSON,
@@ -63,6 +64,7 @@ CREATE TABLE IF NOT EXISTS auditions(
     submission_id VARCHAR(255),
     actor_id VARCHAR(36),
     director_id VARCHAR(36),
+    audio_only BOOLEAN DEFAULT FALSE,
     script TEXT,
     status VARCHAR(50) DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

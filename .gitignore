@@ -13,3 +13,4 @@ preprocessed_data_actors/
 tmp_gui_uploads/
 .vscode/
 __pycache__
+models/
