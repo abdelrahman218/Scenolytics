@@ -60,6 +60,7 @@ class EmotionTransition {
       dirBefore: json['dir_before']?.toString(),
       dirAfter: json['dir_after']?.toString(),
       message: json['message']?.toString(),
+      imageAspectRatio: (json['image_aspect_ratio'] as num?)?.toDouble(),
     );
   }
 
@@ -99,45 +100,21 @@ class EyesAnalysisResult {
   });
 }
 
-const _kSampleData = EyesAnalysisResult(
-  score: 93.8,
-  result: 'EXPRESSIVE',
-  message: 'Eyes moved strongly—strong physical expression',
-  transitions: [
-    EmotionTransition(
-      timestampSeconds: 12,
-      fromEmotion: 'angry',
-      toEmotion: 'fearful',
-      sentence:
-          'how no matter how much i\'d like not to hate you i hate you even more'
-          ' it grows i can\'t even see now',
-      label: 'NO_SHIFT',
-      shiftScore: 0.0,
-      displacement: 0.01061,
-      dirBefore: 'DOWN',
-      dirAfter: 'DOWN',
-      beforeImagePath: 'lib/assets/bef.png',
-      afterImagePath: 'lib/assets/aft .png',
-    ),
-    EmotionTransition(
-      timestampSeconds: 21,
-      fromEmotion: 'fearful',
-      toEmotion: 'sad',
-      sentence:
-          'all i see is this picture of you you and her i don\'t even know if'
-          ' this picture\'s real any more i don\'t even care it\'s a made up'
-          ' picture it invades my head the two of you in this picture it stings'
-          ' me more than if i actually see you with her',
-      label: 'STRONG_SHIFT',
-      shiftScore: 100.0,
-      displacement: 0.06519,
-      dirBefore: 'CENTER',
-      dirAfter: 'CENTER',
-      beforeImagePath: 'lib/assets/bef.png',
-      afterImagePath: 'lib/assets/aft .png',
-    ),
-  ],
-);
+/// Derives a human-readable label/message from a raw expressiveness score when
+/// the backend did not supply one.
+String _eyesResultLabel(double score) {
+  if (score >= 85) return 'EXPRESSIVE';
+  if (score >= 60) return 'MODERATELY EXPRESSIVE';
+  if (score >= 30) return 'SUBTLE';
+  return 'NEUTRAL';
+}
+
+String _eyesResultMessage(double score) {
+  if (score >= 85) return 'Eyes moved strongly — strong physical expression';
+  if (score >= 60) return 'Moderate eye movement and aperture variation';
+  if (score >= 30) return 'Subtle eye movement detected';
+  return 'Minimal eye movement detected';
+}
 
 const _emotionEmoji = <String, String>{
   'angry':   '😡',
@@ -156,16 +133,21 @@ const double _kMobileBreak = 600;
 const double _kTransitionImageAspectRatio = 16 / 9;
 
 class EyesAnalysisPage extends StatelessWidget {
-  final EyesAnalysisResult data;
+  /// Parsed eye analysis. Null when the evaluation produced no eye data.
+  final EyesAnalysisResult? data;
 
   /// When true, omits [Scaffold]/[AppBar] so this can live inside a parent
   /// tab or scroll region without a nested app bar.
   final bool nested;
 
+  /// AI evaluation has not finished for this submission yet.
+  final bool pending;
+
   const EyesAnalysisPage({
     super.key,
-    this.data = _kSampleData,
+    this.data,
     this.nested = false,
+    this.pending = false,
   });
 
   @override
@@ -179,38 +161,177 @@ class EyesAnalysisPage extends StatelessWidget {
     final gapBeforeTransitions = isMobile ? 10.0 : 14.0;
     final transitionBottomPad = isMobile ? 12.0 : 16.0;
 
-    final list = ListView(
-      padding: padding,
-      children: [
-        _ScoreCard(data: data),
-        SizedBox(height: gapAfterScore),
-        _SectionHeader(
-          title: 'Eye Movement During Emotion Transitions',
-          icon: Icons.swap_horiz_rounded,
-          count: data.transitions.length,
-          useGradient: true,
-        ),
-        SizedBox(height: gapBeforeTransitions),
-        ...data.transitions.map(
-          (t) => Padding(
-            padding: EdgeInsets.only(bottom: transitionBottomPad),
-            child: _TransitionCard(transition: t),
+    final result = data;
+    final Widget content;
+    if (pending) {
+      content = const _EyesNotice(
+        title: 'Eyes analysis is pending',
+        message:
+            'The AI evaluation has not completed yet for this submission. '
+            'The expressiveness score and eye-movement transitions will appear '
+            'here as soon as analysis finishes.',
+        showSpinner: true,
+      );
+    } else if (result == null) {
+      content = const _EyesNotice(
+        title: 'No eyes analysis available',
+        message:
+            'No gaze / eye-movement data was produced for this submission.',
+      );
+    } else {
+      content = ListView(
+        padding: padding,
+        children: [
+          _ScoreCard(data: result),
+          SizedBox(height: gapAfterScore),
+          _SectionHeader(
+            title: 'Eye Movement During Emotion Transitions',
+            icon: Icons.swap_horiz_rounded,
+            count: result.transitions.length,
+            useGradient: true,
           ),
-        ),
-      ],
-    );
+          SizedBox(height: gapBeforeTransitions),
+          if (result.transitions.isEmpty)
+            const _EyesNotice(
+              title: 'No emotion transitions detected',
+              message:
+                  'The actor\'s gaze stayed steady through the recording, so no '
+                  'emotion-transition frames were captured.',
+              boxed: true,
+            )
+          else
+            ...result.transitions.map(
+              (t) => Padding(
+                padding: EdgeInsets.only(bottom: transitionBottomPad),
+                child: _TransitionCard(transition: t),
+              ),
+            ),
+        ],
+      );
+    }
 
     if (nested) {
       return ColoredBox(
         color: ScenolyticsColors.pageBackground,
-        child: list,
+        child: content,
       );
     }
 
     return Scaffold(
       backgroundColor: ScenolyticsColors.pageBackground,
       appBar: const _AppBar(),
-      body: list,
+      body: content,
+    );
+  }
+}
+
+/// Builds the eye-analysis view from the AI evaluation payload
+/// (`eye_expression_score`). Returns null when no eye data is present.
+EyesAnalysisResult? eyesAnalysisResultFromEvaluation(
+  ActorAuditionSubmission submission,
+) {
+  final detail = submission.evaluationDetail;
+  final raw = detail?['eye_expression_score'];
+  final fallbackScore = submission.eyesAnalysisScore.clamp(0, 100).toDouble();
+
+  if (raw is! Map) {
+    if (!submission.evaluationCompleted) return null;
+    // Score merged from a numeric column but no rich object — still show a card.
+    return EyesAnalysisResult(
+      score: fallbackScore,
+      result: _eyesResultLabel(fallbackScore),
+      message: _eyesResultMessage(fallbackScore),
+      transitions: const [],
+    );
+  }
+
+  final m = raw.map((k, v) => MapEntry(k.toString(), v));
+  final score = (m['score'] as num?)?.toDouble() ?? fallbackScore;
+  final transitionsRaw = m['transitions'];
+  final transitions = transitionsRaw is List
+      ? transitionsRaw
+          .whereType<Map>()
+          .map((e) =>
+              EmotionTransition.fromJson(e.map((k, v) => MapEntry(k.toString(), v))))
+          .toList()
+      : <EmotionTransition>[];
+
+  return EyesAnalysisResult(
+    score: score,
+    result: (m['result'] ?? _eyesResultLabel(score)).toString(),
+    message: (m['message'] ?? _eyesResultMessage(score)).toString(),
+    transitions: transitions,
+  );
+}
+
+/// Simple notice card used for pending / empty eye-analysis states.
+class _EyesNotice extends StatelessWidget {
+  const _EyesNotice({
+    required this.title,
+    required this.message,
+    this.showSpinner = false,
+    this.boxed = false,
+  });
+
+  final String title;
+  final String message;
+  final bool showSpinner;
+  final bool boxed;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final card = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
+      decoration: BoxDecoration(
+        color: ScenolyticsColors.surfaceCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: ScenolyticsColors.outlineSoft),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              if (showSpinner)
+                SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.4,
+                    color: theme.colorScheme.primary,
+                  ),
+                )
+              else
+                const Icon(Icons.remove_red_eye_outlined,
+                    size: 20, color: ScenolyticsColors.textMuted),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: ScenolyticsColors.textPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            message,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: ScenolyticsColors.textMuted,
+              height: 1.5,
+            ),
+          ),
+        ],
+      ),
+    );
+    if (boxed) return card;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      children: [card],
     );
   }
 }
@@ -243,18 +364,6 @@ class _AppBar extends StatelessWidget implements PreferredSizeWidget {
       ),
     );
   }
-}
-
-/// Sample transitions with the submission's eyes score (rankings drill-down).
-EyesAnalysisResult eyesAnalysisResultFromSubmission(
-  ActorAuditionSubmission submission,
-) {
-  return EyesAnalysisResult(
-    score: submission.eyesAnalysisScore.clamp(0, 100).toDouble(),
-    result: _kSampleData.result,
-    message: _kSampleData.message,
-    transitions: _kSampleData.transitions,
-  );
 }
 
 class _ScoreCard extends StatelessWidget {

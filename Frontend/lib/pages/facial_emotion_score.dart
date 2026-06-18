@@ -1,82 +1,13 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/actor_audition_submission.dart';
 import '../theme/scenolytics_colors.dart';
+import '../utils/evaluation_parsing.dart';
+import '../utils/playback_candidates.dart';
+import '../widgets/evaluation_recording_player.dart';
 
 const double _kMobileBreak = 600;
 bool _isWide(BuildContext context) =>
     MediaQuery.of(context).size.width >= _kMobileBreak;
-
-/// Placeholder timeline-driven controller — replaced with a real video plugin
-/// (e.g. `video_player`) once the recording asset is wired through the API.
-class _VideoController extends ChangeNotifier {
-  final Duration totalDuration;
-  final String videoUrl;
-
-  _VideoController({required this.totalDuration, required this.videoUrl});
-
-  bool _playing = false;
-  bool _disposed = false;
-  Duration _position = Duration.zero;
-  Timer? _timer;
-
-  bool get isPlaying => _playing;
-  Duration get position => _position;
-  Duration get duration => totalDuration;
-  double get progress =>
-      totalDuration.inMilliseconds == 0
-          ? 0
-          : (_position.inMilliseconds / totalDuration.inMilliseconds)
-              .clamp(0.0, 1.0);
-
-  void play() {
-    if (_playing || _disposed) return;
-    _playing = true;
-    notifyListeners();
-    _timer = Timer.periodic(const Duration(milliseconds: 200), (_) {
-      if (_disposed) return;
-      _position += const Duration(milliseconds: 200);
-      if (_position >= totalDuration) {
-        _position = Duration.zero;
-        _playing = false;
-        _timer?.cancel();
-        _timer = null;
-      }
-      if (!_disposed) notifyListeners();
-    });
-  }
-
-  void pause() {
-    if (_disposed) return;
-    _playing = false;
-    _timer?.cancel();
-    _timer = null;
-    notifyListeners();
-  }
-
-  void toggle() => _playing ? pause() : play();
-
-  void seekTo(Duration position) {
-    _position = Duration(
-      milliseconds: position.inMilliseconds.clamp(
-        0,
-        totalDuration.inMilliseconds,
-      ),
-    );
-    notifyListeners();
-  }
-
-  void skipBack() => seekTo(_position - const Duration(seconds: 10));
-  void skipForward() => seekTo(_position + const Duration(seconds: 10));
-
-  @override
-  void dispose() {
-    _disposed = true;
-    _timer?.cancel();
-    _timer = null;
-    super.dispose();
-  }
-}
 
 class SentenceEmotion {
   final String timestamp;
@@ -84,8 +15,6 @@ class SentenceEmotion {
   final String emotion;
   final String emoji;
   final double confidence;
-  final Duration duration;
-  final String videoUrl;
 
   const SentenceEmotion({
     required this.timestamp,
@@ -93,54 +22,43 @@ class SentenceEmotion {
     required this.emotion,
     required this.emoji,
     required this.confidence,
-    required this.duration,
-    this.videoUrl = 'VIDEO_URL_HERE',
   });
+}
+
+/// Builds the per-sentence facial-emotion breakdown from the AI evaluation
+/// payload (`detected_emotions_video.sentence_results`). Returns an empty list
+/// when no per-sentence data is present.
+List<SentenceEmotion> facialSentencesFromEvaluation(
+  Map<String, dynamic>? detail,
+) {
+  return evaluationSentenceResults(detail, channel: 'video').map((r) {
+    final detected = (r['detected_emotion'] ?? '').toString();
+    return SentenceEmotion(
+      timestamp: timeRangeStart(r['time_range']?.toString()),
+      text: (r['sentence'] ?? '').toString(),
+      emotion: detected.isEmpty ? 'No speech' : capitalizeEmotion(detected),
+      emoji: detected.isEmpty ? '🔇' : emotionEmoji(detected),
+      confidence: normalizeConfidencePct(r['confidence'] as num?),
+    );
+  }).toList();
 }
 
 class FacialEmotionScorePage extends StatelessWidget {
   const FacialEmotionScorePage({
     super.key,
     required this.submission,
-    this.sentences = _sentences,
+    this.sentences,
     this.nested = false,
   });
 
   final ActorAuditionSubmission submission;
-  final List<SentenceEmotion> sentences;
+
+  /// Per-sentence breakdown. When null it is derived from the submission's
+  /// AI evaluation payload (`detected_emotions_video.sentence_results`).
+  final List<SentenceEmotion>? sentences;
 
   /// When true, omits the page header so this can live inside a parent tab.
   final bool nested;
-
-  static const _sentences = [
-    SentenceEmotion(
-      timestamp: '0:05',
-      text: "I'm excited to be here today",
-      emotion: 'Happy',
-      emoji: '😊',
-      confidence: 89,
-      duration: Duration(seconds: 8),
-      videoUrl: 'VIDEO_URL_HERE',
-    ),
-    SentenceEmotion(
-      timestamp: '0:12',
-      text: 'Let me show you my singing skills',
-      emotion: 'Happy',
-      emoji: '😊',
-      confidence: 76,
-      duration: Duration(seconds: 11),
-      videoUrl: 'VIDEO_URL_HERE',
-    ),
-    SentenceEmotion(
-      timestamp: '0:25',
-      text: "This is something I've been practising for months",
-      emotion: 'Neutral',
-      emoji: '😐',
-      confidence: 58,
-      duration: Duration(seconds: 14),
-      videoUrl: 'VIDEO_URL_HERE',
-    ),
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -151,6 +69,9 @@ class FacialEmotionScorePage extends StatelessWidget {
     final actorAge = submission.age;
     final actorScore = submission.emotionalScore;
     final pending = !submission.evaluationCompleted;
+    final resolvedSentences =
+        sentences ?? facialSentencesFromEvaluation(submission.evaluationDetail);
+    final candidates = submissionPlaybackCandidates(submission);
     final body = Column(
       children: [
         if (!nested) _AppBar(),
@@ -163,16 +84,18 @@ class FacialEmotionScorePage extends StatelessWidget {
                 )
               : wide
                   ? _WebLayout(
-                      sentences: sentences,
+                      sentences: resolvedSentences,
                       actorName: actorName,
                       actorAge: actorAge,
                       actorScore: actorScore,
+                      candidates: candidates,
                     )
                   : _MobileLayout(
-                      sentences: sentences,
+                      sentences: resolvedSentences,
                       actorName: actorName,
                       actorAge: actorAge,
                       actorScore: actorScore,
+                      candidates: candidates,
                     ),
         ),
       ],
@@ -195,11 +118,13 @@ class _MobileLayout extends StatelessWidget {
   final String actorName;
   final int actorAge;
   final int actorScore;
+  final List<String> candidates;
   const _MobileLayout({
     required this.sentences,
     required this.actorName,
     required this.actorAge,
     required this.actorScore,
+    required this.candidates,
   });
 
   @override
@@ -209,19 +134,19 @@ class _MobileLayout extends StatelessWidget {
       children: [
         _ActorCard(name: actorName, age: actorAge, score: actorScore),
         const SizedBox(height: 14),
-        _OverallVideoPlayer(
-          duration: const Duration(seconds: 42),
-          videoUrl: 'VIDEO_URL_HERE',
-        ),
+        EvaluationVideoPlayer(candidates: candidates),
         const SizedBox(height: 14),
         const _SectionHeading('Emotion Detected By Sentence'),
         const SizedBox(height: 10),
-        ...sentences.map(
-          (s) => Padding(
-            padding: const EdgeInsets.only(bottom: 14),
-            child: _SentenceCard(sentence: s),
+        if (sentences.isEmpty)
+          const _NoSentenceBreakdown()
+        else
+          ...sentences.map(
+            (s) => Padding(
+              padding: const EdgeInsets.only(bottom: 14),
+              child: _SentenceCard(sentence: s),
+            ),
           ),
-        ),
         const SizedBox(height: 20),
       ],
     );
@@ -233,11 +158,13 @@ class _WebLayout extends StatelessWidget {
   final String actorName;
   final int actorAge;
   final int actorScore;
+  final List<String> candidates;
   const _WebLayout({
     required this.sentences,
     required this.actorName,
     required this.actorAge,
     required this.actorScore,
+    required this.candidates,
   });
 
   @override
@@ -247,16 +174,53 @@ class _WebLayout extends StatelessWidget {
       children: [
         _ActorCard(name: actorName, age: actorAge, score: actorScore),
         const SizedBox(height: 16),
-        _OverallVideoPlayer(
-          duration: const Duration(seconds: 42),
-          videoUrl: 'VIDEO_URL_HERE',
-        ),
+        EvaluationVideoPlayer(candidates: candidates),
         const SizedBox(height: 20),
         const _SectionHeading('Emotion Detected By Sentence'),
         const SizedBox(height: 14),
-        _SentenceGrid(sentences: sentences),
+        if (sentences.isEmpty)
+          const _NoSentenceBreakdown()
+        else
+          _SentenceGrid(sentences: sentences),
         const SizedBox(height: 24),
       ],
+    );
+  }
+}
+
+/// Shown when the evaluation completed but carries no per-sentence breakdown
+/// (e.g. no script was provided, so the pipeline scored the clip as a whole).
+class _NoSentenceBreakdown extends StatelessWidget {
+  const _NoSentenceBreakdown();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+      decoration: BoxDecoration(
+        color: ScenolyticsColors.surfaceCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: ScenolyticsColors.outlineSoft),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline_rounded,
+              size: 18, color: ScenolyticsColors.textMuted),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'No per-sentence breakdown is available for this submission. '
+              'The overall score above reflects the full recording.',
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.4,
+                color: ScenolyticsColors.textMuted,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -308,7 +272,7 @@ class _AppBar extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           const Text(
-            'Vocal Emotion Score',
+            'Facial Emotion Score',
             style: TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.w600,
@@ -418,303 +382,6 @@ class _ActorCard extends StatelessWidget {
   }
 }
 
-/// Reusable horizontal track that handles tap / drag seek for both players.
-class _SeekTrack extends StatelessWidget {
-  final _VideoController controller;
-  final Color trackColor;
-  final Color fillColor;
-  final double height;
-
-  const _SeekTrack({
-    required this.controller,
-    required this.trackColor,
-    required this.fillColor,
-    this.height = 4,
-  });
-
-  void _onTapDown(TapDownDetails d, BoxConstraints box) {
-    final fraction = (d.localPosition.dx / box.maxWidth).clamp(0.0, 1.0);
-    controller.seekTo(
-      Duration(
-        milliseconds: (fraction * controller.duration.inMilliseconds).round(),
-      ),
-    );
-  }
-
-  void _onDrag(DragUpdateDetails d, BoxConstraints box) {
-    final fraction = (d.localPosition.dx / box.maxWidth).clamp(0.0, 1.0);
-    controller.seekTo(
-      Duration(
-        milliseconds: (fraction * controller.duration.inMilliseconds).round(),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, box) {
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapDown: (d) => _onTapDown(d, box),
-          onHorizontalDragUpdate: (d) => _onDrag(d, box),
-          child: SizedBox(
-            height: 20, // larger hit area
-            child: Align(
-              alignment: Alignment.center,
-              child: AnimatedBuilder(
-                animation: controller,
-                builder: (_, __) {
-                  return Stack(
-                    children: [
-                      Container(
-                        height: height,
-                        decoration: BoxDecoration(
-                          color: trackColor,
-                          borderRadius: BorderRadius.circular(height / 2),
-                        ),
-                      ),
-                      FractionallySizedBox(
-                        widthFactor: controller.progress,
-                        child: Container(
-                          height: height,
-                          decoration: BoxDecoration(
-                            color: fillColor,
-                            borderRadius: BorderRadius.circular(height / 2),
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _OverallVideoPlayer extends StatefulWidget {
-  final Duration duration;
-  final String videoUrl;
-
-  const _OverallVideoPlayer({
-    required this.duration,
-    required this.videoUrl,
-  });
-
-  @override
-  State<_OverallVideoPlayer> createState() => _OverallVideoPlayerState();
-}
-
-class _OverallVideoPlayerState extends State<_OverallVideoPlayer> {
-  late final _VideoController _ctrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = _VideoController(
-      totalDuration: widget.duration,
-      videoUrl: widget.videoUrl,
-    );
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  String _fmt(Duration d) {
-    final m = d.inMinutes;
-    final s = d.inSeconds % 60;
-    return '$m:${s.toString().padLeft(2, '0')}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        gradient: ScenolyticsColors.heroBarGradient,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AnimatedBuilder(
-            animation: _ctrl,
-            builder: (_, __) {
-              return AspectRatio(
-                aspectRatio: 16 / 9,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Container(
-                      color: Colors.black,
-                      child: Center(
-                        child: Icon(
-                          Icons.videocam_rounded,
-                          color: Colors.white.withValues(alpha: 0.18),
-                          size: 64,
-                        ),
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: _ctrl.toggle,
-                      behavior: HitTestBehavior.opaque,
-                      child: AnimatedOpacity(
-                        opacity: _ctrl.isPlaying ? 0.0 : 1.0,
-                        duration: const Duration(milliseconds: 200),
-                        child: Container(
-                          color: Colors.black.withValues(alpha: 0.35),
-                          child: Center(
-                            child: Container(
-                              width: 60,
-                              height: 60,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.white.withValues(alpha: 0.2),
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.7),
-                                  width: 2,
-                                ),
-                              ),
-                              child: const Icon(
-                                Icons.play_arrow_rounded,
-                                color: Colors.white,
-                                size: 36,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Full Recording',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 0.6,
-                    color: Colors.white.withValues(alpha: 0.75),
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                _SeekTrack(
-                  controller: _ctrl,
-                  trackColor: Colors.white.withValues(alpha: 0.25),
-                  fillColor: Colors.white,
-                  height: 4,
-                ),
-                const SizedBox(height: 6),
-
-                AnimatedBuilder(
-                  animation: _ctrl,
-                  builder: (_, __) => Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        _fmt(_ctrl.position),
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.white.withValues(alpha: 0.85),
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                        ),
-                      ),
-                      Text(
-                        _fmt(_ctrl.duration),
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.white.withValues(alpha: 0.85),
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                AnimatedBuilder(
-                  animation: _ctrl,
-                  builder: (_, __) => Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _WhiteIconBtn(
-                        icon: Icons.replay_10_rounded,
-                        size: 26,
-                        onTap: _ctrl.skipBack,
-                      ),
-                      const SizedBox(width: 20),
-                      GestureDetector(
-                        onTap: _ctrl.toggle,
-                        child: Container(
-                          width: 52,
-                          height: 52,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white.withValues(alpha: 0.2),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.6),
-                              width: 1.5,
-                            ),
-                          ),
-                          child: Icon(
-                            _ctrl.isPlaying
-                                ? Icons.pause_rounded
-                                : Icons.play_arrow_rounded,
-                            color: Colors.white,
-                            size: 28,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 20),
-                      _WhiteIconBtn(
-                        icon: Icons.forward_10_rounded,
-                        size: 26,
-                        onTap: _ctrl.skipForward,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _WhiteIconBtn extends StatelessWidget {
-  final IconData icon;
-  final double size;
-  final VoidCallback onTap;
-  const _WhiteIconBtn({required this.icon, required this.size, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Icon(icon, color: Colors.white.withValues(alpha: 0.9), size: size),
-    );
-  }
-}
-
 class _SectionHeading extends StatelessWidget {
   final String text;
   const _SectionHeading(this.text);
@@ -803,14 +470,9 @@ class _SentenceCard extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
             child: _AnimatedProgressBar(value: sentence.confidence / 100),
           ),
-          Divider(
-            height: 1,
-            color: ScenolyticsColors.outlineSoft.withValues(alpha: 0.6),
-          ),
-          _SentenceVideoPlayer(sentence: sentence),
         ],
       ),
     );
@@ -861,201 +523,6 @@ class _AnimatedProgressBarState extends State<_AnimatedProgressBar>
           valueColor: const AlwaysStoppedAnimation<Color>(
               ScenolyticsColors.accentCyanSoft),
         ),
-      ),
-    );
-  }
-}
-
-class _SentenceVideoPlayer extends StatefulWidget {
-  final SentenceEmotion sentence;
-  const _SentenceVideoPlayer({required this.sentence});
-
-  @override
-  State<_SentenceVideoPlayer> createState() => _SentenceVideoPlayerState();
-}
-
-class _SentenceVideoPlayerState extends State<_SentenceVideoPlayer> {
-  late final _VideoController _ctrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = _VideoController(
-      totalDuration: widget.sentence.duration,
-      videoUrl: widget.sentence.videoUrl,
-    );
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  String _fmt(Duration d) {
-    final m = d.inMinutes;
-    final s = d.inSeconds % 60;
-    return '$m:${s.toString().padLeft(2, '0')}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.videocam_rounded,
-                  size: 13, color: ScenolyticsColors.textMuted),
-              const SizedBox(width: 5),
-              const Text(
-                'Video',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 0.5,
-                  color: ScenolyticsColors.textMuted,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Container(
-            decoration: BoxDecoration(
-              color: ScenolyticsColors.surfaceMuted,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              children: [
-                AnimatedBuilder(
-                  animation: _ctrl,
-                  builder: (_, __) {
-                    return AspectRatio(
-                      aspectRatio: 16 / 9,
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          Container(
-                            color: Colors.black,
-                            child: Center(
-                              child: Icon(
-                                Icons.videocam_rounded,
-                                color: Colors.white.withValues(alpha: 0.15),
-                                size: 36,
-                              ),
-                            ),
-                          ),
-                          GestureDetector(
-                            onTap: _ctrl.toggle,
-                            behavior: HitTestBehavior.opaque,
-                            child: AnimatedOpacity(
-                              opacity: _ctrl.isPlaying ? 0.0 : 1.0,
-                              duration: const Duration(milliseconds: 200),
-                              child: Container(
-                                color: Colors.black.withValues(alpha: 0.3),
-                                child: Center(
-                                  child: Container(
-                                    width: 40,
-                                    height: 40,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: ScenolyticsColors.accentCyan,
-                                    ),
-                                    child: const Icon(
-                                      Icons.play_arrow_rounded,
-                                      color: Colors.white,
-                                      size: 22,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 10),
-                  child: AnimatedBuilder(
-                    animation: _ctrl,
-                    builder: (_, __) {
-                      return Row(
-                        children: [
-                          GestureDetector(
-                            onTap: _ctrl.toggle,
-                            child: Container(
-                              width: 32,
-                              height: 32,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: ScenolyticsColors.accentCyan,
-                              ),
-                              child: Icon(
-                                _ctrl.isPlaying
-                                    ? Icons.pause_rounded
-                                    : Icons.play_arrow_rounded,
-                                color: Colors.white,
-                                size: 18,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-
-                          Expanded(
-                            child: Column(
-                              children: [
-                                _SeekTrack(
-                                  controller: _ctrl,
-                                  trackColor: ScenolyticsColors.outlineSoft,
-                                  fillColor: ScenolyticsColors.accentCyan,
-                                  height: 3,
-                                ),
-                                const SizedBox(height: 5),
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      _fmt(_ctrl.position),
-                                      style: const TextStyle(
-                                        fontSize: 10,
-                                        color: ScenolyticsColors.textMuted,
-                                        fontFeatures: [
-                                          FontFeature.tabularFigures()
-                                        ],
-                                      ),
-                                    ),
-                                    Text(
-                                      _fmt(_ctrl.duration),
-                                      style: const TextStyle(
-                                        fontSize: 10,
-                                        color: ScenolyticsColors.textMuted,
-                                        fontFeatures: [
-                                          FontFeature.tabularFigures()
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }

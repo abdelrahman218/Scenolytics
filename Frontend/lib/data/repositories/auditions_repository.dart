@@ -354,6 +354,10 @@ class AuditionsRepository {
       merged['evaluation_status'] = status;
     }
 
+    // Retain the full evaluation payload so detail tabs can render the
+    // per-sentence / script / eyes / tone breakdowns (not just the scalars).
+    merged['__evaluation_detail'] = evaluation;
+
     return merged;
   }
 
@@ -1318,6 +1322,11 @@ class AuditionsRepository {
 
     final actorId = _actorUserIdFromSubmission(source);
 
+    final evaluationDetailRaw = source['__evaluation_detail'];
+    final evaluationDetail = evaluationDetailRaw is Map
+        ? evaluationDetailRaw.map((k, v) => MapEntry(k.toString(), v))
+        : null;
+
     return ActorAuditionSubmission(
       id: id,
       actorId: actorId,
@@ -1342,6 +1351,7 @@ class AuditionsRepository {
         source['submission_status'] ?? source['submissionStatus'],
       ),
       evaluationCompleted: evaluationCompleted,
+      evaluationDetail: evaluationDetail,
     );
   }
 

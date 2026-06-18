@@ -139,7 +139,8 @@ class _SubmissionEvaluationDetailsPageState
         return ScriptAlignmentScorePage(submission: submission, nested: true);
       case _EvaluationTabKind.eyes:
         return EyesAnalysisPage(
-          data: eyesAnalysisResultFromSubmission(submission),
+          data: eyesAnalysisResultFromEvaluation(submission),
+          pending: !submission.evaluationCompleted,
           nested: true,
         );
       case _EvaluationTabKind.tone:

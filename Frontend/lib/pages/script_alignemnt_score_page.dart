@@ -86,137 +86,123 @@ class AlignmentResult {
     required this.sentences,
   });
 
-  factory AlignmentResult.mock() => const AlignmentResult(
-    actorName: 'ef',
-    age: 20,
-    score: 87,
-    matched: 156,
-    added: 12,
-    removed: 8,
-    changed: 24,
-    changedPairs: [
-      ChangedWordPair(scriptWord: 'Hello', transcriptWord: 'Hi', sentenceLabel: 'Sentence 1'),
-      ChangedWordPair(scriptWord: 'الزقازيق', transcriptWord: 'القاهره', sentenceLabel: 'Sentence 2'),
-      ChangedWordPair(scriptWord: 'say', transcriptWord: 'tel', sentenceLabel: 'Sentence 3'),
-      ChangedWordPair(scriptWord: 'smoked', transcriptWord: 'smoked', sentenceLabel: 'Sentence 4'),
-      ChangedWordPair(scriptWord: 'ticket', transcriptWord: 'those', sentenceLabel: 'Sentence 5'),
-    ],
-    addedWords: [
-      AddedWord(word: 'actually', sentenceLabel: 'Sentence 3'),
-      AddedWord(word: 'really', sentenceLabel: 'Sentence 5'),
-      AddedWord(word: 'um', sentenceLabel: 'Sentence 7'),
-      AddedWord(word: 'basically', sentenceLabel: 'Sentence 8'),
-    ],
-    removedWords: [
-      RemovedWord(word: 'important', sentenceLabel: 'Sentence 2'),
-      RemovedWord(word: 'very', sentenceLabel: 'Sentence 4'),
-      RemovedWord(word: 'please', sentenceLabel: 'Sentence 6'),
-    ],
-    sentences: [
-      SentenceAlignment(
-        label: 'Sentence 1',
-        score: 90,
-        scriptWords: [
-          AlignedWord('Hello', WordStatus.changed, changedFrom: 'Hello'),
-          AlignedWord('everyone,', WordStatus.matched),
-          AlignedWord('welcome', WordStatus.matched),
-          AlignedWord('to', WordStatus.matched),
-          AlignedWord('the', WordStatus.matched),
-          AlignedWord('presentation', WordStatus.matched),
-          AlignedWord('today.', WordStatus.matched),
-        ],
-        transcriptWords: [
-          AlignedWord('Hi', WordStatus.changed),
-          AlignedWord('everyone,', WordStatus.matched),
-          AlignedWord('welcome', WordStatus.matched),
-          AlignedWord('to', WordStatus.matched),
-          AlignedWord('the', WordStatus.matched),
-          AlignedWord('presentation', WordStatus.matched),
-          AlignedWord('today.', WordStatus.matched),
-        ],
-      ),
-      SentenceAlignment(
-        label: 'Sentence 2',
-        score: 72,
-        scriptWords: [
-          AlignedWord('I', WordStatus.matched),
-          AlignedWord('was', WordStatus.matched),
-          AlignedWord('here', WordStatus.matched),
-          AlignedWord('that', WordStatus.matched),
-          AlignedWord('I', WordStatus.matched),
-          AlignedWord('forced', WordStatus.matched),
-          AlignedWord('my', WordStatus.matched),
-          AlignedWord('way', WordStatus.matched),
-          AlignedWord('in', WordStatus.matched),
-          AlignedWord('important', WordStatus.removed),
-        ],
-        transcriptWords: [
-          AlignedWord('I', WordStatus.matched),
-          AlignedWord('was', WordStatus.matched),
-          AlignedWord('here', WordStatus.matched),
-          AlignedWord('that', WordStatus.matched),
-          AlignedWord('I', WordStatus.matched),
-          AlignedWord('forced', WordStatus.matched),
-          AlignedWord('my', WordStatus.matched),
-          AlignedWord('way', WordStatus.matched),
-          AlignedWord('in', WordStatus.matched),
-        ],
-      ),
-      SentenceAlignment(
-        label: 'Sentence 3',
-        score: 91,
-        scriptWords: [
-          AlignedWord('tel', WordStatus.matched),
-          AlignedWord('the', WordStatus.matched),
-          AlignedWord('DEA', WordStatus.matched),
-          AlignedWord('once', WordStatus.matched),
-          AlignedWord('I', WordStatus.matched),
-          AlignedWord('leave', WordStatus.matched),
-        ],
-        transcriptWords: [
-          AlignedWord('tel', WordStatus.matched),
-          AlignedWord('the', WordStatus.matched),
-          AlignedWord('DEA', WordStatus.matched),
-          AlignedWord('once', WordStatus.matched),
-          AlignedWord('I', WordStatus.matched),
-          AlignedWord('leave', WordStatus.matched),
-          AlignedWord('actually', WordStatus.added),
-        ],
-      ),
-      SentenceAlignment(
-        label: 'Sentence 4',
-        score: 88,
-        scriptWords: [
-          AlignedWord('and', WordStatus.matched),
-          AlignedWord('say', WordStatus.changed, changedFrom: 'say'),
-          AlignedWord('to', WordStatus.matched),
-          AlignedWord('them', WordStatus.matched),
-          AlignedWord('very', WordStatus.removed),
-        ],
-        transcriptWords: [
-          AlignedWord('and', WordStatus.matched),
-          AlignedWord('tel', WordStatus.changed),
-          AlignedWord('to', WordStatus.matched),
-          AlignedWord('them', WordStatus.matched),
-        ],
-      ),
-    ],
-  );
+  /// Builds the script-alignment view from the AI evaluation payload
+  /// (`script_alignment_details`). Returns null when no alignment data exists.
+  static AlignmentResult? fromEvaluation(
+    Map<String, dynamic>? detail,
+    ActorAuditionSubmission submission,
+  ) {
+    if (detail == null) return null;
+    final raw = detail['script_alignment_details'];
+    if (raw is! Map) return null;
+    final d = raw.map((k, v) => MapEntry(k.toString(), v));
 
-  factory AlignmentResult.mockForSubmission(ActorAuditionSubmission s) {
-    final base = AlignmentResult.mock();
+    List<dynamic> asList(Object? v) => v is List ? v : const [];
+    int countOf(String countKey, String listKey) {
+      final c = d[countKey];
+      if (c is num) return c.toInt();
+      return asList(d[listKey]).length;
+    }
+
+    String wordText(Object? item) {
+      if (item is String) return item;
+      if (item is Map) {
+        return (item['word'] ??
+                item['text'] ??
+                item['script'] ??
+                item['expected'] ??
+                '')
+            .toString();
+      }
+      return item?.toString() ?? '';
+    }
+
+    final changedPairs = asList(d['changed_words']).map((item) {
+      if (item is Map) {
+        final m = item.map((k, v) => MapEntry(k.toString(), v));
+        final script = (m['script'] ??
+                m['expected'] ??
+                m['from'] ??
+                m['original'] ??
+                m['word'] ??
+                '')
+            .toString();
+        final transcript =
+            (m['transcript'] ?? m['actual'] ?? m['to'] ?? m['hypothesis'] ?? '')
+                .toString();
+        return ChangedWordPair(
+          scriptWord: script,
+          transcriptWord: transcript,
+          sentenceLabel: (m['sentence'] ?? '').toString(),
+        );
+      }
+      return ChangedWordPair(
+        scriptWord: wordText(item),
+        transcriptWord: '',
+        sentenceLabel: '',
+      );
+    }).toList();
+
+    final addedWords = asList(d['added_words'])
+        .map((w) => AddedWord(word: wordText(w), sentenceLabel: ''))
+        .toList();
+    final removedWords = asList(d['skipped_words'])
+        .map((w) => RemovedWord(word: wordText(w), sentenceLabel: ''))
+        .toList();
+
+    final overall = submission.scriptMatchScore;
+    final sentences = <SentenceAlignment>[];
+    final aligned = asList(d['sentences_aligned']);
+    for (var i = 0; i < aligned.length; i++) {
+      final s = aligned[i];
+      if (s is! Map) continue;
+      final m = s.map((k, v) => MapEntry(k.toString(), v));
+      final content = (m['content'] ?? m['sentence'] ?? m['script'] ?? '')
+          .toString()
+          .trim();
+      if (content.isEmpty) continue;
+      final transcript =
+          (m['transcript'] ?? m['hypothesis'] ?? m['recognized'] ?? '')
+              .toString()
+              .trim();
+      final num? rawScore = m['score'] as num?;
+      final num? coverage = m['coverage'] as num?;
+      final sentScore = rawScore != null
+          ? rawScore.round()
+          : coverage != null
+              ? (coverage <= 1 ? (coverage * 100).round() : coverage.round())
+              : overall;
+      sentences.add(
+        SentenceAlignment(
+          label: 'Sentence ${i + 1}',
+          score: sentScore.clamp(0, 100),
+          scriptWords: content
+              .split(RegExp(r'\s+'))
+              .where((w) => w.isNotEmpty)
+              .map((w) => AlignedWord(w, WordStatus.matched))
+              .toList(),
+          transcriptWords: transcript
+              .split(RegExp(r'\s+'))
+              .where((w) => w.isNotEmpty)
+              .map((w) => AlignedWord(w, WordStatus.matched))
+              .toList(),
+        ),
+      );
+    }
+
     return AlignmentResult(
-      actorName: s.actorName.trim().isEmpty ? base.actorName : s.actorName.trim(),
-      age: s.age > 0 ? s.age : base.age,
-      score: s.scriptMatchScore,
-      matched: base.matched,
-      added: base.added,
-      removed: base.removed,
-      changed: base.changed,
-      changedPairs: base.changedPairs,
-      addedWords: base.addedWords,
-      removedWords: base.removedWords,
-      sentences: base.sentences,
+      actorName:
+          submission.actorName.trim().isEmpty ? 'Actor' : submission.actorName.trim(),
+      age: submission.age,
+      score: overall,
+      matched: countOf('matched_word_count', 'matched_words'),
+      added: countOf('added_word_count', 'added_words'),
+      removed: countOf('skipped_word_count', 'skipped_words'),
+      changed: countOf('changed_word_count', 'changed_words'),
+      changedPairs: changedPairs,
+      addedWords: addedWords,
+      removedWords: removedWords,
+      sentences: sentences,
     );
   }
 }
@@ -240,7 +226,8 @@ class ScriptAlignmentScorePage extends StatelessWidget {
     final pending = !submission.evaluationCompleted;
     final data = pending
         ? null
-        : (result ?? AlignmentResult.mockForSubmission(submission));
+        : (result ??
+            AlignmentResult.fromEvaluation(submission.evaluationDetail, submission));
     final wide = _isWide(context);
 
     final body = Column(
@@ -249,9 +236,11 @@ class ScriptAlignmentScorePage extends StatelessWidget {
         Expanded(
           child: pending
               ? const _ScriptAlignmentPending()
-              : wide
-                  ? _WebLayout(data: data!)
-                  : _MobileLayout(data: data!),
+              : data == null
+                  ? const _ScriptAlignmentUnavailable()
+                  : wide
+                      ? _WebLayout(data: data)
+                      : _MobileLayout(data: data),
         ),
       ],
     );
@@ -638,9 +627,10 @@ class _WordStatsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final maxVal = [data.matched, data.added, data.removed, data.changed]
+    final rawMax = [data.matched, data.added, data.removed, data.changed]
         .reduce(math.max)
         .toDouble();
+    final maxVal = rawMax <= 0 ? 1.0 : rawMax;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -1063,6 +1053,61 @@ class _SectionHeading extends StatelessWidget {
         color: ScenolyticsColors.textMuted,
         letterSpacing: 1.0,
       ),
+    );
+  }
+}
+
+/// Evaluation finished but produced no script alignment (e.g. the audition had
+/// no script attached, so there was nothing to align against).
+class _ScriptAlignmentUnavailable extends StatelessWidget {
+  const _ScriptAlignmentUnavailable();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
+          decoration: BoxDecoration(
+            color: ScenolyticsColors.surfaceCard,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: ScenolyticsColors.outlineSoft),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: const [
+                  Icon(Icons.menu_book_outlined,
+                      size: 20, color: ScenolyticsColors.textMuted),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'No script alignment available',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: ScenolyticsColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'This audition did not include a script to compare against, so '
+                'no word-level alignment was produced for this submission.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: ScenolyticsColors.textMuted,
+                  height: 1.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
