@@ -31,10 +31,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Re-pin numpy LAST (mediapipe upgrades it)
 RUN pip install --no-cache-dir "numpy==1.26.4" --force-reinstall
 
-RUN pip cache purge
 
 COPY . .
 
 EXPOSE 5012
 
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${AI_EVALUATION_SERVICE_PORT:-5012}"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5012"]

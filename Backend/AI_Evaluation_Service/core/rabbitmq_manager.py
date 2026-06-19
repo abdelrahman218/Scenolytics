@@ -7,6 +7,7 @@ import json
 import logging
 from typing import Optional, Callable
 import aio_pika
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -57,11 +58,9 @@ class RabbitMQManager:
         for attempt in range(max_retries):
             try:
                 self.connection = await aio_pika.connect_robust(
-                    'amqp://rabbitmq/',
-                    heartbeat=60,                    # keep-alive ping every 60 s so the
-                                                     # broker never closes an idle connection
-                                                     # during long ML pipeline runs
-                    blocked_connection_timeout=300,  # allow up to 5 min of back-pressure
+                    os.environ.get('RABBITMQ_URL', 'amqp://rabbitmq/'),
+                    heartbeat=60,
+                    blocked_connection_timeout=300,
                 )
 
                 # ── Publisher channel (publishing only) ──────────────────────
@@ -103,6 +102,8 @@ class RabbitMQManager:
                 await audition_queue.bind(self.audition_exchange, routing_key=AUDITION_UPDATED_ROUTING_KEY)
                 await audition_queue.bind(self.audition_exchange, routing_key=AUDITION_SUBMITTED_ROUTING_KEY)
 
+                logger.info(f"✓ Declared and bound queue '{AUDITION_EVENTS_QUEUE}' on exchange '{AUDITION_EVENTS_EXCHANGE}'")
+                logger.info(f"✓ Connection details: {self.connection.url if hasattr(self.connection, 'url') else 'unknown'}")
                 logger.info("✓ Connected to RabbitMQ")
                 return True
 
