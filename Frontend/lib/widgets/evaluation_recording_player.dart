@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
 import '../theme/scenolytics_colors.dart';
+import 'evaluation_playback_controller.dart';
 
 String _fmt(Duration d) {
   final m = d.inMinutes;
@@ -16,9 +17,16 @@ String _fmt(Duration d) {
 /// the different MinIO / gateway URL shapes the repository may resolve. Shows a
 /// graceful placeholder when no playable URL is available.
 class EvaluationVideoPlayer extends StatefulWidget {
-  const EvaluationVideoPlayer({super.key, required this.candidates});
+  const EvaluationVideoPlayer({
+    super.key,
+    required this.candidates,
+    this.playback,
+  });
 
   final List<String> candidates;
+
+  /// Optional shared controller so per-sentence cards can play their slice.
+  final EvaluationPlaybackController? playback;
 
   @override
   State<EvaluationVideoPlayer> createState() => _EvaluationVideoPlayerState();
@@ -57,6 +65,11 @@ class _EvaluationVideoPlayerState extends State<EvaluationVideoPlayer> {
           return;
         }
         c.addListener(_onTick);
+        widget.playback?.attach(
+          seek: c.seekTo,
+          play: c.play,
+          pause: c.pause,
+        );
         setState(() {
           _controller = c;
           _loading = false;
@@ -75,11 +88,16 @@ class _EvaluationVideoPlayerState extends State<EvaluationVideoPlayer> {
   }
 
   void _onTick() {
+    final c = _controller;
+    if (c != null) {
+      widget.playback?.reportPosition(c.value.position, c.value.duration);
+    }
     if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    widget.playback?.detach();
     _controller?.removeListener(_onTick);
     _controller?.dispose();
     super.dispose();
@@ -293,9 +311,16 @@ class _ProgressBar extends StatelessWidget {
 
 /// Real network audio player for the director's full audition recording.
 class EvaluationAudioPlayer extends StatefulWidget {
-  const EvaluationAudioPlayer({super.key, required this.candidates});
+  const EvaluationAudioPlayer({
+    super.key,
+    required this.candidates,
+    this.playback,
+  });
 
   final List<String> candidates;
+
+  /// Optional shared controller so per-sentence cards can play their slice.
+  final EvaluationPlaybackController? playback;
 
   @override
   State<EvaluationAudioPlayer> createState() => _EvaluationAudioPlayerState();
@@ -323,7 +348,9 @@ class _EvaluationAudioPlayerState extends State<EvaluationAudioPlayer> {
       });
     });
     _player.onPositionChanged.listen((p) {
-      if (mounted) setState(() => _position = p);
+      if (!mounted) return;
+      setState(() => _position = p);
+      widget.playback?.reportPosition(p, _duration);
     });
     _player.onDurationChanged.listen((d) {
       if (mounted) setState(() => _duration = d);
@@ -340,6 +367,11 @@ class _EvaluationAudioPlayerState extends State<EvaluationAudioPlayer> {
       try {
         await _player.setSource(ap.UrlSource(url));
         if (!mounted) return;
+        widget.playback?.attach(
+          seek: _player.seek,
+          play: _player.resume,
+          pause: _player.pause,
+        );
         setState(() => _loading = false);
         return;
       } catch (_) {}
@@ -354,6 +386,7 @@ class _EvaluationAudioPlayerState extends State<EvaluationAudioPlayer> {
 
   @override
   void dispose() {
+    widget.playback?.detach();
     _player.dispose();
     super.dispose();
   }

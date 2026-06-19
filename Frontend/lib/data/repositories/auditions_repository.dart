@@ -341,12 +341,21 @@ class AuditionsRepository {
       if (nested is num) merged['eyes_analysis_score'] = nested.round();
     }
 
-    final tone = evaluation['tone_analysis'];
-    if (tone is num) {
-      merged['tone_analysis_score'] = tone.round();
-    } else if (tone is Map) {
-      final nested = tone['score'] ?? tone['overall_score'];
-      if (nested is num) merged['tone_analysis_score'] = nested.round();
+    // Tone score lives at the top level (`tone_score`) in the AI response.
+    // `tone_analysis` is a separate object holding the per-segment timeline
+    // (timestamps, pitch/loudness) and usually carries no scalar score, so we
+    // read `tone_score` first and only fall back to a nested score.
+    final toneScore = evaluation['tone_score'];
+    if (toneScore is num) {
+      merged['tone_analysis_score'] = toneScore.round();
+    } else {
+      final tone = evaluation['tone_analysis'];
+      if (tone is num) {
+        merged['tone_analysis_score'] = tone.round();
+      } else if (tone is Map) {
+        final nested = tone['score'] ?? tone['overall_score'];
+        if (nested is num) merged['tone_analysis_score'] = nested.round();
+      }
     }
 
     final status = evaluation['evaluation_status']?.toString();

@@ -3,7 +3,9 @@ import '../models/actor_audition_submission.dart';
 import '../theme/scenolytics_colors.dart';
 import '../utils/evaluation_parsing.dart';
 import '../utils/playback_candidates.dart';
+import '../widgets/evaluation_playback_controller.dart';
 import '../widgets/evaluation_recording_player.dart';
+import '../widgets/tone_timeline_card.dart';
 
 const double _kMobileBreak = 600;
 bool _isWide(BuildContext context) =>
@@ -16,12 +18,19 @@ class SentenceEmotion {
   final String emoji;
   final double confidence;
 
+  /// Precise segment bounds (seconds) used to play just this slice of the
+  /// recording. Null when the run produced no usable timestamp.
+  final double? startSeconds;
+  final double? endSeconds;
+
   const SentenceEmotion({
     required this.timestamp,
     required this.text,
     required this.emotion,
     required this.emoji,
     required this.confidence,
+    this.startSeconds,
+    this.endSeconds,
   });
 }
 
@@ -31,19 +40,44 @@ class SentenceEmotion {
 List<SentenceEmotion> vocalSentencesFromEvaluation(
   Map<String, dynamic>? detail,
 ) {
-  return evaluationSentenceResults(detail, channel: 'vocal').map((r) {
-    final detected = (r['detected_emotion'] ?? '').toString();
+  final fromVocal = evaluationSentenceResults(detail, channel: 'vocal');
+  if (fromVocal.isNotEmpty) {
+    return fromVocal.map((r) {
+      final detected = (r['detected_emotion'] ?? '').toString();
+      final win = sentenceTimeWindowSeconds(r);
+      return SentenceEmotion(
+        timestamp: clockRangeLabel(win.start, win.end),
+        text: (r['sentence'] ?? '').toString(),
+        emotion: detected.isEmpty ? 'No speech' : capitalizeEmotion(detected),
+        emoji: detected.isEmpty ? '🔇' : emotionEmoji(detected),
+        confidence: normalizeConfidencePct(r['confidence'] as num?),
+        startSeconds: win.start,
+        endSeconds: win.end,
+      );
+    }).toList();
+  }
+
+  // Fallback: script lines with estimated timestamps (alignment score may be 0).
+  return scriptAlignedSentences(detail).map((r) {
+    final expected = (r['emotion'] ?? r['expected_emotion'] ?? '').toString();
+    final status = (r['status'] ?? '').toString();
+    final win = sentenceTimeWindowSeconds(r);
+    final label = expected.isEmpty
+        ? (status == 'estimated' ? 'Script line (estimated)' : 'Script line')
+        : capitalizeEmotion(expected);
     return SentenceEmotion(
-      timestamp: timeRangeStart(r['time_range']?.toString()),
-      text: (r['sentence'] ?? '').toString(),
-      emotion: detected.isEmpty ? 'No speech' : capitalizeEmotion(detected),
-      emoji: detected.isEmpty ? '🔇' : emotionEmoji(detected),
-      confidence: normalizeConfidencePct(r['confidence'] as num?),
+      timestamp: clockRangeLabel(win.start, win.end),
+      text: (r['content'] ?? r['sentence'] ?? '').toString(),
+      emotion: label,
+      emoji: expected.isEmpty ? '📝' : emotionEmoji(expected),
+      confidence: 0,
+      startSeconds: win.start,
+      endSeconds: win.end,
     );
   }).toList();
 }
 
-class VocalEmotionScorePage extends StatelessWidget {
+class VocalEmotionScorePage extends StatefulWidget {
   const VocalEmotionScorePage({
     super.key,
     required this.submission,
@@ -61,18 +95,36 @@ class VocalEmotionScorePage extends StatelessWidget {
   final bool nested;
 
   @override
+  State<VocalEmotionScorePage> createState() => _VocalEmotionScorePageState();
+}
+
+class _VocalEmotionScorePageState extends State<VocalEmotionScorePage> {
+  final EvaluationPlaybackController _playback =
+      EvaluationPlaybackController();
+
+  @override
+  void dispose() {
+    _playback.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final submission = widget.submission;
     final wide = _isWide(context);
-    final actorName = submission.actorName.trim().isEmpty ? 'Actor' : submission.actorName.trim();
+    final actorName = submission.actorName.trim().isEmpty
+        ? 'Actor'
+        : submission.actorName.trim();
     final actorAge = submission.age;
     final actorScore = submission.vocalToneScore;
     final pending = !submission.evaluationCompleted;
+    final detail = submission.evaluationDetail;
     final resolvedSentences =
-        sentences ?? vocalSentencesFromEvaluation(submission.evaluationDetail);
+        widget.sentences ?? vocalSentencesFromEvaluation(detail);
     final candidates = submissionPlaybackCandidates(submission);
     final body = Column(
       children: [
-        if (!nested) _AppBar(),
+        if (!widget.nested) _AppBar(),
         Expanded(
           child: pending
               ? _PendingAnalysisView(
@@ -87,6 +139,8 @@ class VocalEmotionScorePage extends StatelessWidget {
                       actorAge: actorAge,
                       actorScore: actorScore,
                       candidates: candidates,
+                      detail: detail,
+                      playback: _playback,
                     )
                   : _MobileLayout(
                       sentences: resolvedSentences,
@@ -94,11 +148,13 @@ class VocalEmotionScorePage extends StatelessWidget {
                       actorAge: actorAge,
                       actorScore: actorScore,
                       candidates: candidates,
+                      detail: detail,
+                      playback: _playback,
                     ),
         ),
       ],
     );
-    if (nested) {
+    if (widget.nested) {
       return ColoredBox(
         color: ScenolyticsColors.pageBackground,
         child: body,
@@ -117,12 +173,16 @@ class _MobileLayout extends StatelessWidget {
   final int actorAge;
   final int actorScore;
   final List<String> candidates;
+  final Map<String, dynamic>? detail;
+  final EvaluationPlaybackController playback;
   const _MobileLayout({
     required this.sentences,
     required this.actorName,
     required this.actorAge,
     required this.actorScore,
     required this.candidates,
+    required this.detail,
+    required this.playback,
   });
 
   @override
@@ -132,17 +192,18 @@ class _MobileLayout extends StatelessWidget {
       children: [
         _ActorCard(name: actorName, age: actorAge, score: actorScore),
         const SizedBox(height: 14),
-        EvaluationAudioPlayer(candidates: candidates),
+        EvaluationAudioPlayer(candidates: candidates, playback: playback),
         const SizedBox(height: 14),
         const _SectionHeading('Emotion Detected By Sentence'),
+        if (sentences.isNotEmpty) const _PlayHint(),
         const SizedBox(height: 10),
         if (sentences.isEmpty)
-          const _NoSentenceBreakdown()
+          _VocalFallback(detail: detail)
         else
           ...sentences.map(
             (s) => Padding(
               padding: const EdgeInsets.only(bottom: 14),
-              child: _SentenceCard(sentence: s),
+              child: _SentenceCard(sentence: s, playback: playback),
             ),
           ),
         const SizedBox(height: 20),
@@ -157,12 +218,16 @@ class _WebLayout extends StatelessWidget {
   final int actorAge;
   final int actorScore;
   final List<String> candidates;
+  final Map<String, dynamic>? detail;
+  final EvaluationPlaybackController playback;
   const _WebLayout({
     required this.sentences,
     required this.actorName,
     required this.actorAge,
     required this.actorScore,
     required this.candidates,
+    required this.detail,
+    required this.playback,
   });
 
   @override
@@ -172,23 +237,147 @@ class _WebLayout extends StatelessWidget {
       children: [
         _ActorCard(name: actorName, age: actorAge, score: actorScore),
         const SizedBox(height: 16),
-        EvaluationAudioPlayer(candidates: candidates),
+        EvaluationAudioPlayer(candidates: candidates, playback: playback),
         const SizedBox(height: 20),
         const _SectionHeading('Emotion Detected By Sentence'),
+        if (sentences.isNotEmpty) const _PlayHint(),
         const SizedBox(height: 14),
         if (sentences.isEmpty)
-          const _NoSentenceBreakdown()
+          _VocalFallback(detail: detail)
         else
-          _SentenceGrid(sentences: sentences),
+          _SentenceGrid(sentences: sentences, playback: playback),
         const SizedBox(height: 24),
       ],
     );
   }
 }
 
-/// Shown when the evaluation completed but carries no per-sentence breakdown.
-class _NoSentenceBreakdown extends StatelessWidget {
-  const _NoSentenceBreakdown();
+/// Fallback when no per-sentence vocal breakdown exists (script transcription
+/// unavailable). Shows the whole-clip dominant emotion plus the timestamped
+/// prosody timeline so the audio is still broken down by time.
+class _VocalFallback extends StatelessWidget {
+  const _VocalFallback({required this.detail});
+
+  final Map<String, dynamic>? detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final wholeClip = wholeClipVocalEmotion(detail);
+    final segments = toneSegmentsFromEvaluation(detail);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (wholeClip != null) ...[
+          _WholeClipEmotionCard(
+            emotion: wholeClip.emotion,
+            confidencePct: wholeClip.confidencePct,
+            score: wholeClip.score,
+          ),
+          const SizedBox(height: 14),
+        ],
+        if (segments.isNotEmpty) ...[
+          ToneTimelineCard(
+            segments: segments,
+            title: 'Vocal timeline',
+          ),
+          const SizedBox(height: 14),
+        ],
+        if (evaluationTranscript(detail) != null) ...[
+          _TranscriptCard(transcript: evaluationTranscript(detail)!),
+          const SizedBox(height: 14),
+        ],
+        if (vocalSentencesFromEvaluation(detail).isEmpty)
+          _NoSentenceBreakdownNote(detail: detail),
+      ],
+    );
+  }
+}
+
+class _WholeClipEmotionCard extends StatelessWidget {
+  const _WholeClipEmotionCard({
+    required this.emotion,
+    required this.confidencePct,
+    required this.score,
+  });
+
+  final String emotion;
+  final double confidencePct;
+  final int score;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: ScenolyticsColors.surfaceCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: ScenolyticsColors.outlineSoft),
+      ),
+      child: Row(
+        children: [
+          Text(emotionEmoji(emotion), style: const TextStyle(fontSize: 30)),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Dominant vocal emotion (full clip)',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.4,
+                    color: ScenolyticsColors.textMuted,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  capitalizeEmotion(emotion),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: ScenolyticsColors.textPrimary,
+                  ),
+                ),
+                if (confidencePct > 0)
+                  Text(
+                    '${confidencePct.toInt()}% confidence',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: ScenolyticsColors.accentCyan,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              border: Border.all(color: ScenolyticsColors.accentCyan, width: 2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              '$score',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: ScenolyticsColors.primary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Explains why per-sentence rows may be missing or estimated.
+class _NoSentenceBreakdownNote extends StatelessWidget {
+  const _NoSentenceBreakdownNote({required this.detail});
+
+  final Map<String, dynamic>? detail;
 
   @override
   Widget build(BuildContext context) {
@@ -207,8 +396,7 @@ class _NoSentenceBreakdown extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'No per-sentence breakdown is available for this submission. '
-              'The overall score above reflects the full recording.',
+              sentenceBreakdownMessage(detail),
               style: TextStyle(
                 fontSize: 13,
                 height: 1.4,
@@ -222,9 +410,52 @@ class _NoSentenceBreakdown extends StatelessWidget {
   }
 }
 
+class _TranscriptCard extends StatelessWidget {
+  const _TranscriptCard({required this.transcript});
+
+  final String transcript;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: ScenolyticsColors.surfaceCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: ScenolyticsColors.outlineSoft),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'What we heard',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.6,
+              color: ScenolyticsColors.textMuted,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            transcript,
+            style: const TextStyle(
+              fontSize: 14,
+              height: 1.5,
+              color: ScenolyticsColors.textPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SentenceGrid extends StatelessWidget {
   final List<SentenceEmotion> sentences;
-  const _SentenceGrid({required this.sentences});
+  final EvaluationPlaybackController playback;
+  const _SentenceGrid({required this.sentences, required this.playback});
 
   @override
   Widget build(BuildContext context) {
@@ -239,10 +470,11 @@ class _SentenceGrid extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(child: _SentenceCard(sentence: row[0])),
+              Expanded(child: _SentenceCard(sentence: row[0], playback: playback)),
               if (row.length > 1) ...[
                 const SizedBox(width: 20),
-                Expanded(child: _SentenceCard(sentence: row[1])),
+                Expanded(
+                    child: _SentenceCard(sentence: row[1], playback: playback)),
               ] else
                 const Expanded(child: SizedBox()),
             ],
@@ -399,46 +631,59 @@ class _SectionHeading extends StatelessWidget {
 
 class _SentenceCard extends StatelessWidget {
   final SentenceEmotion sentence;
-  const _SentenceCard({required this.sentence});
+  final EvaluationPlaybackController playback;
+  const _SentenceCard({required this.sentence, required this.playback});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: ScenolyticsColors.surfaceCard,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: ScenolyticsColors.outlineSoft),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  sentence.timestamp,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: ScenolyticsColors.textMuted,
-                    letterSpacing: 0.4,
-                    fontFeatures: [FontFeature.tabularFigures()],
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  sentence.text,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: ScenolyticsColors.textPrimary,
-                    height: 1.5,
-                  ),
-                ),
-              ],
+    return AnimatedBuilder(
+      animation: playback,
+      builder: (context, _) {
+        final active =
+            playback.isSegmentActive(sentence.startSeconds, sentence.endSeconds);
+        return Container(
+          decoration: BoxDecoration(
+            color: ScenolyticsColors.surfaceCard,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: active
+                  ? ScenolyticsColors.accentCyan
+                  : ScenolyticsColors.outlineSoft,
+              width: active ? 1.6 : 1,
             ),
           ),
+          child: _buildBody(active),
+        );
+      },
+    );
+  }
+
+  Widget _buildBody(bool active) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _TimestampPlayRow(
+                sentence: sentence,
+                playback: playback,
+                active: active,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                sentence.text,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: ScenolyticsColors.textPrimary,
+                  height: 1.5,
+                ),
+              ),
+            ],
+          ),
+        ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
@@ -469,6 +714,100 @@ class _SentenceCard extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
             child: _AnimatedProgressBar(value: sentence.confidence / 100),
+          ),
+        ],
+      );
+  }
+}
+
+/// Timestamp shown as a tappable "play this segment" chip when a player is
+/// attached and the sentence has a usable start time; otherwise plain text.
+class _TimestampPlayRow extends StatelessWidget {
+  const _TimestampPlayRow({
+    required this.sentence,
+    required this.playback,
+    required this.active,
+  });
+
+  final SentenceEmotion sentence;
+  final EvaluationPlaybackController playback;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasSegment = sentence.startSeconds != null;
+    final label = sentence.timestamp.isEmpty ? '—' : sentence.timestamp;
+    if (!hasSegment || !playback.isReady) {
+      return Text(
+        label,
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+          color: ScenolyticsColors.textMuted,
+          letterSpacing: 0.4,
+          fontFeatures: [FontFeature.tabularFigures()],
+        ),
+      );
+    }
+    final color =
+        active ? ScenolyticsColors.accentCyan : ScenolyticsColors.primary;
+    return GestureDetector(
+      onTap: () =>
+          playback.playSegment(sentence.startSeconds!, sentence.endSeconds),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: active ? 0.18 : 0.10),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: color.withValues(alpha: 0.5)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(active ? Icons.graphic_eq_rounded : Icons.play_arrow_rounded,
+                size: 14, color: color),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: color,
+                letterSpacing: 0.3,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One-line hint under the section heading telling the user the timestamps are
+/// clickable.
+class _PlayHint extends StatelessWidget {
+  const _PlayHint();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.only(top: 6),
+      child: Row(
+        children: [
+          Icon(Icons.touch_app_rounded,
+              size: 13, color: ScenolyticsColors.textMuted),
+          SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'Tap a timestamp to play just that part of the recording.',
+              style: TextStyle(
+                fontSize: 11.5,
+                color: ScenolyticsColors.textMuted,
+                height: 1.3,
+              ),
+            ),
           ),
         ],
       ),

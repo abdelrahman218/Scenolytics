@@ -71,6 +71,7 @@ class AlignmentResult {
   final List<AddedWord> addedWords;
   final List<RemovedWord> removedWords;
   final List<SentenceAlignment> sentences;
+  final String? transcript;
 
   const AlignmentResult({
     required this.actorName,
@@ -84,6 +85,7 @@ class AlignmentResult {
     required this.addedWords,
     required this.removedWords,
     required this.sentences,
+    this.transcript,
   });
 
   /// Builds the script-alignment view from the AI evaluation payload
@@ -165,6 +167,11 @@ class AlignmentResult {
           (m['transcript'] ?? m['hypothesis'] ?? m['recognized'] ?? '')
               .toString()
               .trim();
+      final start = m['t_start'];
+      final end = m['t_end'];
+      final timeLabel = (start is num && end is num)
+          ? ' (${start.toStringAsFixed(1)}s–${end.toStringAsFixed(1)}s)'
+          : '';
       final num? rawScore = m['score'] as num?;
       final num? coverage = m['coverage'] as num?;
       final sentScore = rawScore != null
@@ -174,7 +181,7 @@ class AlignmentResult {
               : overall;
       sentences.add(
         SentenceAlignment(
-          label: 'Sentence ${i + 1}',
+          label: 'Sentence ${i + 1}$timeLabel',
           score: sentScore.clamp(0, 100),
           scriptWords: content
               .split(RegExp(r'\s+'))
@@ -190,6 +197,8 @@ class AlignmentResult {
       );
     }
 
+    final heard = d['transcript']?.toString().trim() ?? '';
+
     return AlignmentResult(
       actorName:
           submission.actorName.trim().isEmpty ? 'Actor' : submission.actorName.trim(),
@@ -203,6 +212,7 @@ class AlignmentResult {
       addedWords: addedWords,
       removedWords: removedWords,
       sentences: sentences,
+      transcript: heard.isEmpty ? null : heard,
     );
   }
 }
@@ -272,6 +282,10 @@ class _MobileLayout extends StatelessWidget {
         const SizedBox(height: 16),
         _SectionHeading('SENTENCE COMPARISON'),
         const SizedBox(height: 10),
+        if (data.sentences.isEmpty && data.transcript != null) ...[
+          _TranscriptOnlyCard(transcript: data.transcript!),
+          const SizedBox(height: 10),
+        ],
         ...data.sentences.map((s) => Padding(
           padding: const EdgeInsets.only(bottom: 10),
           child: _SentenceAccordion(sentence: s),
@@ -320,6 +334,10 @@ class _WebLayout extends StatelessWidget {
         const SizedBox(height: 16),
         _SectionHeading('SENTENCE COMPARISON'),
         const SizedBox(height: 10),
+        if (data.sentences.isEmpty && data.transcript != null) ...[
+          _TranscriptOnlyCard(transcript: data.transcript!),
+          const SizedBox(height: 10),
+        ],
         ...data.sentences.map((s) => Padding(
           padding: const EdgeInsets.only(bottom: 10),
           child: _SentenceAccordion(sentence: s),
@@ -1052,6 +1070,59 @@ class _SectionHeading extends StatelessWidget {
         fontWeight: FontWeight.w700,
         color: ScenolyticsColors.textMuted,
         letterSpacing: 1.0,
+      ),
+    );
+  }
+}
+
+/// Shows the ASR transcript when no per-sentence alignment rows exist.
+class _TranscriptOnlyCard extends StatelessWidget {
+  const _TranscriptOnlyCard({required this.transcript});
+
+  final String transcript;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: ScenolyticsColors.surfaceCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: ScenolyticsColors.outlineSoft),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'WHAT WE HEARD',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.0,
+              color: ScenolyticsColors.textMuted,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            transcript,
+            style: const TextStyle(
+              fontSize: 14,
+              height: 1.5,
+              color: ScenolyticsColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Word alignment to the script was 0% — the actor may have read '
+            'different lines than the audition script.',
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.4,
+              color: ScenolyticsColors.textMuted,
+            ),
+          ),
+        ],
       ),
     );
   }

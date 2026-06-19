@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../models/actor_audition_submission.dart';
 import '../theme/scenolytics_colors.dart';
+import '../utils/evaluation_parsing.dart';
 import 'director_actor_profile_details_page.dart';
 import 'eyes_analysis_page.dart';
 import 'facial_emotion_score.dart';
 import 'script_alignemnt_score_page.dart';
+import 'tone_analysis_page.dart';
 import 'vocal_emotion_score.dart';
 
 class SubmissionEvaluationDetailsPage extends StatefulWidget {
@@ -650,291 +652,28 @@ class _DetailTabBar extends StatelessWidget {
   }
 }
 
-/// Tone analysis tab body — themed score card with a gauge.
+/// Tone analysis tab body — themed pitch / loudness variation charts driven by
+/// the evaluation payload (`tone_analysis.segments`).
 class _ToneAnalysisTabBody extends StatelessWidget {
   const _ToneAnalysisTabBody({required this.submission});
 
   final ActorAuditionSubmission submission;
 
-  Color _scoreColor(int score) {
-    if (score >= 85) return ScenolyticsColors.success;
-    if (score >= 60) return ScenolyticsColors.warning;
-    return ScenolyticsColors.error;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final brightness = theme.brightness;
     final score = submission.toneAnalysisScore.clamp(0, 100);
-    final color = _scoreColor(score);
-    final pageBg = brightness == Brightness.dark
-        ? ScenolyticsColors.darkPageBackground
-        : ScenolyticsColors.pageBackground;
-    final cardSurface = brightness == Brightness.dark
-        ? ScenolyticsColors.darkSurfaceCard
-        : ScenolyticsColors.surfaceCard;
-    final outline = brightness == Brightness.dark
-        ? ScenolyticsColors.darkOutlineSoft.withValues(alpha: 0.5)
-        : ScenolyticsColors.outlineSoft.withValues(alpha: 0.6);
-    final mutedText = brightness == Brightness.dark
-        ? ScenolyticsColors.darkTextMuted
-        : ScenolyticsColors.textMuted;
-
-    return ColoredBox(
-      color: pageBg,
-      child: LayoutBuilder(
-        builder: (context, c) {
-          final wide = c.maxWidth >= 720;
-          return SingleChildScrollView(
-            padding: EdgeInsets.symmetric(
-              horizontal: wide ? 32 : 16,
-              vertical: 24,
-            ),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 880),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _ToneHeroBanner(color: ScenolyticsColors.metricToneAnalysis),
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: cardSurface,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: outline),
-                        boxShadow: [
-                          BoxShadow(
-                            color: cs.shadow.withValues(alpha: 0.05),
-                            blurRadius: 16,
-                            offset: const Offset(0, 6),
-                          ),
-                        ],
-                      ),
-                      child: Flex(
-                        direction: wide ? Axis.horizontal : Axis.vertical,
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          _ToneGauge(score: score, color: color),
-                          SizedBox(
-                            width: wide ? 28 : 0,
-                            height: wide ? 0 : 18,
-                          ),
-                          Expanded(
-                            flex: wide ? 1 : 0,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Speech tone & prosody',
-                                  style: theme.textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Measures rhythm, stress, and intonation patterns in the actor’s '
-                                  'voice relative to the script. Higher scores indicate clearer prosodic '
-                                  'expression and richer tonal variety.',
-                                  style: theme.textTheme.bodyMedium?.copyWith(
-                                    color: mutedText,
-                                    height: 1.45,
-                                  ),
-                                ),
-                                const SizedBox(height: 14),
-                                _ToneBandRow(score: score),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      ),
+    final segments = toneSegmentsFromEvaluation(submission.evaluationDetail);
+    final result = ToneAnalysisResult.fromSegments(
+      actorName: submission.actorName,
+      age: submission.age,
+      score: score,
+      segments: segments,
+    );
+    return ToneAnalysisPage(
+      result: result,
+      nested: true,
+      pending: !submission.evaluationCompleted,
     );
   }
 }
 
-class _ToneHeroBanner extends StatelessWidget {
-  const _ToneHeroBanner({required this.color});
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [color, color.withValues(alpha: 0.78)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.35),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: const Row(
-        children: [
-          Icon(Icons.equalizer_rounded, color: Colors.white, size: 20),
-          SizedBox(width: 8),
-          Text(
-            'Tone analysis',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.2,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ToneGauge extends StatelessWidget {
-  const _ToneGauge({required this.score, required this.color});
-
-  final int score;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 132,
-      height: 132,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          SizedBox(
-            width: 132,
-            height: 132,
-            child: CircularProgressIndicator(
-              value: (score / 100).clamp(0.0, 1.0),
-              strokeWidth: 10,
-              backgroundColor: color.withValues(alpha: 0.15),
-              valueColor: AlwaysStoppedAnimation<Color>(color),
-            ),
-          ),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '$score',
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.w800,
-                  color: color,
-                  height: 1,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '/ 100',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: color.withValues(alpha: 0.85),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ToneBandRow extends StatelessWidget {
-  const _ToneBandRow({required this.score});
-
-  final int score;
-
-  @override
-  Widget build(BuildContext context) {
-    final bands = <_ToneBand>[
-      _ToneBand('Needs work', ScenolyticsColors.error, max: 60),
-      _ToneBand('Decent', ScenolyticsColors.warning, max: 85),
-      _ToneBand('Excellent', ScenolyticsColors.success, max: 100),
-    ];
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        for (final band in bands)
-          _ToneBandPill(
-            band: band,
-            active: score < band.max &&
-                (bands.indexOf(band) == 0 ||
-                    score >= bands[bands.indexOf(band) - 1].max),
-          ),
-      ],
-    );
-  }
-}
-
-class _ToneBand {
-  const _ToneBand(this.label, this.color, {required this.max});
-  final String label;
-  final Color color;
-  final int max;
-}
-
-class _ToneBandPill extends StatelessWidget {
-  const _ToneBandPill({required this.band, required this.active});
-
-  final _ToneBand band;
-  final bool active;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: active
-            ? band.color.withValues(alpha: 0.16)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: band.color.withValues(alpha: active ? 0.8 : 0.4),
-          width: active ? 1.5 : 1,
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: band.color,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            band.label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: band.color,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
