@@ -7,6 +7,7 @@ import json
 import logging
 from typing import Optional, Callable
 import aio_pika
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,7 @@ class RabbitMQManager:
         for attempt in range(max_retries):
             try:
                 self.connection = await aio_pika.connect_robust(
-                    'amqp://rabbitmq/',
+                    os.environ.get('RABBITMQ_URL', 'amqp://guest:guest@localhost/'),
                     heartbeat=60,                    # keep-alive ping every 60 s so the
                                                      # broker never closes an idle connection
                                                      # during long ML pipeline runs
