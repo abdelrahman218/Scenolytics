@@ -11,10 +11,10 @@ COPY requirements.txt .
 
 RUN pip install --upgrade pip
 
-# PyTorch CPU only
+# PyTorch with CUDA 12.1 support (T4 GPU on Modal)
 RUN pip install --no-cache-dir \
     torch==2.4.0 torchaudio==2.4.0 \
-    --index-url https://download.pytorch.org/whl/cpu
+    --index-url https://download.pytorch.org/whl/cu121
 
 # Core stack
 RUN pip install --no-cache-dir \
@@ -27,10 +27,12 @@ RUN pip install --no-cache-dir \
 
 # Install rest
 RUN pip install --no-cache-dir -r requirements.txt
-
+RUN pip install --no-cache-dir --no-deps whisperx==3.8.6 && \
+    pip install --no-cache-dir ctranslate2 faster-whisper nltk pandas && \
+    python -c "import whisperx; print(whisperx.load_align_model)"
+RUN pip install --no-cache-dir "protobuf==4.25.3" --force-reinstall    
 # Re-pin numpy LAST (mediapipe upgrades it)
 RUN pip install --no-cache-dir "numpy==1.26.4" --force-reinstall
-
 
 COPY . .
 

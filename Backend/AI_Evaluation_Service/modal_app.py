@@ -49,72 +49,20 @@ image = (
     )
 )
 
-# ── GPU Transcriber ─────────────────────────────────────────────────────────
-
-SEAMLESS_MODEL_CANDIDATES = [
-    "./models/seamless-m4t-v2-large",
-    "/app/models/seamless-m4t-v2-large",
-]
+# ── Evaluation Service ──────────────────────────────────────────────────────
+# Runs MLPipeline directly on a T4 GPU (SeamlessM4T, WavLM, and WhisperX all
+# move to cuda inside MLPipeline -- see core/ml_pipeline.py script_device).
+# The old separate SeamlessTranscriber class has been removed: MLPipeline
+# loads and runs SeamlessM4T in-process now, so a second remote .method()
+# hop is no longer needed.
 
 @app.cls(
     image=image,
     gpu="T4",
-    timeout=300,
-    scaledown_window=300,
-    volumes={MODEL_DIR: model_volume},
-)
-class SeamlessTranscriber:
-
-    @modal.enter()
-    async def load_model(self):
-        from pathlib import Path
-        from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
-
-        model_path = None
-        for p in SEAMLESS_MODEL_CANDIDATES:
-            if Path(p).exists():
-                model_path = p
-                break
-
-        if model_path is None:
-            self.model = None
-            self.processor = None
-            return
-
-        self.processor = AutoProcessor.from_pretrained(model_path)
-        self.model = AutoModelForSpeechSeq2Seq.from_pretrained(model_path)
-        self.model.eval()
-
-        import torch
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.model.to(self.device)
-
-    @modal.method()
-    async def transcribe(self, waveform_list: list, sampling_rate: int = 16000, tgt_lang: str = "eng"):
-        import numpy as np
-        import torch
-
-        if self.model is None:
-            return ""
-
-        waveform = np.array(waveform_list, dtype=np.float32)
-
-        inputs = self.processor(audio=waveform, sampling_rate=sampling_rate, return_tensors="pt")
-        inputs = {k: v.to(self.device) for k, v in inputs.items()}
-
-        with torch.no_grad():
-            output = self.model.generate(**inputs, tgt_lang=tgt_lang)
-
-        return self.processor.decode(output[0], skip_special_tokens=True)
-
-
-# ── Evaluation Service ──────────────────────────────────────────────────────
-
-@app.cls(
-    image=image,
     timeout=600,
     memory=16384,
     volumes={MODEL_DIR: model_volume},
+    secrets=[modal.Secret.from_name("ai-evaluation-secrets")],
 )
 class AIEvaluationService:
 
@@ -123,18 +71,20 @@ class AIEvaluationService:
         import asyncio
         import logging
         from dotenv import load_dotenv
-
+        from core.service import EvaluationService 
         load_dotenv()
-
+        self._EvaluationService = EvaluationService
         logging.basicConfig(level=logging.INFO)
         self.logger = logging.getLogger("modal-ai-eval")
-
+        
         # DB
         from core.database import init_db
         await init_db()
 
         # ML
         from core.ml_pipeline import MLPipeline
+        from api.routes.evaluation import run_ml_pipeline as run_evaluation_pipeline
+        self.run_evaluation_pipeline = run_evaluation_pipeline
         self.pipeline = MLPipeline()
         await self.pipeline.initialize()
 
@@ -211,18 +161,28 @@ class AIEvaluationService:
         )
 
     @modal.method()
-    async def evaluate(self, evaluation_id: str, event_data: dict):
-        video_key = event_data.get("video_key") or event_data.get("video_url")
-        script_text = event_data.get("script_text") or event_data.get("script")
-
-        if not video_key:
-            await self._mark_failed(evaluation_id, "missing video_key")
+    async def evaluate(self, evaluation_id: str, event_data: dict[str, any]):
+        media_id = event_data.get("media_id") 
+        submission_id = event_data.get("id")
+        audition = await self._EvaluationService.get_audition_by_id(
+                    event_data.get("audition_id")
+                )
+        audio_only = bool(audition.get("audio_only"))
+        pipeline = self.pipeline
+        rabbitmq_manager = self.rabbitmq
+        if not media_id:
+            await self._mark_failed(evaluation_id, "missing video")
             return {"status": "failed"}
-
+        script = await self._EvaluationService.resolve_script_for_submission(
+            event_data
+        )
+        self.logger.info("Script for evaluation: %s", script)
+        self.logger.info("audio_only: %s", audio_only)
         try:
-            path = await self._download_video(video_key)
-
-            result = await self.pipeline.evaluate_video(path, script_text=script_text)
+            result = await self.run_evaluation_pipeline(
+                evaluation_id, media_id, pipeline, script,
+                rabbitmq_manager, submission_id, audio_only
+            )
 
             await self._write_results(evaluation_id, result)
 

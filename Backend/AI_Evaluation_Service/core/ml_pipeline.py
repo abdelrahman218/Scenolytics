@@ -2,33 +2,34 @@
 ML Pipeline for AI Evaluation Service
 ======================================
 Integrates 3 trained models to evaluate audition videos:
-
+ 
   1. Video Emotion Model  -> emotional_expression_score (40%)
      - Architecture : ResNet50 + 2-layer Bidirectional LSTM + Attention
      - File         : ./models/best_video_emotion_model.h5
      - Framework    : TensorFlow / Keras
      - Input        : (1, 16, 224, 224, 3)  <- 16 frames @ 224x224, ImageNet-normalised
      - Face detector: OpenCV Haar cascade   <- matches training
-
+ 
   2. Audio Emotion Model  -> vocal_tone_score (35%)
      - Architecture : facebook/wav2vec2-base fine-tuned on RAVDESS
      - Folder       : ./emotion-recognition-final/
      - Framework    : PyTorch / HuggingFace Transformers
      - NEW: Supports sentence-level emotion detection with script alignment
-
+ 
   3. Script Alignment     -> script_alignment_score (25%)
      - Architecture : facebook/seamless-m4t-v2-large (ASR) + difflib
      - Framework    : transformers (SeamlessM4Tv2Model + AutoProcessor)
      - NEW: Optional - if no script provided, uses transcription only
-
+     - NEW: Runs fully locally -- no remote Colab/ngrok dependency
+ 
   Eye contact score (informational only -- not in overall_performance_score)
      - Method : dlib 68-point face landmark EAR (Eye Aspect Ratio)
      - Replaces MediaPipe FaceMesh which broke on mediapipe >= 0.10
-
+ 
 Overall score = emotional_expression * 0.40
               + vocal_tone            * 0.35
               + script_alignment      * 0.25
-
+ 
 Changelog
 ---------
 - Added sentence-level emotion detection for audio
@@ -38,36 +39,42 @@ Changelog
 - Fixed SeamlessM4T tokenizer Metaspace bug (patch tokenizer.json in place)
 - Fixed memory issues with 8-bit quantization and offloading
 - Fixed logging errors and task parameter issues
+- Migrated script alignment from remote Colab/ngrok API to a fully local
+  SeamlessM4T v2 model loaded from disk (SEAMLESS_MODEL_CANDIDATES)
 """
-
+ 
 # ---------------------------------------------------------------------------
 # Numpy 2.x compatibility shim -- must be before ALL other imports
 # ---------------------------------------------------------------------------
 import numpy as np
-
+ 
 _numpy_compat = {"NaN": np.nan, "Inf": np.inf}
 for _attr, _val in _numpy_compat.items():
     if not hasattr(np, _attr):
         setattr(np, _attr, _val)
-
+ 
 import os
 os.environ["TF_USE_LEGACY_KERAS"] = "1"
-
+ 
 import re
 import json
 import logging
 import difflib
+import math
 import subprocess
 import tempfile
 import cv2
 import tensorflow as tf
-
+ 
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from collections import Counter
-
+ 
+from core.eye_analysis import analyze_eye_expression
+from core import script
+ 
 logger = logging.getLogger(__name__)
-
+ 
 # ---------------------------------------------------------------------------
 # Emotion label mapping -- shared by both video and audio models
 # ---------------------------------------------------------------------------
@@ -83,7 +90,20 @@ EMOTIONS = {
 }
 EMOTION_NAMES: List[str] = list(EMOTIONS.values())
 NUM_CLASSES = len(EMOTION_NAMES)  # 8
-
+EXCLUDED_EMOTIONS = ["fearful", "disgust", "neutral"]
+ 
+def _get_valid_emotion(all_scores: dict) -> Tuple[str, float]:
+    sorted_emotions = sorted(all_scores.items(), key=lambda x: x[1], reverse=True)
+    for emotion, score in sorted_emotions:
+        if emotion==EXCLUDED_EMOTIONS[0]:
+            return "sad", all_scores["sad"]
+        elif emotion==EXCLUDED_EMOTIONS[1]:
+            return "angry", all_scores["angry"]
+        elif emotion==EXCLUDED_EMOTIONS[2]:
+            return "calm", all_scores["calm"]   
+        else:
+            return emotion, score    
+    return sorted_emotions[0]
 # ---------------------------------------------------------------------------
 # Video model hyper-parameters -- must match training notebook exactly
 # ---------------------------------------------------------------------------
@@ -91,23 +111,23 @@ FRAMES_PER_VIDEO = 10        # training: num_frames=16
 IMG_SIZE         = 160       # training: target_size=(224, 224)
 IMAGENET_MEAN    = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 IMAGENET_STD     = np.array([0.229, 0.224, 0.225], dtype=np.float32)
-
+ 
 # ---------------------------------------------------------------------------
 # Model file locations
 # ---------------------------------------------------------------------------
 VIDEO_MODEL_CANDIDATES = [
+    "/app/models/best_video_emotion_model.h5",  # Modal volume (scenolytics-models), mounted at MODEL_DIR in modal_app.py
     "./models/best_video_emotion_model.h5",
-    "/app/models/best_video_emotion_model.h5",
     "models/best_video_emotion_model.h5",
 ]
-
+ 
 AUDIO_MODEL_CANDIDATES = [
+    "/app/models/emotion-recognition-final",  # Modal volume (scenolytics-models), mounted at MODEL_DIR in modal_app.py
     "./emotion-recognition-final",
     "./models/emotion-recognition-final",
-    "/app/models/emotion-recognition-final",
     "models/emotion-recognition-final",
 ]
-
+ 
 # dlib shape predictor -- download from:
 # http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2
 DLIB_PREDICTOR_CANDIDATES = [
@@ -115,27 +135,24 @@ DLIB_PREDICTOR_CANDIDATES = [
     "/app/models/shape_predictor_68_face_landmarks.dat",
     "shape_predictor_68_face_landmarks.dat",
 ]
-
+ 
 # SeamlessM4T local model folder
-# Prioritize fp32 converted model to avoid quantization issues on CPU
+# Prioritize the Modal volume copy (downloaded fresh from HF Hub by
+# modal_app/seed_models.py), then fall back to local fp32/clean conversions.
 SEAMLESS_MODEL_CANDIDATES = [
-    "./models/seamless-m4t-v2-large-fp32",
-    "/app/models/seamless-m4t-v2-large-fp32",
-    "models/seamless-m4t-v2-large-fp32",
-    "./seamless-m4t-v2-large-clean",
-    "./models/seamless-m4t-v2-large-clean",
-    "/app/models/seamless-m4t-v2-large-clean",
-    "models/seamless-m4t-v2-large-clean",
+    "/app/models/seamless-m4t-v2-large",  # Modal volume (scenolytics-models), mounted at MODEL_DIR in modal_app.py
+    "./models/seamless-m4t-v2-large",
+    "models/seamless-m4t-v2-large",
 ]
-
+ 
 SEAMLESS_SRC_LANG    = "eng"
 SEAMLESS_SAMPLE_RATE = 16_000
-
-
+ 
+ 
 # ===========================================================================
 # Helper utilities
 # ===========================================================================
-
+ 
 def _find_path(candidates: List[str]) -> Optional[Path]:
     """Return the first existing path from a list of candidates."""
     for p in candidates:
@@ -143,8 +160,8 @@ def _find_path(candidates: List[str]) -> Optional[Path]:
         if path.exists():
             return path
     return None
-
-
+ 
+ 
 def _extract_audio_ffmpeg(video_path: str, output_wav: str) -> str:
     """
     Use ffmpeg to extract the audio track as a 16 kHz mono WAV.
@@ -168,67 +185,77 @@ def _extract_audio_ffmpeg(video_path: str, output_wav: str) -> str:
     if not Path(output_wav).exists():
         raise ValueError("ffmpeg produced no output file -- video may have no audio track.")
     return output_wav
-
-
-def _normalize_text(text: str) -> str:
-    """Lower-case and strip punctuation for fair script vs transcript comparison."""
-    text = text.lower()
-    text = re.sub(r"[^\w\s]", "", text)
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
-
-
+ 
+ 
+ 
+ 
+ 
 @tf.keras.utils.register_keras_serializable(package="Custom")
 class SumPooling(tf.keras.layers.Layer):
     def __init__(self, axis=1, **kwargs):
         super().__init__(**kwargs)
         self.axis = axis
-
+ 
     def call(self, inputs):
         return tf.reduce_sum(inputs, axis=self.axis)
-
+ 
     def get_config(self):
         config = super().get_config()
         config.update({"axis": self.axis})
         return config
-
-
+ 
+ 
 # ===========================================================================
 # MLPipeline
 # ===========================================================================
-
+ 
 class MLPipeline:
     """
     Load models once at startup, then call evaluate_video() per audition.
-
+ 
     Usage
     -----
     pipeline = MLPipeline()
     await pipeline.initialize()
     result = await pipeline.evaluate_video(video_path, script_text=script)
     """
-
+ 
     def __init__(self):
         # ---- Video model (TensorFlow / Keras) ----
         self.emotion_model = None
-
+ 
         # ---- Audio model (PyTorch / HuggingFace) ----
         self.audio_feature_extractor = None
         self.audio_model             = None
         self.audio_label_mapping     = None
-
-        # ---- Script alignment (SeamlessM4T) ----
+ 
+        # ---- Script alignment (SeamlessM4T, local) ----
         self.script_processor = None   # AutoProcessor
         self.script_model     = None   # SeamlessM4Tv2Model
-
+        import torch as _torch
+        self.script_device = "cuda" if _torch.cuda.is_available() else "cpu"  # CPU-first, matches WhisperX alignment
+ 
+        # ---- WhisperX forced-alignment models, cached per language code ----
+        # populated lazily by script._align_with_whisperx()
+        self._whisperx_align_cache: Dict[str, Tuple] = {}
+ 
         # ---- dlib eye-contact scorer (lazy-loaded on first use) ----
         self._dlib_detector  = None
         self._dlib_predictor = None
         self._dlib_loaded    = False   # True once load has been attempted
-
+ 
         # ---- OpenCV Haar cascade for frame extraction (lazy-loaded) ----
         self._face_cascade = None
-
+        try:
+            from retinaface import RetinaFace as _RF
+            self._use_retinaface = True
+            logger.info("RetinaFace available — using it for face detection (matches training)")
+        except ImportError:
+            self._use_retinaface = False
+            logger.warning(
+                "RetinaFace not installed — falling back to Haar cascade. "
+                "Emotion accuracy may be lower. Install with: pip install retina-face"
+            )
         # ---- Metric weights (must sum to 1.0) ----
         self.weights = {
             "emotional_expression_score": 0.40,
@@ -236,28 +263,28 @@ class MLPipeline:
             "script_alignment_score":     0.25,
         }
         assert abs(sum(self.weights.values()) - 1.0) < 1e-6, "Weights must sum to 1.0"
-
+ 
     # -----------------------------------------------------------------------
     # Initialization
     # -----------------------------------------------------------------------
     async def initialize(self):
         """Load all three models. Call this once at service startup."""
         logger.info("Initializing ML pipeline -- loading models...")
-
+ 
         logger.info("Step 1/3: Loading video emotion model...")
         await self._load_emotion_model()
         logger.info("Step 1/3: Done.")
-
+ 
         logger.info("Step 2/3: Loading audio emotion model...")
         await self._load_audio_model()
         logger.info("Step 2/3: Done.")
-
+ 
         logger.info("Step 3/3: Loading SeamlessM4T script model...")
         await self._load_script_model()
         logger.info("Step 3/3: Done.")
-
+ 
         logger.info("ML pipeline ready.")
-
+ 
     async def _load_emotion_model(self):
         try:
             model_path = _find_path(VIDEO_MODEL_CANDIDATES)
@@ -266,7 +293,7 @@ class MLPipeline:
                     "Video emotion model not found. Tried: %s", VIDEO_MODEL_CANDIDATES
                 )
                 return
-
+ 
             custom_objects = {"SumPooling": SumPooling}
             try:
                 import tf_keras
@@ -287,26 +314,26 @@ class MLPipeline:
                         str(model_path), custom_objects=custom_objects, compile=False
                     )
                 logger.info("Video emotion model loaded via tf.keras from %s", model_path)
-
+ 
         except Exception as e:
             logger.error("Could not load video emotion model: %s", e)
-
+ 
     async def _load_audio_model(self):
         """Load the fine-tuned wav2vec2 audio-emotion model."""
         try:
             from transformers import AutoFeatureExtractor, AutoModelForAudioClassification
-
+ 
             model_path = _find_path(AUDIO_MODEL_CANDIDATES)
             if model_path is None:
                 logger.warning(
                     "Audio emotion model not found. Tried: %s", AUDIO_MODEL_CANDIDATES
                 )
                 return
-
+ 
             self.audio_feature_extractor = AutoFeatureExtractor.from_pretrained(str(model_path))
             self.audio_model = AutoModelForAudioClassification.from_pretrained(str(model_path))
             self.audio_model.eval()
-
+ 
             label_file = model_path / "label_mapping.json"
             if label_file.exists():
                 with open(label_file, "r") as f:
@@ -316,21 +343,42 @@ class MLPipeline:
                     "id2label": {str(i): name for i, name in enumerate(EMOTION_NAMES)},
                     "label2id": {name: str(i) for i, name in enumerate(EMOTION_NAMES)},
                 }
-
+ 
             logger.info("Audio emotion model loaded from %s", model_path)
-
+ 
         except Exception as e:
             logger.error("Could not load audio emotion model: %s", e)
-
+ 
     async def _load_script_model(self):
-        """Use remote Colab SeamlessM4T GPU API."""
-        api_url ="https://dolly-reckless-celibacy.ngrok-free.dev/transcribe"
-        if api_url:
-            self.script_model     = api_url
-            self.script_processor = "remote"
-            logger.info("✓ Using remote SeamlessM4T API at %s", api_url)
-        else:
-            logger.warning("SEAMLESS_API_URL not set -- script alignment disabled")
+        """
+        Load SeamlessM4T v2 locally from disk (transformers SeamlessM4Tv2Model +
+        AutoProcessor). Replaces the old remote Colab/ngrok HTTP API.
+        """
+        try:
+            from transformers import AutoProcessor, SeamlessM4Tv2Model
+ 
+            model_path = _find_path(SEAMLESS_MODEL_CANDIDATES)
+            if model_path is None:
+                logger.warning(
+                    "SeamlessM4T model not found on disk. Tried: %s -- "
+                    "script alignment disabled.",
+                    SEAMLESS_MODEL_CANDIDATES,
+                )
+                self.script_model     = None
+                self.script_processor = None
+                return
+ 
+            logger.info("Loading SeamlessM4T v2 from %s ...", model_path)
+            self.script_processor = AutoProcessor.from_pretrained(str(model_path))
+            self.script_model = SeamlessM4Tv2Model.from_pretrained(str(model_path))
+            self.script_model.to(self.script_device)
+            self.script_model.eval()
+ 
+            logger.info("✓ SeamlessM4T v2 loaded locally from %s (device=%s)",
+                         model_path, self.script_device)
+ 
+        except Exception as e:
+            logger.error("Could not load local SeamlessM4T model: %s", e, exc_info=True)
             self.script_model     = None
             self.script_processor = None
     # -----------------------------------------------------------------------
@@ -426,6 +474,7 @@ class MLPipeline:
         try:
             import mediapipe as mp
             mp_face_mesh = mp.solutions.face_mesh
+            from core.Eye import get_face_size, get_head_angle, check_lighting, compute_iris_ratios
         except (ImportError, AttributeError):
             logger.warning("MediaPipe not available, will use dlib fallback")
             return None, None
@@ -457,11 +506,23 @@ class MLPipeline:
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 results = face_mesh.process(rgb_frame)
 
-                if results.multi_face_landmarks:
+                face_detected     = results.multi_face_landmarks is not None
+                face_large_enough = False
+                angle_ok          = False
+                lighting_ok       = check_lighting(frame)
+
+                if face_detected:
+                    landmarks         = results.multi_face_landmarks[0].landmark
+                    face_ratio        = get_face_size(landmarks, frame_height, frame_width)
+                    face_large_enough = face_ratio >= 0.10
+                    head_angle        = get_head_angle(landmarks)
+                    angle_ok          = head_angle <= 30
+
+                if face_detected and face_large_enough and lighting_ok and angle_ok:
                     usable_frames.append({
-                        "frame_index": frame_index,
+                        "frame_index":  frame_index,
                         "timestamp_ms": timestamp_ms,
-                        "landmarks": results.multi_face_landmarks[0].landmark,
+                        "landmarks":    results.multi_face_landmarks[0].landmark,
                     })
 
                 frame_index += 1
@@ -488,44 +549,18 @@ class MLPipeline:
             }
 
             # Extract iris ratios
+           # Extract iris ratios using Eye.py's compute_iris_ratios
+            # to guarantee identical results to the standalone pipeline
+            from core.Eye import compute_iris_ratios
+
             iris_series = []
             for fd in usable_frames:
-                ts = fd["timestamp_ms"]
-                lm = fd["landmarks"]
-
-                # Iris indices: 468=left, 473=right
-                iris_left = np.array([lm[468].x, lm[468].y])
-                iris_right = np.array([lm[473].x, lm[473].y])
-
-                # Eye corner indices
-                left_inner = np.array([lm[33].x, lm[33].y])
-                left_outer = np.array([lm[133].x, lm[133].y])
-                right_inner = np.array([lm[362].x, lm[362].y])
-                right_outer = np.array([lm[263].x, lm[263].y])
-                left_top = np.array([lm[159].x, lm[159].y])
-                left_bot = np.array([lm[145].x, lm[145].y])
-                right_top = np.array([lm[386].x, lm[386].y])
-                right_bot = np.array([lm[374].x, lm[374].y])
-
-                def safe_ratio(val, lo, hi):
-                    span = hi - lo
-                    return (val - lo) / span if span != 0 else 0.5
-
-                # Horizontal: left eye → inner is left, outer is right
-                h_left = safe_ratio(iris_left[0], left_inner[0], left_outer[0])
-                h_right = safe_ratio(iris_right[0], right_outer[0], right_inner[0])
-                h_ratio = float(np.mean([h_left, h_right]))
-
-                # Vertical
-                v_left = safe_ratio(iris_left[1], left_top[1], left_bot[1])
-                v_right = safe_ratio(iris_right[1], right_top[1], right_bot[1])
-                v_ratio = float(np.mean([v_left, v_right]))
-
+                h_ratio, v_ratio = compute_iris_ratios(fd["landmarks"], frame_width, frame_height)
                 iris_series.append({
-                    "timestamp_ms": ts,
-                    "h_ratio": h_ratio,
-                    "v_ratio": v_ratio,
-                    "landmarks": lm,
+                    "timestamp_ms": fd["timestamp_ms"],
+                    "h_ratio":      h_ratio,
+                    "v_ratio":      v_ratio,
+                    "landmarks":    fd["landmarks"],
                 })
 
             logger.info(
@@ -539,52 +574,16 @@ class MLPipeline:
             logger.error("MediaPipe extraction failed: %s", e)
             return None, None
 
-    def _calibrate_gaze_centre(self, iris_series: List[Dict]) -> Tuple[float, float, float, float]:
-        """
-        Calibrate neutral gaze centre from iris series.
-        Returns (center_h, center_v, h_tol, v_tol).
-        """
-        h_vals = np.array([f["h_ratio"] for f in iris_series])
-        v_vals = np.array([f["v_ratio"] for f in iris_series])
-
-        center_h = float(np.median(h_vals))
-        center_v = float(np.median(v_vals))
-
-        h_tol = float(np.percentile(np.abs(h_vals - center_h), 75))
-        v_tol = float(np.percentile(np.abs(v_vals - center_v), 75))
-
-        # Clamp to sensible minimum
-        h_tol = max(h_tol, 0.02)
-        v_tol = max(v_tol, 0.02)
-
-        logger.debug(
-            "Gaze centre calibrated: H=%.3f±%.3f, V=%.3f±%.3f",
-            center_h, h_tol, center_v, v_tol
-        )
-
-        return center_h, center_v, h_tol, v_tol
-
-    def _classify_gaze(self, h: float, v: float, center_h: float, center_v: float,
-                       h_tol: float, v_tol: float) -> str:
-        """Classify gaze direction as string label."""
-        h_off = h - center_h
-        v_off = v - center_v
-
-        h_dir = ("RIGHT" if h_off > h_tol else
-                "LEFT" if h_off < -h_tol else "")
-        v_dir = ("DOWN" if v_off > v_tol else
-                "UP" if v_off < -v_tol else "")
-
-        if h_dir and v_dir:
-            return f"{v_dir}-{h_dir}"
-        return h_dir or v_dir or "CENTER"
-
     async def _analyze_emotion_transitions(
-        self, frames: np.ndarray, video_path: str
+        self,
+        frames: np.ndarray,
+        video_path: str,
+        sentences_aligned: Optional[List[Dict]] = None,
+        evaluation_id: Optional[str] = None,
     ) -> Dict:
         """
-        Analyze emotion transitions using MediaPipe-based gaze tracking.
-        Follows the Colab eye_movement_8_4.ipynb approach.
+        Analyze emotion transitions using MediaPipe-based gaze tracking via eye_analysis module.
+        Falls back to dlib if MediaPipe extraction fails.
         """
         if self.emotion_model is None:
             return {
@@ -602,98 +601,18 @@ class MLPipeline:
             return await self._analyze_emotion_transitions_dlib(frames, video_path)
 
         try:
-            if not quality_report["video_is_usable"]:
-                logger.warning(
-                    "Video quality low (%.1f%% usable), results may be unreliable",
-                    quality_report["usable_ratio"] * 100
-                )
-
-            # Calibrate gaze centre
-            center_h, center_v, h_tol, v_tol = self._calibrate_gaze_centre(iris_series)
-
-            # Get video metadata
-            cap = cv2.VideoCapture(str(video_path))
-            fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-            frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            cap.release()
-
-            aspect_ratio = frame_width / frame_height if frame_height > 0 else 1.0
-
-            # Calculate gaze direction changes over time
-            transitions = []
-            prev_gaze = None
-            prev_time_ms = None
-
-            for i, iris_data in enumerate(iris_series):
-                ts_ms = iris_data["timestamp_ms"]
-                h_ratio = iris_data["h_ratio"]
-                v_ratio = iris_data["v_ratio"]
-                gaze = self._classify_gaze(h_ratio, v_ratio, center_h, center_v, h_tol, v_tol)
-
-                if prev_gaze is not None and gaze != prev_gaze:
-                    time_sec = round(ts_ms / 1000.0, 2)
-                    transition = {
-                        "time_sec": time_sec,
-                        "time_ms": int(ts_ms),
-                        "from_emotion": prev_gaze,
-                        "to_emotion": gaze,
-                        "from_sentence": None,
-                        "to_sentence": None,
-                        "label": "GAZE_CHANGE",
-                        "score": 50.0,  # Default score for gaze changes
-                        "displacement": 0.01,  # Placeholder
-                        "dir_before": prev_gaze,
-                        "dir_after": gaze,
-                        "message": f"Gaze shift from {prev_gaze} to {gaze}",
-                        "before_image": None,
-                        "after_image": None,
-                        "image_aspect_ratio": aspect_ratio,
-                    }
-                    transitions.append(transition)
-
-                prev_gaze = gaze
-                prev_time_ms = ts_ms
-
-            # Score based on gaze variability
-            h_vals = np.array([f["h_ratio"] for f in iris_series])
-            v_vals = np.array([f["v_ratio"] for f in iris_series])
-            
-            h_variability = float(np.std(h_vals))
-            v_variability = float(np.std(v_vals))
-            total_variability = np.sqrt(h_variability**2 + v_variability**2)
-
-            if len(transitions) == 0:
-                result = "NEUTRAL"
-                message = "Eyes maintained consistent gaze"
-                score = max(0.0, (total_variability - 0.02) * 100)
-            elif len(transitions) > 5:
-                result = "EXPRESSIVE"
-                message = "Eyes moved strongly—strong physical expression"
-                score = min(100.0, 75 + len(transitions) * 2)
-            elif len(transitions) > 2:
-                result = "MODERATELY_EXPRESSIVE"
-                message = "Multiple gaze movements detected"
-                score = min(100.0, 50 + len(transitions) * 5)
-            else:
-                result = "SUBTLE"
-                message = "Subtle gaze movements detected"
-                score = min(100.0, 25 + len(transitions) * 10)
-
-            logger.info(
-                "Eye movement analysis: %s (score=%.1f, gaze_changes=%d, variability=%.4f)",
-                result, score, len(transitions), total_variability
+            # Use eye_analysis module for comprehensive eye expression analysis
+            result = analyze_eye_expression(
+                quality_report=quality_report,
+                iris_series=iris_series,
+                video_path=video_path,
+                sentences_aligned=sentences_aligned,
+                evaluation_id=evaluation_id,
             )
-
-            return {
-                "score": round(score, 2),
-                "result": result,
-                "message": message,
-                "transitions": transitions,
-            }
+            return result
 
         except Exception as e:
-            logger.error("MediaPipe-based analysis failed: %s", e, exc_info=True)
+            logger.error("Eye expression analysis failed: %s", e, exc_info=True)
             return await self._analyze_emotion_transitions_dlib(frames, video_path)
 
     async def _analyze_emotion_transitions_dlib(
@@ -799,66 +718,24 @@ class MLPipeline:
                 "message": f"Analysis failed: {str(e)}",
                 "transitions": [],
             }
-
-    def _score_eye_contact(self, frames: np.ndarray) -> float:
-        """
-        Compute Eye Aspect Ratio (EAR) per frame using dlib 68-point landmarks
-        and return a 0-100 score. Kept for backward compatibility.
-        """
-        if not self._ensure_dlib_loaded():
-            return 0.0
-
-        EAR_OPEN_THRESHOLD = 0.20
-        EAR_FULL_OPEN      = 0.35
-
-        def _ear(shape, start: int, end: int) -> float:
-            pts = np.array(
-                [[shape.part(i).x, shape.part(i).y] for i in range(start, end + 1)],
-                dtype=np.float32,
-            )
-            v1 = np.linalg.norm(pts[1] - pts[5])
-            v2 = np.linalg.norm(pts[2] - pts[4])
-            h  = np.linalg.norm(pts[0] - pts[3])
-            return float((v1 + v2) / (2.0 * h + 1e-6))
-
-        ear_scores = []
-
-        for frame in frames:
-            img_uint8 = (frame * 255).astype(np.uint8)
-            gray      = cv2.cvtColor(img_uint8, cv2.COLOR_RGB2GRAY)
-
-            faces = self._dlib_detector(gray, 0)
-            if len(faces) == 0:
-                ear_scores.append(0.0)
-                continue
-
-            face  = max(faces, key=lambda r: r.width() * r.height())
-            shape = self._dlib_predictor(gray, face)
-
-            left_ear  = _ear(shape, 36, 41)
-            right_ear = _ear(shape, 42, 47)
-            avg_ear   = (left_ear + right_ear) / 2.0
-
-            score = float(
-                np.clip(
-                    (avg_ear - EAR_OPEN_THRESHOLD) / (EAR_FULL_OPEN - EAR_OPEN_THRESHOLD),
-                    0.0,
-                    1.0,
-                )
-            )
-            ear_scores.append(score)
-
-        if not ear_scores:
-            return 0.0
-        return round(float(np.mean(ear_scores)) * 100, 2)
-
     # -----------------------------------------------------------------------
     # Public entry point
     # -----------------------------------------------------------------------
+
+    def display_score(self,score: float) -> float:
+        score = round(score, 1)  # 99.46 → 99.5, 99.74 → 99.7
+        decimal = score % 1
+        if decimal == 0.5:
+            return score
+        elif decimal > 0.5:
+            return float(math.ceil(score))
+        else:
+            return float(math.floor(score))
     async def evaluate_video(
         self,
         video_path: str,
         script_text: Optional[str] = None,
+        audio_only: bool = False,
     ) -> Dict:
         """
         Run the full evaluation pipeline on one audition video.
@@ -882,12 +759,8 @@ class MLPipeline:
             detected_emotions_vocal     dict
             ai_feedback                 str
         """
-        logger.info("Starting evaluation for video: %s", video_path)
+        logger.info("Starting evaluation. audio_only=%s, video=%s", audio_only, video_path)
 
-        # 1. Extract frames once -- reused by emotion scorer and eye contact scorer
-        frames = self._extract_video_frames(video_path)
-
-        # 2. Extract audio once -- reused by audio emotion and script alignment
         tmp_audio = None
         try:
             tmp_dir   = tempfile.mkdtemp()
@@ -898,56 +771,114 @@ class MLPipeline:
             logger.error("Audio extraction failed: %s", e)
             tmp_audio = None
 
-        # 3. Score video emotion
-        emotional_score, emotions_detail = await self._score_emotion_video(frames)
-
-        # 4. Transcribe audio and align with script (if provided)
+        # ── Script alignment ──────────────────────────────────────────────────
         sentences_aligned = None
-        script_score = 0.0
+        script_score      = 0.0
+        alignment_data    = None
 
         if script_text and tmp_audio:
             script_score, alignment_data = await self._score_script_alignment_with_sentences(
-                tmp_audio,
-                script_text,
+                tmp_audio, script_text,
             )
             sentences_aligned = alignment_data.get("sentences_aligned") if alignment_data else None
+        elif not script_text:
+            logger.info("No script_text for evaluation — script_alignment_score stays 0")
+        elif not tmp_audio:
+            logger.warning("No extracted audio — script_alignment_score stays 0")
 
-        # 5. Score audio emotion (with sentence-level analysis if script was provided)
+        # ── Audio emotion ─────────────────────────────────────────────────────
         if sentences_aligned:
-            audio_result = await self._score_audio_emotion_per_sentence(
-                tmp_audio,
-                sentences_aligned,
-            )
+            audio_result = await self._score_audio_emotion_per_sentence(tmp_audio, sentences_aligned)
         else:
-            audio_result = await self._score_audio_emotion(tmp_audio, expected_emotion=None)
+            audio_result = await self._score_audio_emotion(tmp_audio)
 
         vocal_score = audio_result["score"]
         detected_emotions_vocal = {
             "primary":     audio_result["detected_emotion"],
             "confidence":  audio_result["confidence"],
-            "all_emotions": audio_result.get("all_emotions", {}),
+            "score":        self.display_score(audio_result["score"]),
         }
-
         if "sentence_results" in audio_result:
             detected_emotions_vocal["sentence_results"] = audio_result["sentence_results"]
             detected_emotions_vocal["accuracy"]         = audio_result.get("accuracy", 0.0)
 
-        # 6. Emotion transition analysis (replaces eye contact score)
-        eye_expression_data = await self._analyze_emotion_transitions(frames, video_path)
+        # ── Tone analysis ─────────────────────────────────────────────────────
+        tone_result = None
+        if tmp_audio:
+            try:
+                from core.tone import analyze_tone
+                tone_result = analyze_tone(
+                    audio_path=tmp_audio,
+                    sentences_aligned=sentences_aligned,
+                ) 
+            except Exception as e:
+                logger.error("Tone analysis failed: %s", e)
 
-        # 7. Weighted overall score (using only emotional, vocal, and script)
+            tone_score = 0.0
+            from core.tone import compute_tone_score
+            tone_score = compute_tone_score(tone_result)
+        # ── Audio-only path ───────────────────────────────────────────────────
+        if audio_only:
+            # Weights: vocal 50%, script 30%, tone 20%
+
+            overall = round(
+                vocal_score  * 0.50
+                + script_score * 0.30
+                + tone_score   * 0.20,
+                2,
+            )
+            overall = max(0.0, min(100.0, overall))
+            feedback = self._generate_feedback(overall, 0, vocal_score, script_score)
+
+            if tmp_audio and Path(tmp_audio).exists():
+                try:
+                    Path(tmp_audio).unlink()
+                except Exception:
+                    pass
+
+            return {
+                "mode":                      "audio_only",
+                "vocal_tone_score":          self.display_score(vocal_score),
+                "script_alignment_score":    self.display_score(script_score),
+                "tone_score":                self.display_score(tone_score),
+                "overall_performance_score": self.display_score(overall),
+                "tone_analysis":             tone_result,
+                "detected_emotions_vocal":   detected_emotions_vocal,
+                "script_alignment_data":     alignment_data,
+                "ai_feedback":               feedback,
+            }
+
+        # ── Full video path ───────────────────────────────────────────────────
+        frames = self._extract_video_frames(video_path)
+
+        emotional_score, emotions_detail = await self._score_emotion_video(frames)
+
+        detected_emotions_video = None
+        if sentences_aligned:
+            video_emotion_result = await self._score_video_emotion_per_sentence(
+                video_path, sentences_aligned,
+            )
+            detected_emotions_video = {
+                "primary":          video_emotion_result["detected_emotion"],
+                "confidence":       video_emotion_result["confidence"],
+                "score":            self.display_score(video_emotion_result["score"]),
+                "accuracy":         video_emotion_result["accuracy"],
+                "sentence_results": video_emotion_result.get("sentence_results", []),
+            }
+
+        eye_expression_data = await self._analyze_emotion_transitions(
+            frames, video_path, sentences_aligned=sentences_aligned
+        )
+
         overall = round(
-            emotional_score * self.weights["emotional_expression_score"]
+            self.display_score(video_emotion_result["score"]) * self.weights["emotional_expression_score"]
             + vocal_score   * self.weights["vocal_tone_score"]
             + script_score  * self.weights["script_alignment_score"],
             2,
         )
         overall = max(0.0, min(100.0, overall))
-
-        # 8. Human-readable feedback
         feedback = self._generate_feedback(overall, emotional_score, vocal_score, script_score)
 
-        # 9. Clean up temp audio
         if tmp_audio and Path(tmp_audio).exists():
             try:
                 Path(tmp_audio).unlink()
@@ -955,23 +886,47 @@ class MLPipeline:
                 pass
 
         logger.info(
-            "Evaluation complete -- overall=%.2f  emotion=%.2f  vocal=%.2f  "
-            "script=%.2f  transitions=%d",
-            overall, emotional_score, vocal_score, script_score, len(eye_expression_data.get("transitions", [])),
+            "Evaluation complete -- overall=%.2f  emotion=%.2f  vocal=%.2f  script=%.2f",
+            overall, emotional_score, vocal_score, script_score,
         )
 
         return {
-            "emotional_expression_score": round(emotional_score, 2),
-            "vocal_tone_score":           round(vocal_score, 2),
-            "script_alignment_score":     round(script_score, 2),
-            "overall_performance_score":  overall,
-            "eye_expression":             eye_expression_data,
-            "detected_emotions":          emotions_detail,
-            "detected_emotions_vocal":    detected_emotions_vocal,
-            "script_alignment_data":      alignment_data,
-            "ai_feedback":                feedback,
+            "mode":                          "video",
+            "emotional_expression_score":    self.display_score(video_emotion_result["score"]),
+            "vocal_tone_score":              self.display_score(vocal_score),
+            "script_alignment_score":        self.display_score(script_score),
+            "tone_score":                    self.display_score(tone_score),
+            "overall_performance_score":     self.display_score(overall),
+            "eye_expression":                eye_expression_data,
+            "tone_analysis":                 tone_result,
+            "detected_emotions":             emotions_detail,
+            "detected_emotions_vocal":       detected_emotions_vocal,
+            "detected_emotions_video":       detected_emotions_video,
+            "script_alignment_data":         alignment_data,
+            "ai_feedback":                   feedback,
         }
-
+    @staticmethod
+    def _compute_sentence_score(
+        detected_emotion: str,
+        expected_emotion: Optional[str],
+        confidence: float
+    ) -> float:
+        """
+        Score a single sentence based on emotion match quality.
+    
+        Correct emotion  → 60–100 (floor rewards correct match,
+                                ceiling rewards strong expression)
+        Wrong emotion    → 0–40   (partial credit if expected emotion
+                                was present but not dominant)
+        No expected      → raw confidence × 100
+        """
+        if expected_emotion is None:
+            return round(confidence * 100, 2)
+    
+        if detected_emotion.lower() == expected_emotion.lower():
+            return round(80.0 + confidence * 20.0, 2)
+        else:
+            return 0.0
     # -----------------------------------------------------------------------
     # 1 -- Video emotion scoring
     # -----------------------------------------------------------------------
@@ -996,26 +951,29 @@ class MLPipeline:
             frames_norm = preprocess_input(frames * 255.0)
 
             if len(frames_norm) < FRAMES_PER_VIDEO:
-                pad = np.zeros(
-                    (FRAMES_PER_VIDEO - len(frames_norm), IMG_SIZE, IMG_SIZE, 3),
-                    dtype=np.float32,
+                last_frame = frames_norm[-1:]  # shape (1, H, W, 3)
+                pad = np.repeat(
+                    last_frame,
+                    FRAMES_PER_VIDEO - len(frames_norm),
+                    axis=0,
                 )
                 frames_norm = np.concatenate([frames_norm, pad], axis=0)
             else:
-                frames_norm = frames_norm[:FRAMES_PER_VIDEO]
+                frames_norm = frames_norm[:FRAMES_PER_VIDEO]    
 
             input_batch   = frames_norm[np.newaxis, ...]
             probabilities = self.emotion_model.predict(input_batch, verbose=0)[0]
             probabilities = np.array(probabilities, dtype=np.float64)
             probabilities = probabilities / probabilities.sum()
 
-            primary_idx   = int(np.argmax(probabilities))
-            secondary_idx = int(np.argsort(probabilities)[-2])
-
-            primary_emotion   = EMOTION_NAMES[primary_idx]
-            secondary_emotion = EMOTION_NAMES[secondary_idx]
-            confidence        = float(probabilities[primary_idx])
-            score             = round(confidence * 100, 2)
+            all_scores_dict = {EMOTION_NAMES[i]: float(probabilities[i]) for i in range(NUM_CLASSES)}
+            primary_emotion, confidence = _get_valid_emotion(all_scores_dict)
+            valid_secondary = [
+                e for e, _ in sorted(all_scores_dict.items(), key=lambda x: x[1], reverse=True)
+                if e != primary_emotion and e not in EXCLUDED_EMOTIONS
+            ]
+            secondary_emotion = valid_secondary[0] if valid_secondary else primary_emotion
+            score = round(confidence * 100, 2)
 
             emotions_detail = {
                 "primary":    primary_emotion,
@@ -1074,38 +1032,158 @@ class MLPipeline:
                 )
                 continue
 
-            h, w  = frame.shape[:2]
-            gray  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            faces = self._face_cascade.detectMultiScale(
-                gray, scaleFactor=1.1, minNeighbors=4, minSize=(30, 30)
-            )
-
+            # AFTER
+            h, w = frame.shape[:2]
             face_crop = None
-            if len(faces) > 0:
-                fx, fy, fw, fh = faces[0]
-                x1 = max(0, fx - HAAR_PADDING)
-                y1 = max(0, fy - HAAR_PADDING)
-                x2 = min(w, fx + fw + HAAR_PADDING)
-                y2 = min(h, fy + fh + HAAR_PADDING)
-                if x2 > x1 and y2 > y1:
-                    face_crop = frame[y1:y2, x1:x2]
 
-            if face_crop is None or face_crop.size == 0:
-                if last_good is not None:
-                    logger.debug("Frame %d: no face -- reusing last good crop.", idx)
-                    frames.append(last_good.copy())
-                    continue
-                else:
-                    logger.debug("Frame %d: no face and no prior crop -- using full frame.", idx)
-                    size      = min(h, w)
-                    y_off     = (h - size) // 2
-                    x_off     = (w - size) // 2
-                    face_crop = frame[y_off: y_off + size, x_off: x_off + size]
+            if self._use_retinaface:
+                try:
+                    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    faces = RetinaFace.detect_faces(rgb)
+                    if isinstance(faces, dict) and faces:
+                        first = next(iter(faces.values()))
+                        x1, y1, x2, y2 = first["facial_area"]
+                        x1 = max(0, x1 - HAAR_PADDING)
+                        y1 = max(0, y1 - HAAR_PADDING)
+                        x2 = min(w, x2 + HAAR_PADDING)
+                        y2 = min(h, y2 + HAAR_PADDING)
+                        if x2 > x1 and y2 > y1:
+                            face_crop = frame[y1:y2, x1:x2]
+                except Exception:
+                    pass  # fall through to Haar below
 
+            if face_crop is None:
+                gray  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                faces = self._face_cascade.detectMultiScale(
+                    gray, scaleFactor=1.1, minNeighbors=4, minSize=(30, 30)
+                )
+                if len(faces) > 0:
+                    fx, fy, fw, fh = faces[0]
+                    x1 = max(0, fx - HAAR_PADDING)
+                    y1 = max(0, fy - HAAR_PADDING)
+                    x2 = min(w, fx + fw + HAAR_PADDING)
+                    y2 = min(h, fy + fh + HAAR_PADDING)
+                    if x2 > x1 and y2 > y1:
+                        face_crop = frame[y1:y2, x1:x2]
+            if face_crop is None:
+                face_crop = frame 
             resized    = cv2.resize(face_crop, (IMG_SIZE, IMG_SIZE))
             resized    = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
             normalized = resized.astype(np.float32) / 255.0
             last_good  = normalized
+            frames.append(normalized)
+
+        cap.release()
+        return np.array(frames, dtype=np.float32)
+
+    def _extract_frames_for_time_range(
+        self,
+        video_path: str,
+        t_start: float,
+        t_end: float,
+        num_frames: int = FRAMES_PER_VIDEO,
+    ) -> np.ndarray:
+        """
+        Extract a fixed number of frames evenly sampled from a specific time range.
+        
+        Parameters
+        ----------
+        video_path : str
+            Path to the video file
+        t_start : float
+            Start time in seconds
+        t_end : float
+            End time in seconds
+        num_frames : int
+            Number of frames to extract (default: FRAMES_PER_VIDEO)
+        
+        Returns
+        -------
+        np.ndarray
+            Array of shape (num_frames, IMG_SIZE, IMG_SIZE, 3) with float32 values in [0, 1]
+        """
+        if self._face_cascade is None:
+            cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+            self._face_cascade = cv2.CascadeClassifier(cascade_path)
+
+        HAAR_PADDING = 20
+
+        cap = cv2.VideoCapture(str(video_path))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        
+        if fps <= 0 or total_frames <= 0:
+            cap.release()
+            return np.array([], dtype=np.float32)
+
+        # Convert time range to frame indices
+        start_frame = int(t_start * fps)
+        end_frame = int(t_end * fps)
+        
+        # Clamp to valid range
+        start_frame = max(0, start_frame)
+        end_frame = min(total_frames - 1, end_frame)
+        
+        if start_frame >= end_frame:
+            cap.release()
+            return np.array([], dtype=np.float32)
+
+        # Extract num_frames evenly spaced frames from this range
+        indices = np.linspace(start_frame, end_frame, num_frames, dtype=int)
+        
+        frames = []
+        last_good = None
+
+        for idx in indices:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, int(idx))
+            ret, frame = cap.read()
+
+            if not ret:
+                frames.append(
+                    last_good.copy() if last_good is not None
+                    else np.zeros((IMG_SIZE, IMG_SIZE, 3), dtype=np.float32)
+                )
+                continue
+
+            # AFTER
+            h, w = frame.shape[:2]
+            face_crop = None
+
+            if self._use_retinaface:
+                try:
+                    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    faces = RetinaFace.detect_faces(rgb)
+                    if isinstance(faces, dict) and faces:
+                        first = next(iter(faces.values()))
+                        x1, y1, x2, y2 = first["facial_area"]
+                        x1 = max(0, x1 - HAAR_PADDING)
+                        y1 = max(0, y1 - HAAR_PADDING)
+                        x2 = min(w, x2 + HAAR_PADDING)
+                        y2 = min(h, y2 + HAAR_PADDING)
+                        if x2 > x1 and y2 > y1:
+                            face_crop = frame[y1:y2, x1:x2]
+                except Exception:
+                    pass  # fall through to Haar below
+
+            if face_crop is None:
+                gray  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                faces = self._face_cascade.detectMultiScale(
+                    gray, scaleFactor=1.1, minNeighbors=4, minSize=(30, 30)
+                )
+                if len(faces) > 0:
+                    fx, fy, fw, fh = faces[0]
+                    x1 = max(0, fx - HAAR_PADDING)
+                    y1 = max(0, fy - HAAR_PADDING)
+                    x2 = min(w, fx + fw + HAAR_PADDING)
+                    y2 = min(h, fy + fh + HAAR_PADDING)
+                    if x2 > x1 and y2 > y1:
+                        face_crop = frame[y1:y2, x1:x2]
+            if face_crop is None:
+                face_crop = frame
+            resized = cv2.resize(face_crop, (IMG_SIZE, IMG_SIZE))
+            resized = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
+            normalized = resized.astype(np.float32) / 255.0
+            last_good = normalized
             frames.append(normalized)
 
         cap.release()
@@ -1116,8 +1194,7 @@ class MLPipeline:
     # -----------------------------------------------------------------------
     async def _score_audio_emotion(
         self,
-        audio_path: Optional[str],
-        expected_emotion: Optional[str] = None,
+        audio_path: Optional[str]
     ) -> dict:
         """
         Feed the WAV file to the fine-tuned wav2vec2 model in segments,
@@ -1190,10 +1267,8 @@ class MLPipeline:
             all_probs    = np.array(all_probs, dtype=np.float32)
             avg_probs    = np.mean(all_probs, axis=0)
             id2label     = self.audio_model.config.id2label
-            predicted_id = np.argmax(avg_probs)
-
-            detected_emotion   = id2label[predicted_id]
-            emotion_confidence = float(avg_probs[predicted_id])
+            all_scores_dict = {id2label[idx]: float(prob) for idx, prob in enumerate(avg_probs)}
+            detected_emotion, emotion_confidence = _get_valid_emotion(all_scores_dict)
 
             all_emotions = {
                 id2label[idx]: float(prob)
@@ -1210,20 +1285,9 @@ class MLPipeline:
             consistency = float(np.clip(most_common_count / len(peaks), 0, 1))
             stability   = float(np.clip(stability, 0, 1))
 
-            if expected_emotion is not None:
-                match = detected_emotion.lower() == expected_emotion.lower()
-                if match:
-                    score = emotion_confidence * 100
-                else:
-                    expected_prob = 0.0
-                    for idx, label in id2label.items():
-                        if label.lower() == expected_emotion.lower():
-                            expected_prob = float(avg_probs[idx])
-                            break
-                    score = expected_prob * 100
-            else:
-                score = (dominance * 0.5) + (stability * 0.3) + (consistency * 0.2)
-                score = float(np.clip(score * 100, 0, 100))
+
+            score = (dominance * 0.5) + (stability * 0.3) + (consistency * 0.2)
+            score = float(np.clip(score * 100, 0, 100))
 
             metrics = {
                 "dominance":   dominance,
@@ -1295,19 +1359,33 @@ class MLPipeline:
                     continue
                 start_sample = int(sent["t_start"] * sr)
                 end_sample   = int(sent["t_end"] * sr)
-                start_sample = min(start_sample, len(audio_array))
-                end_sample   = min(end_sample, len(audio_array))
-                segment      = audio_array[start_sample:end_sample]
+                
+                # Check if sentence is completely beyond audio file
+                start_sample = min(start_sample, len(audio_array) - 1)
+                end_sample = min(end_sample, len(audio_array))
+                segment = audio_array[start_sample:end_sample]
+
+                segment_duration  = len(segment) / sr
+                expected_duration = sent["t_end"] - sent["t_start"]
+                is_mostly_complete = segment_duration >= (expected_duration * 0.5)
+                
                 logger.debug(
-                    "Sentence %d slice: start_sample=%d end_sample=%d audio_len=%d segment_len=%d",
+                    "Sentence %d slice: start_sample=%d end_sample=%d audio_len=%d segment_len=%d duration=%.2fs",
                     len(sentence_results) + 1,
-                    start_sample, end_sample, len(audio_array), len(segment),
+                    start_sample, end_sample, len(audio_array), len(segment), segment_duration,
                 )
-                if len(segment) < 1600:
+                
+            
+                is_end_of_file = end_sample >= len(audio_array)
+                is_mostly_complete = segment_duration >= (expected_duration * 0.5)
+                
+                should_skip = len(segment) < 8000 and not (is_end_of_file and is_mostly_complete)
+                
+                if should_skip:
                     logger.warning(
-                        "Sentence %d too short: %.4fs (%d samples) | t=%.3f-%.3f | '%s...'",
+                        "Sentence %d skipped (too short): %.2fs (%d samples) | t=%.1f-%.1f | '%s...'",
                         len(sentence_results) + 1,
-                        len(segment) / sr, len(segment),
+                        segment_duration, len(segment),
                         sent["t_start"], sent["t_end"],
                         sent["content"][:40],
                     )
@@ -1328,8 +1406,7 @@ class MLPipeline:
                     tmp_path = tmp.name
 
                 result = await self._score_audio_emotion(
-                    tmp_path,
-                    expected_emotion=sent.get("emotion"),
+                    tmp_path
                 )
 
                 sentence_results.append({
@@ -1337,10 +1414,15 @@ class MLPipeline:
                     "expected_emotion": sent["emotion"],
                     "detected_emotion": result["detected_emotion"],
                     "confidence":       result["confidence"],
-                    "score":            result["score"],
+                    "score":            self.display_score(self._compute_sentence_score(
+                                            result["detected_emotion"],
+                                            sent.get("emotion"),
+                                            result["confidence"]
+                                        )),
                     "time_range":       f"{sent['t_start']:.1f}s-{sent['t_end']:.1f}s",
                     "coverage":         sent.get("coverage", 1.0),
                     "status":           sent["status"],
+                    "all_scores":       result.get("all_emotions", {}),
                 })
 
                 try:
@@ -1363,7 +1445,7 @@ class MLPipeline:
                 avg_confidence   = 0.0
             matches = sum(
                 1 for r in sentence_results
-                if r["detected_emotion"] is not None
+                if r.get("detected_emotion") is not None
                 and r["detected_emotion"].lower() == (r["expected_emotion"] or "").lower()
             )
          
@@ -1375,7 +1457,7 @@ class MLPipeline:
             )
 
             return {
-                "score":            avg_score,
+                "score":            self.display_score(avg_score),
                 "detected_emotion": dominant_emotion,
                 "confidence":       avg_confidence,
                 "sentence_results": sentence_results,
@@ -1387,6 +1469,258 @@ class MLPipeline:
         except Exception as e:
             logger.error("Sentence-level emotion scoring failed: %s", e, exc_info=True)
             return await self._score_audio_emotion(audio_path)
+    
+    async def _score_video_emotion_per_sentence(
+        self,
+        video_path: str,
+        sentences_aligned: List[Dict],
+    ) -> Dict:
+        """
+        Score video emotion per sentence using alignment data.
+        
+        Parameters
+        ----------
+        video_path : str
+            Path to the video file
+        sentences_aligned : List[Dict]
+            List of sentences with timing information from script alignment
+            Each dict has: content, emotion, t_start, t_end, coverage, status
+        
+        Returns
+        -------
+        Dict with keys:
+            - score: float (0-100) - average score across valid sentences
+            - detected_emotion: str - dominant emotion across sentences
+            - confidence: float - average confidence across valid sentences
+            - sentence_results: list - per-sentence emotion detections
+            - accuracy: float - percentage of sentences matching expected emotion
+            - all_emotions: dict - placeholder for consistency with audio function
+        """
+        CONTEXT_SECONDS = 3.0
+        if self.emotion_model is None:
+            logger.warning("Video emotion model not loaded -- cannot score per sentence")
+            return {
+                "score": 0.0,
+                "detected_emotion": "unknown",
+                "confidence": 0.0,
+                "sentence_results": [],
+                "accuracy": 0.0,
+                "all_emotions": {},
+            }
+        
+        try:
+            from tensorflow.keras.applications.efficientnet import preprocess_input
+            
+            sentence_results = []
+            
+            logger.info(
+                "Starting video emotion scoring for %d sentences", len(sentences_aligned)
+            )
+            
+            for sent_idx, sent in enumerate(sentences_aligned):
+                if sent["status"] == "missing" or sent["t_start"] is None:
+                    logger.debug("Skipping missing sentence %d: %s...", sent_idx, sent["content"][:50])
+                    sentence_results.append({
+                        "sentence": sent["content"],
+                        "expected_emotion": sent.get("emotion"),
+                        "detected_emotion": None,
+                        "confidence": 0.0,
+                        "score": 0.0,
+                        "time_range": "N/A",
+                        "coverage": sent.get("coverage", 0.0),
+                        "status": "missing",
+                    })
+                    continue
+                
+                # Extract frames for this sentence's time range
+                t_start = sent["t_start"]
+                t_end = sent["t_end"]
+                duration = t_end - t_start
+                context_start = max(0.0, t_start - CONTEXT_SECONDS)
+                context_frames_count = max(2, int(FRAMES_PER_VIDEO * (
+                    CONTEXT_SECONDS / (CONTEXT_SECONDS + duration)
+                )))
+                sentence_frames_count = FRAMES_PER_VIDEO - context_frames_count
+                if duration < 0.2:  # Too short (< 200ms)
+                    logger.warning(
+                        "Sentence %d too short (%.2fs): '%s...'",
+                        sent_idx, duration, sent["content"][:40]
+                    )
+                    sentence_results.append({
+                        "sentence": sent["content"],
+                        "expected_emotion": sent.get("emotion"),
+                        "detected_emotion": None,
+                        "confidence": 0.0,
+                        "score": 0.0,
+                        "time_range": f"{t_start:.1f}s-{t_end:.1f}s",
+                        "coverage": sent.get("coverage", 1.0),
+                        "status": "too_short",
+                    })
+                    continue
+                context_frames = self._extract_frames_for_time_range(
+                    video_path, context_start, t_start,
+                    num_frames=context_frames_count,
+                ) if context_start < t_start else np.array([])
+                # Extract sentence frames
+                sentence_frames = self._extract_frames_for_time_range(
+                    video_path, t_start, t_end,
+                    num_frames=sentence_frames_count,
+                )
+                
+                if len(sentence_frames) == 0:
+                    logger.warning(
+                        "Sentence %d: no frames extracted for time range %.1f-%.1f",
+                        sent_idx, t_start, t_end
+                    )
+                    sentence_results.append({
+                        "sentence": sent["content"],
+                        "expected_emotion": sent.get("emotion"),
+                        "detected_emotion": None,
+                        "confidence": 0.0,
+                        "score": 0.0,
+                        "time_range": f"{t_start:.1f}s-{t_end:.1f}s",
+                        "coverage": sent.get("coverage", 1.0),
+                        "status": "no_frames",
+                    })
+                    continue
+
+
+            # Combine: context first so LSTM sees it before sentence
+                if len(context_frames) > 0:
+                    frames = np.concatenate([context_frames, sentence_frames], axis=0)
+                else:
+                    frames = sentence_frames
+
+                # Pad/trim to exactly FRAMES_PER_VIDEO
+                if len(frames) < FRAMES_PER_VIDEO:
+                    pad = np.repeat(frames[-1:], FRAMES_PER_VIDEO - len(frames), axis=0)
+                    frames = np.concatenate([frames, pad], axis=0)
+                else:
+                    frames = frames[:FRAMES_PER_VIDEO]
+                
+                # Run emotion model on extracted frames
+                try:
+                    frames_norm = preprocess_input(frames * 255.0)
+                    
+                    # Pad or trim to FRAMES_PER_VIDEO
+                    if len(frames_norm) < FRAMES_PER_VIDEO:
+                        last_frame = frames_norm[-1:]  # shape (1, H, W, 3)
+                        pad = np.repeat(
+                            last_frame,
+                            FRAMES_PER_VIDEO - len(frames_norm),
+                            axis=0,
+                        )
+                        frames_norm = np.concatenate([frames_norm, pad], axis=0)
+                    else:
+                        frames_norm = frames_norm[:FRAMES_PER_VIDEO]
+                    input_batch = frames_norm[np.newaxis, ...]
+                    probabilities = self.emotion_model.predict(input_batch, verbose=0)[0]
+                    probabilities = np.array(probabilities, dtype=np.float64)
+                    probabilities = probabilities / probabilities.sum()
+                    
+                    all_scores_dict = {EMOTION_NAMES[i]: float(probabilities[i]) for i in range(NUM_CLASSES)}
+                    detected_emotion, confidence = _get_valid_emotion(all_scores_dict)
+                    score = self.display_score(self._compute_sentence_score(
+                        detected_emotion,
+                        sent.get("emotion"),
+                        confidence
+                    ))
+                    
+                    logger.debug(
+                        "Sentence %d emotion: %s (conf=%.2f%%), time=%.1f-%.1f",
+                        sent_idx, detected_emotion, confidence * 100, t_start, t_end
+                    )
+                    
+                    sentence_results.append({
+                        "sentence": sent["content"],
+                        "expected_emotion": sent.get("emotion"),
+                        "detected_emotion": detected_emotion,
+                        "confidence": round(confidence, 4),
+                        "score": score,
+                        "time_range": f"{t_start:.1f}s-{t_end:.1f}s",
+                        "coverage": sent.get("coverage", 1.0),
+                        "status": sent.get("status", "ok"),
+                        "all_emotions":     {       # ← add this
+                            EMOTION_NAMES[i]: round(float(probabilities[i]), 4)
+                            for i in range(NUM_CLASSES)
+                        },
+                    })
+                    
+                except Exception as e:
+                    logger.error(
+                        "Failed to score video emotion for sentence %d: %s", sent_idx, e
+                    )
+                    sentence_results.append({
+                        "sentence": sent["content"],
+                        "expected_emotion": sent.get("emotion"),
+                        "detected_emotion": None,
+                        "confidence": 0.0,
+                        "score": 0.0,
+                        "time_range": f"{t_start:.1f}s-{t_end:.1f}s",
+                        "coverage": sent.get("coverage", 1.0),
+                        "status": "error",
+                    })
+                    continue
+            
+            # Compute aggregate metrics
+            if not sentence_results:
+                logger.warning("No valid sentences for video emotion analysis")
+                return {
+                    "score": 0.0,
+                    "detected_emotion": "unknown",
+                    "confidence": 0.0,
+                    "sentence_results": [],
+                    "accuracy": 0.0,
+                    "all_emotions": {},
+                }
+            
+            valid_results = [r for r in sentence_results if r["detected_emotion"] is not None]
+            
+            if valid_results:
+                avg_score = sum(r["score"] for r in valid_results) / len(valid_results)
+                emotions = [r["detected_emotion"] for r in valid_results]
+                dominant_emotion = Counter(emotions).most_common(1)[0][0]
+                avg_confidence = sum(r["confidence"] for r in valid_results) / len(valid_results)
+            else:
+                avg_score = 0.0
+                dominant_emotion = "neutral"
+                avg_confidence = 0.0
+            
+            # Calculate accuracy (percentage matching expected emotion)
+            matches = sum(
+                1 for r in sentence_results
+                if r["detected_emotion"] is not None
+                and r["detected_emotion"].lower() == (r["expected_emotion"] or "").lower()
+            )
+            accuracy = matches / len(sentence_results) if sentence_results else 0.0
+            
+            logger.info(
+                "Video emotion per-sentence analysis complete: %d sentences (%d valid), "
+                "accuracy=%.1f%%, dominant=%s, avg_score=%.2f",
+                len(sentence_results), len(valid_results), accuracy * 100,
+                dominant_emotion, avg_score,
+            )
+            
+            return {
+                "score":self.display_score(avg_score),
+                "detected_emotion": dominant_emotion,
+                "confidence": round(avg_confidence, 4),
+                "sentence_results": sentence_results,
+                "accuracy": round(accuracy, 4),
+                "all_emotions": {},
+            }
+        
+        except Exception as e:
+            logger.error("Video emotion per-sentence scoring failed: %s", e, exc_info=True)
+            return {
+                "score": 0.0,
+                "detected_emotion": "unknown",
+                "confidence": 0.0,
+                "sentence_results": [],
+                "accuracy": 0.0,
+                "all_emotions": {},
+                "error": str(e),
+            }
 
     # -----------------------------------------------------------------------
     # 3 -- Script alignment scoring (SeamlessM4T)
@@ -1397,233 +1731,161 @@ class MLPipeline:
         script_text: str,
     ) -> Tuple[float, Optional[Dict]]:
         """
-        Transcribe with remote SeamlessM4T API, align with script, and return both:
+        Transcribe locally with SeamlessM4T, force-align with WhisperX, diff
+        against the script with script.compare(), and return both:
         - alignment score (0-100)
         - sentence-level alignment data for emotion detection
         """
         if self.script_model is None or self.script_processor is None:
             logger.warning("SeamlessM4T not loaded -- script alignment score = 0.")
             return 0.0, None
-
+ 
         if not script_text or not audio_path:
             logger.info("No script text or audio provided -- script score = 0.")
             return 0.0, None
-
+ 
         if not Path(audio_path).exists():
             logger.warning("Audio file not found: %s", audio_path)
             return 0.0, None
-
+ 
         try:
-            import aiohttp
             import soundfile as sf
             import librosa
-
-            logger.info("Sending audio to remote SeamlessM4T API...")
-            # Guard: reject tiny/empty files before sending
+ 
+            # Guard: reject tiny/empty files before running ASR
             audio_size = Path(audio_path).stat().st_size
             if audio_size < 8000:
                 logger.warning("Audio file too small (%d bytes), skipping ASR", audio_size)
                 return 0.0, None
+ 
+            audio_array, sr = sf.read(audio_path)
+            audio_array = np.asarray(audio_array, dtype=np.float32).flatten()
+            if audio_array.size == 0:
+                logger.warning("Empty audio array read from %s", audio_path)
+                return 0.0, None
+ 
+            total_duration = len(audio_array) / sr
+            if sr != SEAMLESS_SAMPLE_RATE:
+                audio_array = librosa.resample(
+                    audio_array, orig_sr=sr, target_sr=SEAMLESS_SAMPLE_RATE
+                )
+ 
+            # Parse the script (raw text with embedded "emotion" labels, JSON
+            # list, or plain text -- handled by parse_script_to_json).
             try:
-                async with aiohttp.ClientSession() as health_session:
-                    health_url = self.script_model.replace("/transcribe", "/health")
-                    async with health_session.get(
-                        health_url,
-                        timeout=aiohttp.ClientTimeout(connect=10, sock_read=10)
-                    ) as r:
-                        logger.info("SeamlessM4T health check: %s", await r.text())
+                sentences = script.parse_script_to_json(script_text)
             except Exception as e:
-                logger.error("SeamlessM4T API unreachable: %s", e)
+                logger.error("Failed to parse script_text: %s", e, exc_info=True)
                 return 0.0, None
-            async with aiohttp.ClientSession() as session:
-                with open(audio_path, "rb") as f:
-                    form = aiohttp.FormData()
-                    form.add_field(
-                        "audio", f,
-                        filename="audio.wav",
-                        content_type="audio/wav",
-                    )
-                    async with session.post(
-                        self.script_model,
-                        data=form,
-                        timeout=aiohttp.ClientTimeout(
-                            connect=30,
-                            sock_read=1800,
-                            ),
-                    ) as resp:
-                        if resp.status != 200:
-                           logger.error("Remote ASR API error: %s", await resp.text())
-                           return 0.0, None
-                        api_result = await resp.json()
-
-            full_transcript = api_result.get("text", "")
-            if not full_transcript:
-                logger.warning("Empty transcript from remote API")
+ 
+            if not sentences:
+                logger.warning("Script parsed to zero sentences -- script score = 0.")
                 return 0.0, None
+            logger.info("Parsed script: %d", sentences)
+            logger.info("Parsed script: %d sentences (first=%s)", len(sentences), sentences[0])
 
-            transcript_clean = _normalize_text(full_transcript).split()
-
-            sentences = self._parse_script(script_text)
-
-            script_words     = []
-            word_to_sentence = []
-            for sent_idx, sent in enumerate(sentences):
-                words = _normalize_text(sent["content"]).split()
-                script_words.extend(words)
-                word_to_sentence.extend([sent_idx] * len(words))
-
-            if not script_words:
+            joined_script = " ".join(s["script_text"] for s in sentences)
+            detected_lang = script._detect_language(joined_script)
+            logger.debug("[DEBUG] Detected language=%s", detected_lang)
+ 
+            logger.info("Running local SeamlessM4T transcription (lang=%s)...", detected_lang)
+            transcription = script._transcribe_with_chunking(
+                self.script_processor,
+                self.script_model,
+                self.script_device,
+                audio_array,
+                tgt_lang=detected_lang,
+            )
+ 
+            if not transcription or not transcription.strip():
+                logger.warning("Empty transcript from local SeamlessM4T model")
                 return 0.0, None
-
-            matcher = difflib.SequenceMatcher(None, script_words, transcript_clean)
-
-            sentence_coverage    = [0] * len(sentences)
-            sentence_word_counts = [
-                len(_normalize_text(s["content"]).split()) for s in sentences
-            ]
-
-            for tag, i1, i2, j1, j2 in matcher.get_opcodes():
-                if tag == "equal":
-                    for i in range(i1, i2):
-                        sentence_coverage[word_to_sentence[i]] += 1
-            # Add this loop after the existing matcher.get_opcodes() sentence_coverage loop:
-            comparison_rows = []
-            for tag, i1, i2, j1, j2 in matcher.get_opcodes():
-                if tag == "equal":
-                    for k in range(i2 - i1):
-                        comparison_rows.append({
-                            "status": "match",
-                            "script_word": script_words[i1 + k],
-                            "transcript_word": transcript_clean[j1 + k],
-                        })
-                elif tag == "replace":
-                    for k in range(max(i2 - i1, j2 - j1)):
-                        s_w = script_words[i1 + k] if i1 + k < i2 else ""
-                        t_w = transcript_clean[j1 + k] if j1 + k < j2 else ""
-                        comparison_rows.append({
-                            "status": "changed" if s_w and t_w else ("skipped" if s_w else "added"),
-                            "script_word": s_w or "-",
-                            "transcript_word": t_w or "-",
-                        })
-                elif tag == "delete":
-                    for k in range(i2 - i1):
-                        comparison_rows.append({
-                            "status": "skipped",
-                            "script_word": script_words[i1 + k],
-                            "transcript_word": "-",
-                        })
-                elif tag == "insert":
-                    for k in range(j2 - j1):
-                        comparison_rows.append({
-                        "status": "added",
-                        "script_word": "-",
-                        "transcript_word": transcript_clean[j1 + k],
-                    })
-
-            # Fix the matched_words bug while you're here:
-            matched_words = sum(size for _, _, size in matcher.get_matching_blocks())
-            overall_coverage = matched_words / len(script_words) if script_words else 0
-            score = round(min(overall_coverage, 1.0) * 100, 2)
-
-            # Use segments from API for timing
-            api_segments     = api_result.get("segments", [])
-            total_duration   = api_segments[-1]["end"] if api_segments else len(transcript_clean)
-            words_per_second = len(transcript_clean) / total_duration if total_duration > 0 else 1
-
-            sentences_aligned = []
-            current_time = 0.0
-
-            for sent_idx, sent in enumerate(sentences):
-                word_count         = sentence_word_counts[sent_idx]
-                matched_words      = sentence_coverage[sent_idx]
-                coverage           = matched_words / word_count if word_count > 0 else 0.0
-                estimated_duration = word_count / words_per_second if words_per_second > 0 else 2.0
-
-                if coverage > 0:
-                    t_start = current_time
-                    t_end   = current_time + estimated_duration
-                    status  = "ok" if coverage >= 0.5 else "partial"
-                else:
-                    t_start = None
-                    t_end   = None
-                    status  = "missing"
-
-                sentences_aligned.append({
-                    "content":  sent["content"],
-                    "emotion":  sent["emotion"],
-                    "t_start":  t_start,
-                    "t_end":    t_end,
-                    "coverage": coverage,
-                    "status":   status,
-                })
-                current_time += estimated_duration
-
-
+ 
             logger.info(
-                "Script alignment -- matched=%d / total=%d -> score=%.2f, %d sentences",
-                matched_words, len(script_words), score, len(sentences_aligned),
+                "Transcript length: %d words: %s...",
+                len(transcription.split()), transcription[:80],
+            )
+ 
+            # Force-align transcript words to audio timestamps via WhisperX
+            aligned_words = []
+            try:
+                aligned_words = self._align_with_whisperx(
+                    audio_array, transcription, language=detected_lang,
+                )
+            except Exception as e:
+                logger.error("[DEBUG] Alignment error: %s", e, exc_info=True)
+
+            logger.debug("[DEBUG] Aligned words=%d", len(aligned_words))
+
+            # Step 3: Compare with script and reconstruct timestamps
+            norm_script     = script.normalize_arabic(joined_script)
+            norm_transcript = " ".join(
+                script.normalize_arabic(w["word"]) for w in aligned_words
             )
 
+            df_comparison = script.compare(norm_script, norm_transcript, aligned_words)
+            summary       = script.compute_summary(df_comparison)
+            logger.debug("[DEBUG] Comparison rows=%d, summary=%s", len(df_comparison), summary)
+
+            script_word_to_sent = script.build_word_sent_map(sentences)
+            df_annotated         = script.annotate_sent_idx(df_comparison, script_word_to_sent)
+            sentences_aligned    = script.reconstruct_timestamps(
+                df_annotated, sentences, total_duration
+            )
+
+            matched = summary.get("matched", 0)
+            changed = summary.get("changed", 0)
+            skipped = summary.get("skipped", 0)
+            added   = summary.get("added", 0)
+
+            total_script_words = matched + changed + skipped
+            overall_coverage   = matched / total_script_words if total_script_words else 0.0
+            score              = round(min(overall_coverage, 1.0) * 100, 2)
+
+            logger.info(
+                "Script alignment -- matched=%d changed=%d skipped=%d added=%d -> score=%.2f",
+                matched, changed, skipped, added, score,
+            )
+ 
             return score, {
                 "sentences_aligned": sentences_aligned,
-                "transcript":        full_transcript,
+                "transcript":        transcription,
                 "coverage":          overall_coverage,
-                "comparison_rows": comparison_rows,
+                "matched_count":     matched,
+                "added_count":       added,
+                "changed_count":     changed,
+                "skipped_count":     skipped,
+                "matched_words":     summary.get("matched_words", []),
+                "added_words":       summary.get("added_words", []),
+                "changed_words":     summary.get("changed_words", []),
+                "skipped_words":     summary.get("skipped_words", []),
             }
-
+ 
         except Exception as e:
             logger.error("Script alignment scoring failed: %s", e, exc_info=True)
             return 0.0, None
-    def _parse_script(self, script_text: str) -> List[Dict]:
+ 
+    def _align_with_whisperx(
+        self,
+        audio_array: np.ndarray,
+        transcript_text: str,
+        sample_rate: int = SEAMLESS_SAMPLE_RATE,
+        language: Optional[str] = None,
+    ) -> List[Dict]:
         """
-        Parse script into sentences with emotion labels.
-
-        Accepts two formats:
-
-        Format 1 (preferred) -- JSON array string:
-            '[{"content": "sentence", "emotion": "angry"}, ...]'
-
-        Format 2 (legacy) -- plain text with inline emotion tags:
-            Sentence text "emotion"
-
-        Returns list of {content: str, emotion: str}
+        Thin wrapper so script._align_with_whisperx can use this
+        instance's WhisperX model cache (self._whisperx_align_cache) and
+        device, without script needing to manage pipeline state.
         """
-        script_text = script_text.strip()
-
-        # ── Format 1: JSON array ─────────────────────────────────────────
-        if script_text.startswith("["):
-            try:
-                data = json.loads(script_text)
-                sentences = []
-                for item in data:
-                    content = str(item.get("content", "")).strip()
-                    emotion = str(item.get("emotion", "neutral")).strip().lower()
-                    if content:
-                        sentences.append({"content": content, "emotion": emotion})
-                if sentences:
-                    logger.info("Parsed script as JSON array: %d sentences", len(sentences))
-                    return sentences
-            except json.JSONDecodeError as e:
-                logger.warning("Script looked like JSON but failed to parse: %s", e)
-
-        # ── Format 2: Legacy plain-text with inline "emotion" tags ───────
-        sentences = []
-        for line in script_text.split("\n"):
-            if not line.strip():
-                continue
-            match = re.search(r'"([^"]+)"', line)
-            if match:
-                emotion = match.group(1).lower()
-                content = line[: match.start()].strip()
-            else:
-                content = line.strip()
-                emotion = "neutral"
-            if content:
-                sentences.append({"content": content, "emotion": emotion})
-
-        logger.info("Parsed script as plain text: %d sentences", len(sentences))
-        return sentences
-
+        return script._align_with_whisperx(
+            audio_array,
+            transcript_text,
+            sample_rate=sample_rate,
+            language=language,
+            device=self.script_device,
+            align_cache=self._whisperx_align_cache,
+        )
+ 
     async def _score_script_alignment(
         self,
         audio_path: Optional[str],

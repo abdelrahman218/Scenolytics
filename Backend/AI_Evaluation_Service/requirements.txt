@@ -8,12 +8,14 @@ pydantic==2.5.0
 pydantic-settings==2.1.0
 aiohttp
 
-# pinned before whisperx to prevent overwrite
-transformers==4.40.2
-tokenizers==0.19.1
-huggingface-hub==0.23.4
-accelerate==0.29.3
+
+transformers>=5.0.0
+tokenizers
+huggingface-hub
+accelerate
 sentencepiece
+
+
 
 # audio / video
 librosa==0.10.0
@@ -31,4 +33,4 @@ dlib-bin
 # cloud
 boto3
 pandas
-modal==0.72.0
+modal==1.5.0
