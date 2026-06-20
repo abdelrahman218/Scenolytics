@@ -66,6 +66,7 @@ List<AlignmentTokenRow> collectAlignmentTokenRows(Map<String, dynamic> d) {
 
   void addRow(Map<String, dynamic> m, {String? defaultStatus}) {
     final script = _wordField(m, const [
+      'script_word',
       'script',
       'Script',
       'expected',
@@ -74,6 +75,7 @@ List<AlignmentTokenRow> collectAlignmentTokenRows(Map<String, dynamic> d) {
       'word',
     ]);
     final transcript = _wordField(m, const [
+      'transcript_word',
       'transcript',
       'Transcript',
       'actual',
@@ -197,12 +199,13 @@ List<AlignmentTokenRow> _rowsForSentence(
 
 List<AlignmentTokenRow> _rowsFromSentenceObject(Map<String, dynamic> m) {
   final rows = <AlignmentTokenRow>[];
-  for (final key in const ['words', 'alignment', 'comparison', 'tokens']) {
+  for (final key in const ['word_diff', 'words', 'alignment', 'comparison', 'tokens']) {
     final list = _asList(m[key]);
     for (final item in list) {
       if (item is! Map) continue;
       final map = item.map((k, v) => MapEntry(k.toString(), v));
       final script = _wordField(map, const [
+        'script_word',
         'script',
         'Script',
         'expected',
@@ -210,6 +213,7 @@ List<AlignmentTokenRow> _rowsFromSentenceObject(Map<String, dynamic> m) {
         'word',
       ]);
       final transcript = _wordField(map, const [
+        'transcript_word',
         'transcript',
         'Transcript',
         'actual',
