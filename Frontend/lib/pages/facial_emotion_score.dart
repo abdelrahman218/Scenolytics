@@ -35,36 +35,28 @@ class SentenceEmotion {
 
 /// Builds the per-sentence facial-emotion breakdown from the AI evaluation
 /// payload (`detected_emotions_video.sentence_results`). Returns an empty list
-/// when no per-sentence data is present.
+/// when no per-sentence *video* data is present.
+///
+/// The facial tab is driven strictly by the video-emotion analysis: it splits
+/// the recording into segments using the per-sentence video results. It does
+/// NOT fall back to the script/ASR (audio) alignment timeline — that data
+/// belongs to the vocal/script tabs, and showing it here made the facial
+/// breakdown look like it came from the audio analysis.
 List<SentenceEmotion> facialSentencesFromEvaluation(
   Map<String, dynamic>? detail,
 ) {
   final fromVideo = evaluationSentenceResults(detail, channel: 'video');
-  if (fromVideo.isNotEmpty) {
-    return fromVideo.map((r) {
-      final detected = (r['detected_emotion'] ?? '').toString();
-      final win = sentenceTimeWindowSeconds(r);
-      return SentenceEmotion(
-        timestamp: clockRangeLabel(win.start, win.end),
-        text: (r['sentence'] ?? '').toString(),
-        emotion: detected.isEmpty ? 'No speech' : capitalizeEmotion(detected),
-        emoji: detected.isEmpty ? '🔇' : emotionEmoji(detected),
-        confidence: normalizeConfidencePct(r['confidence'] as num?),
-        startSeconds: win.start,
-        endSeconds: win.end,
-      );
-    }).toList();
-  }
+  if (fromVideo.isEmpty) return const [];
 
-  return scriptAlignedSentences(detail).map((r) {
-    final expected = (r['emotion'] ?? r['expected_emotion'] ?? '').toString();
+  return fromVideo.map((r) {
+    final detected = (r['detected_emotion'] ?? '').toString();
     final win = sentenceTimeWindowSeconds(r);
     return SentenceEmotion(
       timestamp: clockRangeLabel(win.start, win.end),
-      text: (r['content'] ?? r['sentence'] ?? '').toString(),
-      emotion: expected.isEmpty ? 'Script line' : capitalizeEmotion(expected),
-      emoji: expected.isEmpty ? '📝' : emotionEmoji(expected),
-      confidence: 0,
+      text: (r['sentence'] ?? '').toString(),
+      emotion: detected.isEmpty ? 'No speech' : capitalizeEmotion(detected),
+      emoji: detected.isEmpty ? '🔇' : emotionEmoji(detected),
+      confidence: normalizeConfidencePct(r['confidence'] as num?),
       startSeconds: win.start,
       endSeconds: win.end,
     );

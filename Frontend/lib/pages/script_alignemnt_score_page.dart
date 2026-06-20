@@ -163,10 +163,17 @@ class AlignmentResult {
           .toString()
           .trim();
       if (content.isEmpty) continue;
-      final transcript =
-          (m['transcript'] ?? m['hypothesis'] ?? m['recognized'] ?? '')
-              .toString()
-              .trim();
+      final transcript = (m['transcript'] ??
+              m['hypothesis'] ??
+              m['recognized'] ??
+              m['actual'] ??
+              m['heard'] ??
+              m['spoken'] ??
+              m['said'] ??
+              m['asr'] ??
+              '')
+          .toString()
+          .trim();
       final start = m['t_start'];
       final end = m['t_end'];
       final timeLabel = (start is num && end is num)
@@ -282,8 +289,11 @@ class _MobileLayout extends StatelessWidget {
         const SizedBox(height: 16),
         _SectionHeading('SENTENCE COMPARISON'),
         const SizedBox(height: 10),
-        if (data.sentences.isEmpty && data.transcript != null) ...[
-          _TranscriptOnlyCard(transcript: data.transcript!),
+        if (data.transcript != null && data.transcript!.isNotEmpty) ...[
+          _TranscriptOnlyCard(
+            transcript: data.transcript!,
+            showAlignmentWarning: data.sentences.isEmpty,
+          ),
           const SizedBox(height: 10),
         ],
         ...data.sentences.map((s) => Padding(
@@ -334,8 +344,11 @@ class _WebLayout extends StatelessWidget {
         const SizedBox(height: 16),
         _SectionHeading('SENTENCE COMPARISON'),
         const SizedBox(height: 10),
-        if (data.sentences.isEmpty && data.transcript != null) ...[
-          _TranscriptOnlyCard(transcript: data.transcript!),
+        if (data.transcript != null && data.transcript!.isNotEmpty) ...[
+          _TranscriptOnlyCard(
+            transcript: data.transcript!,
+            showAlignmentWarning: data.sentences.isEmpty,
+          ),
           const SizedBox(height: 10),
         ],
         ...data.sentences.map((s) => Padding(
@@ -595,7 +608,19 @@ class _ExpandedWordRow extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          Wrap(
+          if (words.isEmpty)
+            Text(
+              label == 'TRANSCRIPT'
+                  ? 'No speech was transcribed for this line.'
+                  : '—',
+              style: const TextStyle(
+                fontSize: 12,
+                fontStyle: FontStyle.italic,
+                color: ScenolyticsColors.textMuted,
+              ),
+            )
+          else
+            Wrap(
             spacing: 4,
             runSpacing: 6,
             children: words.map((w) {
@@ -1075,11 +1100,17 @@ class _SectionHeading extends StatelessWidget {
   }
 }
 
-/// Shows the ASR transcript when no per-sentence alignment rows exist.
+/// Shows the full ASR transcript ("what we heard"). Always rendered above the
+/// per-sentence comparison so the director can read the recognized speech in
+/// full; [showAlignmentWarning] adds a note when no sentence aligned at all.
 class _TranscriptOnlyCard extends StatelessWidget {
-  const _TranscriptOnlyCard({required this.transcript});
+  const _TranscriptOnlyCard({
+    required this.transcript,
+    this.showAlignmentWarning = false,
+  });
 
   final String transcript;
+  final bool showAlignmentWarning;
 
   @override
   Widget build(BuildContext context) {
@@ -1094,14 +1125,27 @@ class _TranscriptOnlyCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'WHAT WE HEARD',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.0,
-              color: ScenolyticsColors.textMuted,
-            ),
+          Row(
+            children: [
+              Container(
+                width: 3,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: ScenolyticsColors.accentCyan,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'FULL TRANSCRIPT — WHAT WE HEARD',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.0,
+                  color: ScenolyticsColors.textMuted,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 8),
           Text(
@@ -1112,16 +1156,18 @@ class _TranscriptOnlyCard extends StatelessWidget {
               color: ScenolyticsColors.textPrimary,
             ),
           ),
-          const SizedBox(height: 8),
-          const Text(
-            'Word alignment to the script was 0% — the actor may have read '
-            'different lines than the audition script.',
-            style: TextStyle(
-              fontSize: 12,
-              height: 1.4,
-              color: ScenolyticsColors.textMuted,
+          if (showAlignmentWarning) ...[
+            const SizedBox(height: 8),
+            const Text(
+              'Word alignment to the script was 0% — the actor may have read '
+              'different lines than the audition script.',
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.4,
+                color: ScenolyticsColors.textMuted,
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );

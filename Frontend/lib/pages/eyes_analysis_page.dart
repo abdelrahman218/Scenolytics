@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../config/app_env.dart';
 import '../models/actor_audition_submission.dart';
 import '../theme/scenolytics_colors.dart';
 
@@ -60,6 +61,18 @@ class EmotionTransition {
       dirBefore: json['dir_before']?.toString(),
       dirAfter: json['dir_after']?.toString(),
       message: json['message']?.toString(),
+      beforeImagePath: AppEnv.minioObjectUrl(
+        (json['before_image'] ??
+                json['before_image_url'] ??
+                json['before_image_path'])
+            ?.toString(),
+      ),
+      afterImagePath: AppEnv.minioObjectUrl(
+        (json['after_image'] ??
+                json['after_image_url'] ??
+                json['after_image_path'])
+            ?.toString(),
+      ),
       imageAspectRatio: (json['image_aspect_ratio'] as num?)?.toDouble(),
     );
   }
@@ -792,22 +805,19 @@ class _PhotoFrame extends StatelessWidget {
           children: [
             // ── Image or placeholder ─────────────────────────────────────
             imagePath != null
-                ? Image.asset(
+                ? Image.network(
                     imagePath!,
                     fit: BoxFit.contain,
                     alignment: Alignment.center,
                     filterQuality: FilterQuality.high,
+                    loadingBuilder: (context, child, progress) {
+                      if (progress == null) return child;
+                      return const _PhotoPlaceholder(loading: true);
+                    },
+                    errorBuilder: (context, error, stack) =>
+                        const _PhotoPlaceholder(),
                   )
-                : Container(
-                    color: const Color(0xFF0D2137),
-                    child: Center(
-                      child: Icon(
-                        Icons.person_outline_rounded,
-                        size: 48,
-                        color: Colors.white.withValues(alpha: 0.15),
-                      ),
-                    ),
-                  ),
+                : const _PhotoPlaceholder(),
 
             // ── Dark gradient at top so text is always readable ───────────
             Positioned.fill(
@@ -861,6 +871,37 @@ class _PhotoFrame extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Fallback shown while a transition frame loads, or when it is missing /
+/// fails to load (e.g. the MinIO object is unavailable).
+class _PhotoPlaceholder extends StatelessWidget {
+  const _PhotoPlaceholder({this.loading = false});
+
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFF0D2137),
+      child: Center(
+        child: loading
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.2,
+                  color: Colors.white24,
+                ),
+              )
+            : Icon(
+                Icons.person_outline_rounded,
+                size: 48,
+                color: Colors.white.withValues(alpha: 0.15),
+              ),
       ),
     );
   }
