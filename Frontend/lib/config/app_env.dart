@@ -101,20 +101,47 @@ class AppEnv {
     return t.isEmpty ? 'http://localhost:9000/videos' : t;
   }
 
-  /// Origin (`scheme://host[:port]`) of the MinIO/S3 endpoint, derived from
-  /// [minioVideosBase]. Used to resolve bucket object paths such as
-  /// `eye-analysis/eval-123/frame_before.png` into fully-qualified URLs.
+  /// Optional explicit MinIO/S3 origin (`scheme://host[:port]`, no path).
+  /// Use on LAN devices, e.g. `http://192.168.1.42:9000`.
+  static const String _minioOriginEnv = String.fromEnvironment(
+    'SCENO_MINIO_ORIGIN',
+    defaultValue: '',
+  );
+
   static String get minioOrigin {
+    final explicit = _minioOriginEnv.trim();
+    if (explicit.isNotEmpty) {
+      return explicit.replaceAll(RegExp(r'/$'), '');
+    }
+
     try {
       final u = Uri.parse(minioVideosBase);
       if (u.hasScheme && u.host.isNotEmpty) {
-        return Uri(
-          scheme: u.scheme,
-          host: u.host,
-          port: u.hasPort ? u.port : null,
-        ).toString().replaceAll(RegExp(r'/$'), '');
+        final host = u.host.toLowerCase();
+        if (host != 'localhost' && host != '127.0.0.1') {
+          return Uri(
+            scheme: u.scheme,
+            host: u.host,
+            port: u.hasPort ? u.port : null,
+          ).toString().replaceAll(RegExp(r'/$'), '');
+        }
       }
     } catch (_) {}
+
+    // When the API uses a LAN host, MinIO is usually on the same machine at 9000.
+    try {
+      final api = Uri.parse(apiBaseUrl);
+      final host = api.host.toLowerCase();
+      if (api.hasScheme &&
+          host.isNotEmpty &&
+          host != 'localhost' &&
+          host != '127.0.0.1') {
+        return Uri(scheme: api.scheme, host: api.host, port: 9000)
+            .toString()
+            .replaceAll(RegExp(r'/$'), '');
+      }
+    } catch (_) {}
+
     return 'http://localhost:9000';
   }
 
@@ -123,11 +150,29 @@ class AppEnv {
   /// Accepts either an already-absolute `http(s)://…` URL (returned as-is) or a
   /// path-style `bucket/key` reference (e.g. `eye-analysis/…png`), which is
   /// prefixed with [minioOrigin]. Returns null for empty input.
+  ///
+  /// Rewrites `localhost` / `127.0.0.1` MinIO hosts to [minioOrigin] so eye
+  /// images saved by the backend still load on phones testing against a LAN API.
   static String? minioObjectUrl(String? ref) {
     final r = ref?.trim();
     if (r == null || r.isEmpty) return null;
     final lower = r.toLowerCase();
-    if (lower.startsWith('http://') || lower.startsWith('https://')) return r;
+    if (lower.startsWith('http://') || lower.startsWith('https://')) {
+      try {
+        final u = Uri.parse(r);
+        final host = u.host.toLowerCase();
+        if (host == 'localhost' || host == '127.0.0.1') {
+          final origin = Uri.parse(minioOrigin);
+          return Uri(
+            scheme: origin.scheme,
+            host: origin.host,
+            port: origin.hasPort ? origin.port : null,
+            path: u.path,
+          ).toString();
+        }
+      } catch (_) {}
+      return r;
+    }
     final cleaned = r.startsWith('/') ? r.substring(1) : r;
     return '$minioOrigin/$cleaned';
   }

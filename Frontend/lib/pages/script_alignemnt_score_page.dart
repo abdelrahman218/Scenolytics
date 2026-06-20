@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import '../models/actor_audition_submission.dart';
 import '../theme/scenolytics_colors.dart';
+import '../utils/script_alignment_parsing.dart';
 
 const double _kMobileBreak = 600;
 bool _isWide(BuildContext ctx) =>
@@ -20,6 +21,22 @@ class AlignedWord {
   final WordStatus status;
   final String? changedFrom;
   const AlignedWord(this.word, this.status, {this.changedFrom});
+
+  factory AlignedWord.fromStatus(String word, String status) {
+    final normalized = normalizeAlignmentStatus(status);
+    switch (normalized) {
+      case 'added':
+        return AlignedWord(word, WordStatus.added);
+      case 'removed':
+        return AlignedWord(word, WordStatus.removed);
+      case 'changed':
+        return AlignedWord(word, WordStatus.changed);
+      case 'extra':
+        return AlignedWord(word, WordStatus.extra);
+      default:
+        return AlignedWord(word, WordStatus.matched);
+    }
+  }
 }
 
 class SentenceAlignment {
@@ -153,6 +170,7 @@ class AlignmentResult {
         .toList();
 
     final overall = submission.scriptMatchScore;
+    final globalRows = collectAlignmentTokenRows(d);
     final sentences = <SentenceAlignment>[];
     final aligned = asList(d['sentences_aligned']);
     for (var i = 0; i < aligned.length; i++) {
@@ -163,17 +181,13 @@ class AlignmentResult {
           .toString()
           .trim();
       if (content.isEmpty) continue;
-      final transcript = (m['transcript'] ??
-              m['hypothesis'] ??
-              m['recognized'] ??
-              m['actual'] ??
-              m['heard'] ??
-              m['spoken'] ??
-              m['said'] ??
-              m['asr'] ??
-              '')
-          .toString()
-          .trim();
+
+      final sides = buildSentenceWordSides(
+        sentence: m,
+        sentenceIndex: i,
+        globalRows: globalRows,
+      );
+
       final start = m['t_start'];
       final end = m['t_end'];
       final timeLabel = (start is num && end is num)
@@ -186,20 +200,29 @@ class AlignmentResult {
           : coverage != null
               ? (coverage <= 1 ? (coverage * 100).round() : coverage.round())
               : overall;
+
       sentences.add(
         SentenceAlignment(
           label: 'Sentence ${i + 1}$timeLabel',
           score: sentScore.clamp(0, 100),
-          scriptWords: content
-              .split(RegExp(r'\s+'))
-              .where((w) => w.isNotEmpty)
-              .map((w) => AlignedWord(w, WordStatus.matched))
-              .toList(),
-          transcriptWords: transcript
-              .split(RegExp(r'\s+'))
-              .where((w) => w.isNotEmpty)
-              .map((w) => AlignedWord(w, WordStatus.matched))
-              .toList(),
+          scriptWords: [
+            for (var w = 0; w < sides.scriptWords.length; w++)
+              AlignedWord.fromStatus(
+                sides.scriptWords[w],
+                w < sides.scriptStatuses.length
+                    ? sides.scriptStatuses[w]
+                    : 'matched',
+              ),
+          ],
+          transcriptWords: [
+            for (var w = 0; w < sides.transcriptWords.length; w++)
+              AlignedWord.fromStatus(
+                sides.transcriptWords[w],
+                w < sides.transcriptStatuses.length
+                    ? sides.transcriptStatuses[w]
+                    : 'matched',
+              ),
+          ],
         ),
       );
     }
@@ -568,7 +591,7 @@ class _ExpandedWordRow extends StatelessWidget {
 
   Color _colorFor(WordStatus s) {
     switch (s) {
-      case WordStatus.matched: return ScenolyticsColors.textPrimary;
+      case WordStatus.matched: return _colMatched;
       case WordStatus.added:   return _colAdded;
       case WordStatus.removed: return _colRemoved;
       case WordStatus.changed: return _colChanged;

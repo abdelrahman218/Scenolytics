@@ -244,7 +244,7 @@ EyesAnalysisResult? eyesAnalysisResultFromEvaluation(
   ActorAuditionSubmission submission,
 ) {
   final detail = submission.evaluationDetail;
-  final raw = detail?['eye_expression_score'];
+  final raw = detail?['eye_expression_score'] ?? detail?['eye_expression'];
   final fallbackScore = submission.eyesAnalysisScore.clamp(0, 100).toDouble();
 
   if (raw is! Map) {
