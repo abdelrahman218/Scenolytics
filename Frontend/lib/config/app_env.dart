@@ -32,6 +32,27 @@ class AppEnv {
     return t.isEmpty ? 'http://localhost' : t;
   }
 
+  /// Optional separate base URL for the AI Evaluation service (e.g. Modal).
+  /// When empty, evaluations use [apiBaseUrl] via the API gateway (`/api/v1/evaluations/...`).
+  static const String _evaluationApiUrlEnv = String.fromEnvironment(
+    'SCENO_EVALUATION_API_URL',
+    defaultValue: '',
+  );
+
+  static String get evaluationApiBaseUrl {
+    final t = _evaluationApiUrlEnv.trim();
+    if (t.isNotEmpty) return t.replaceAll(RegExp(r'/$'), '');
+    return apiBaseUrl;
+  }
+
+  /// Path prefix for evaluation GET routes — gateway vs direct Modal differ.
+  static String get evaluationApiPathPrefix {
+    if (_evaluationApiUrlEnv.trim().isNotEmpty) {
+      return '/api/evaluations';
+    }
+    return '/api/v1/evaluations';
+  }
+
   /// Full Socket.IO server URL (`http(s)://host:port`). When empty, we build from [apiBaseUrl]
   /// and [notificationSocketWsPort].
   static const String _notificationSocketUrlEnv = String.fromEnvironment(

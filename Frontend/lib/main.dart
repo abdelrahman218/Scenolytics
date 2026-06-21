@@ -183,7 +183,10 @@ class _ScenolyticsHomeState extends State<_ScenolyticsHome> {
     _auditionsRepository = AuditionsRepository(
       castingApi: CastingApi(baseUrl: AppEnv.apiBaseUrl),
       userManagementApi: widget.userManagementApi,
-      evaluationApi: EvaluationApi(baseUrl: AppEnv.apiBaseUrl),
+      evaluationApi: EvaluationApi(
+        baseUrl: AppEnv.evaluationApiBaseUrl,
+        pathPrefix: AppEnv.evaluationApiPathPrefix,
+      ),
       videoPublicBase: AppEnv.videoPublicBase,
     );
     _notificationsApi = NotificationsApi(baseUrl: AppEnv.apiBaseUrl);
