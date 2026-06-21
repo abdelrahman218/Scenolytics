@@ -534,7 +534,7 @@ class _DashboardHero extends StatelessWidget {
             ),
           ),
           Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
               Row(
@@ -643,6 +643,40 @@ class _HeroMetricTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final onHero = ScenolyticsColors.onPrimary;
+    final valueColumn = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          value,
+          style: theme.textTheme.titleMedium?.copyWith(
+            color: onHero,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.2,
+            height: 1.1,
+          ),
+        ),
+        Text(
+          label,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: onHero.withValues(alpha: 0.85),
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.2,
+          ),
+        ),
+      ],
+    );
+
+    final headline = Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Icon(icon, size: 18, color: onHero),
+        const SizedBox(width: 10),
+        valueColumn,
+      ],
+    );
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
@@ -650,41 +684,17 @@ class _HeroMetricTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: onHero.withValues(alpha: 0.22)),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Icon(icon, size: 18, color: onHero),
-          const SizedBox(width: 10),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                value,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  color: onHero,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.2,
-                  height: 1.1,
-                ),
-              ),
-              Text(
-                label,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: onHero.withValues(alpha: 0.85),
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.2,
-                ),
-              ),
-            ],
-          ),
-          if (trailing != null) ...[
-            const SizedBox(width: 8),
-            Flexible(child: trailing!),
-          ],
-        ],
-      ),
+      child: trailing == null
+          ? headline
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                headline,
+                const SizedBox(height: 8),
+                trailing!,
+              ],
+            ),
     );
   }
 }
@@ -1180,7 +1190,7 @@ class _DashboardAuditionCard extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1464,7 +1474,7 @@ class _CountChip extends StatelessWidget {
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
