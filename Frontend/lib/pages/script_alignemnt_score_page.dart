@@ -136,31 +136,62 @@ class AlignmentResult {
       return item?.toString() ?? '';
     }
 
-    final changedPairs = asList(d['changed_words']).map((item) {
-      if (item is Map) {
-        final m = item.map((k, v) => MapEntry(k.toString(), v));
-        final script = (m['script'] ??
-                m['expected'] ??
-                m['from'] ??
-                m['original'] ??
-                m['word'] ??
-                '')
-            .toString();
-        final transcript =
-            (m['transcript'] ?? m['actual'] ?? m['to'] ?? m['hypothesis'] ?? '')
-                .toString();
-        return ChangedWordPair(
-          scriptWord: script,
-          transcriptWord: transcript,
-          sentenceLabel: (m['sentence'] ?? '').toString(),
-        );
+    final changedPairs = <ChangedWordPair>[];
+    for (final s in asList(d['sentences_aligned'])) {
+      if (s is! Map) continue;
+      final m = s.map((k, v) => MapEntry(k.toString(), v));
+      final wordDiff = asList(m['word_diff'] ?? m['words'] ?? m['tokens']);
+      for (final item in wordDiff) {
+        if (item is Map) {
+          final diff = item.map((k, v) => MapEntry(k.toString(), v));
+          final status = (diff['status'] ?? '').toString().toLowerCase();
+          if (status == 'changed') {
+            final script = (diff['script_word'] ?? diff['script'] ?? diff['word'] ?? '').toString();
+            final transcript = (diff['transcript_word'] ?? diff['transcript'] ?? diff['actual'] ?? '').toString();
+            final sentIdx = m['sentence_index'] ?? m['sent_idx'];
+            final label = sentIdx != null ? 'Sentence $sentIdx' : '';
+            changedPairs.add(ChangedWordPair(
+              scriptWord: script,
+              transcriptWord: transcript,
+              sentenceLabel: label,
+            ));
+          }
+        }
       }
-      return ChangedWordPair(
-        scriptWord: wordText(item),
-        transcriptWord: '',
-        sentenceLabel: '',
-      );
-    }).toList();
+    }
+
+    if (changedPairs.isEmpty) {
+      changedPairs.addAll(asList(d['changed_words']).map((item) {
+        if (item is Map) {
+          final m = item.map((k, v) => MapEntry(k.toString(), v));
+          final script = (m['script_word'] ??
+                  m['script'] ??
+                  m['expected'] ??
+                  m['from'] ??
+                  m['original'] ??
+                  m['word'] ??
+                  '')
+              .toString();
+          final transcript = (m['transcript_word'] ??
+                  m['transcript'] ??
+                  m['actual'] ??
+                  m['to'] ??
+                  m['hypothesis'] ??
+                  '')
+              .toString();
+          return ChangedWordPair(
+            scriptWord: script,
+            transcriptWord: transcript,
+            sentenceLabel: (m['sentence'] ?? '').toString(),
+          );
+        }
+        return ChangedWordPair(
+          scriptWord: wordText(item),
+          transcriptWord: '',
+          sentenceLabel: '',
+        );
+      }));
+    }
 
     final addedWords = asList(d['added_words'])
         .map((w) => AddedWord(word: wordText(w), sentenceLabel: ''))
