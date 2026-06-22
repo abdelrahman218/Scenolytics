@@ -176,10 +176,31 @@ def strip_emotion_labels(text):
 
 def parse_script_to_json(raw_text):
     """
-    Accepts raw script text directly (not a filepath) since the script is
-    passed in-memory from MLPipeline rather than read from a multipart
-    form field on disk.
+    Accepts raw script text. Three supported shapes:
+      1. JSON array of sentence dicts with 'content'/'emotion' keys (current DB format)
+      2. Flat text with 'sentence "EMOTION"' quoted-label markers
+      3. Fallback: whole text as one neutral sentence
     """
+    # 1. JSON array of structured sentence objects
+    stripped = raw_text.strip()
+    if stripped.startswith('['):
+        try:
+            data = json.loads(stripped)
+            if isinstance(data, list) and data and isinstance(data[0], dict):
+                sentences = []
+                for item in sorted(data, key=lambda d: d.get('sentence_order', 0)):
+                    content = item.get('content') or item.get('script_text') or item.get('text')
+                    if content:
+                        sentences.append({
+                            'script_text': content.strip(),
+                            'emotion': (item.get('emotion') or 'neutral').strip().lower(),
+                        })
+                if sentences:
+                    return sentences
+        except json.JSONDecodeError:
+            pass  # fall through to legacy parsing below
+
+    # 2. Quoted-emotion-label text format
     raw_flat = re.sub(r'[\r\n]+', ' ', raw_text)
     raw_flat = re.sub(r'\s+', ' ', raw_flat).strip()
     matches = re.findall(r'(.*?)"([^"]+)"', raw_flat)
@@ -191,7 +212,8 @@ def parse_script_to_json(raw_text):
                 sentences.append({'script_text': script_text, 'emotion': emotion.strip().lower()})
         if sentences:
             return sentences
-    # fallback: treat entire text as one neutral sentence
+
+    # 3. Fallback
     return [{'script_text': raw_text.strip(), 'emotion': 'neutral'}]
 
 def build_word_sent_map(sentences):
@@ -434,14 +456,14 @@ def _to_whisperx_lang(lang):
 
 import tempfile
 
-def _align_with_whisperx(audio_array, transcript_text, sample_rate=16000, language=None):
+def _align_with_whisperx(audio_array, transcript_text, sample_rate=16000, language=None, device=None):
     if language is None:
         language = _detect_language(transcript_text)
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
     whisperx_lang = _to_whisperx_lang(language)
-    print(f"[ALIGN] language={language} (whisperx={whisperx_lang}), words in transcript={len(transcript_text.split())}")
+    print(f"[ALIGN] language={language} (whisperx={whisperx_lang}), device={device}, words in transcript={len(transcript_text.split())}")
 
-    # FIX: was a hardcoded Colab path ("/content/temp_align.wav") that doesn't
-    # exist outside Colab/Drive mounts -- now a real cross-platform temp file.
     fd, temp_audio = tempfile.mkstemp(suffix=".wav")
     os.close(fd)
 
@@ -453,11 +475,12 @@ def _align_with_whisperx(audio_array, transcript_text, sample_rate=16000, langua
         audio = whisperx.load_audio(temp_audio)
 
         model_a, metadata = whisperx.load_align_model(
-            language_code=language
+            language_code=whisperx_lang,
+            device=device,
         )
         result_aligned = whisperx.align(
             segments, model_a, metadata,
-            audio, return_char_alignments=False,
+            audio, device, return_char_alignments=False,
         )
         del model_a
         gc.collect()

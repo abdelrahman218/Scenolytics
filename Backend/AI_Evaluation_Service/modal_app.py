@@ -114,40 +114,6 @@ class AIEvaluationService:
             s3.download_fileobj(bucket, video_key, tmp)
             return tmp.name
 
-    async def _write_results(self, evaluation_id: str, result: dict):
-        from core.database import execute_update
-
-        await execute_update(
-            """
-            UPDATE evaluations
-            SET evaluation_status=%s,
-                emotional_expression_score=%s,
-                vocal_tone_score=%s,
-                script_alignment_score=%s,
-                overall_performance_score=%s,
-                eye_expression_score=%s,
-                detected_emotions=%s,
-                detected_emotions_vocal=%s,
-                script_alignment_details=%s,
-                ai_feedback=%s,
-                completed_at=NOW()
-            WHERE evaluation_id=%s
-            """,
-            (
-                "completed",
-                result["emotional_expression_score"],
-                result["vocal_tone_score"],
-                result["script_alignment_score"],
-                result["overall_performance_score"],
-                json.dumps(result["eye_expression"]),
-                json.dumps(result["detected_emotions"]),
-                json.dumps(result["detected_emotions_vocal"]),
-                json.dumps(result.get("script_alignment_data")),
-                result["ai_feedback"],
-                evaluation_id,
-            ),
-        )
-
     async def _mark_failed(self, evaluation_id: str, error: str):
         from core.database import execute_update
 
@@ -183,15 +149,6 @@ class AIEvaluationService:
                 evaluation_id, media_id, pipeline, script,
                 rabbitmq_manager, submission_id, audio_only
             )
-
-            await self._write_results(evaluation_id, result)
-
-            if self.rabbitmq:
-                await self.rabbitmq.publish_evaluation_completed(
-                    evaluation_id,
-                    **result
-                )
-
             return {"status": "ok"}
 
         except Exception as e:
@@ -201,3 +158,33 @@ class AIEvaluationService:
     @modal.fastapi_endpoint(method="GET")
     async def health(self):
         return {"status": "ok"}
+# ── Web API (CPU only — no GPU needed for read endpoints) ──────────────────
+@app.function(
+    image=image,
+    secrets=[modal.Secret.from_name("ai-evaluation-secrets")],
+)
+@modal.asgi_app()
+def fastapi_app():
+    from dotenv import load_dotenv
+    load_dotenv()
+
+    from fastapi import FastAPI
+    from api.routes.evaluation import router as evaluation_router
+    from core.database import init_db  
+
+    web_app = FastAPI(title="Scenolytics Evaluation API")
+
+    @web_app.on_event("startup")
+    async def startup():
+        await init_db() 
+
+    web_app.include_router(evaluation_router)
+
+    @web_app.get("/health")
+    async def health():
+        return {"status": "ok"}
+
+    web_app.state.ml_pipeline = None
+    web_app.state.rabbitmq_manager = None
+
+    return web_app

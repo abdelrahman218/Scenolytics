@@ -1781,14 +1781,16 @@ class MLPipeline:
             if not sentences:
                 logger.warning("Script parsed to zero sentences -- script score = 0.")
                 return 0.0, None
-            logger.info("Parsed script: %d", sentences)
             logger.info("Parsed script: %d sentences (first=%s)", len(sentences), sentences[0])
 
             joined_script = " ".join(s["script_text"] for s in sentences)
             detected_lang = script._detect_language(joined_script)
             logger.debug("[DEBUG] Detected language=%s", detected_lang)
  
-            logger.info("Running local SeamlessM4T transcription (lang=%s)...", detected_lang)
+            logger.info(
+                "Running local SeamlessM4T transcription (lang=%s). Audio duration: %.2fs",
+                detected_lang, len(audio_array) / sr,
+            )
             transcription = script._transcribe_with_chunking(
                 self.script_processor,
                 self.script_model,
@@ -1796,15 +1798,14 @@ class MLPipeline:
                 audio_array,
                 tgt_lang=detected_lang,
             )
- 
+            logger.info(
+                "Transcript length: %d words. Full transcript: %s",
+                len(transcription.split()), transcription,
+            )
             if not transcription or not transcription.strip():
                 logger.warning("Empty transcript from local SeamlessM4T model")
                 return 0.0, None
  
-            logger.info(
-                "Transcript length: %d words: %s...",
-                len(transcription.split()), transcription[:80],
-            )
  
             # Force-align transcript words to audio timestamps via WhisperX
             aligned_words = []
@@ -1883,7 +1884,6 @@ class MLPipeline:
             sample_rate=sample_rate,
             language=language,
             device=self.script_device,
-            align_cache=self._whisperx_align_cache,
         )
  
     async def _score_script_alignment(

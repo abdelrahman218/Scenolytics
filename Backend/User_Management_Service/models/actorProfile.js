@@ -3,8 +3,22 @@ import pool from '../config/mysql.js';
 class ActorProfile {
   static async create(profile) {
     const [result] = await pool.execute(
-      'INSERT INTO actor_profiles (id, user_id, display_name, bio, height_cm, age, gender, ethnicity, body_type, genres, experience_years, portfolio_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [profile.id, profile.user_id, profile.display_name, profile.bio, profile.height_cm, profile.age, profile.gender, profile.ethnicity, profile.body_type, profile.genres, profile.experience_years, profile.portfolio_url]
+      'INSERT INTO actor_profiles (id, user_id, display_name, bio, height_cm, age, gender, ethnicity, body_type, personality_traits, genres, experience_years, portfolio_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        profile.id,
+        profile.user_id,
+        profile.display_name ?? null,
+        profile.bio ?? null,
+        profile.height_cm ?? null,
+        profile.age ?? null,
+        profile.gender ?? null,
+        profile.ethnicity ?? null,
+        profile.body_type ?? null,
+        JSON.stringify(profile.personality_traits ?? []),
+        JSON.stringify(profile.genres ?? []),
+        profile.experience_years ?? null,
+        profile.portfolio_url ?? null,
+      ]
     );
     return result;
   }
@@ -21,8 +35,21 @@ class ActorProfile {
 
   static async update(id, profile) {
     const [result] = await pool.execute(
-      'UPDATE actor_profiles SET display_name = ?, bio = ?, height_cm = ?, age = ?, gender = ?, ethnicity = ?, body_type = ?, genres = ?, experience_years = ? WHERE id = ?',
-      [profile.display_name, profile.bio, profile.height_cm, profile.age, profile.gender, profile.ethnicity, profile.body_type, profile.genres, profile.experience_years, id]
+      'UPDATE actor_profiles SET display_name = ?, bio = ?, height_cm = ?, age = ?, gender = ?, ethnicity = ?, body_type = ?, personality_traits = ?, genres = ?, experience_years = ?, portfolio_url = ? WHERE id = ?',
+      [
+        profile.display_name ?? null,
+        profile.bio ?? null,
+        profile.height_cm ?? null,
+        profile.age ?? null,
+        profile.gender ?? null,
+        profile.ethnicity ?? null,
+        profile.body_type ?? null,
+        JSON.stringify(profile.personality_traits ?? []),
+        JSON.stringify(profile.genres ?? []),
+        profile.experience_years ?? null,
+        profile.portfolio_url ?? null,
+        id,
+      ]
     );
     return result;
   }

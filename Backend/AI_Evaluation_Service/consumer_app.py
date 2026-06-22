@@ -1,8 +1,3 @@
-# consumer_app.py — run manually before a demo/discussion:
-#   modal run consumer_app.py
-# Stop with Ctrl+C when the session is over. No deploy, no idle billing
-# outside the window it's actually running.
-
 import json
 import os
 import uuid
@@ -22,7 +17,9 @@ AUDITION_EVENTS_QUEUE = "ai_evaluation_audition_events_queue"
 @app.function(
     image=image,
     secrets=[modal.Secret.from_name("ai-evaluation-secrets")],
-    timeout=60 * 60 * 4,  # 4 hours — adjust to however long a session might run
+    timeout=86400,  # max allowed; the loop is expected to run indefinitely
+    min_containers=1,
+    max_containers=1,  # exactly one consumer — avoid duplicate message processing
 )
 async def run_consumer():
     import asyncio
@@ -142,7 +139,16 @@ async def run_consumer():
     connection = await aio_pika.connect_robust(RABBITMQ_URL, heartbeat=60)
     channel = await connection.channel()
     await channel.set_qos(prefetch_count=10)
+
+    exchange = await channel.declare_exchange(
+        "auditions_exchange", aio_pika.ExchangeType.TOPIC, durable=True
+    )
     queue = await channel.declare_queue(AUDITION_EVENTS_QUEUE, durable=True)
+
+    for routing_key in ("audition.created", "audition.updated", "audition.submitted"):
+        await queue.bind(exchange, routing_key=routing_key)
+
+    logger.info("Listening on %s — leave this running during your session, Ctrl+C to stop.", AUDITION_EVENTS_QUEUE)
 
     logger.info("Listening on %s — leave this running during your session, Ctrl+C to stop.", AUDITION_EVENTS_QUEUE)
 
@@ -155,8 +161,3 @@ async def run_consumer():
                     asyncio.create_task(handle_event(message.routing_key, data))
             except Exception as e:
                 logger.error("Failed to process message: %s", e, exc_info=True)
-
-
-@app.local_entrypoint()
-def main():
-    run_consumer.remote()
