@@ -40,6 +40,8 @@ export const createAudition = async (req, res, next) => {
       .status(201)
       .json({ message: "Audition created successfully", audition });
   } catch (error) {
+    console.log("Error creating audition");
+    console.error(error);
     next(error);
   }
 };
@@ -49,6 +51,8 @@ export const getAllDirectorAuditions = async (req, res, next) => {
     const auditions = await Audition.findByDirectorId(req.user.user_id);
     return res.status(200).json(auditions);
   } catch (error) {
+    console.log("Error getting all director auditions");
+    console.error(error);
     next(error);
   }
 };
@@ -87,6 +91,8 @@ export const updateAudition = async (req, res, next) => {
       .status(200)
       .json({ message: "Audition updated successfully", audition });
   } catch (error) {
+    console.log("Error updating audition");
+    console.error(error);
     next(error);
   }
 };
@@ -101,6 +107,8 @@ export const deleteAudition = async (req, res, next) => {
     );
     return res.status(200).json({ message: "Audition deleted successfully" });
   } catch (error) {
+    console.log("Error deleting audition");
+    console.error(error);
     next(error);
   }
 };
@@ -126,6 +134,8 @@ export const inviteActorsToAudition = async (req, res, next) => {
       .status(201)
       .json({ message: "Actors invited successfully", invitations });
   } catch (error) {
+    console.log("Error inviting actors to audition");
+    console.error(error);
     next(error);
   }
 };
@@ -138,6 +148,8 @@ export const getDirectorPendingInvitations = async (req, res, next) => {
     );
     return res.status(200).json(invitations);
   } catch (error) {
+    console.log("Error getting director pending invitations");
+    console.error(error);
     next(error);
   }
 };
@@ -150,6 +162,8 @@ export const getAuditionPendingInvitations = async (req, res, next) => {
     );
     return res.status(200).json(invitations);
   } catch (error) {
+    console.log("Error getting audition pending invitations");
+    console.error(error);
     next(error);
   }
 };
@@ -166,6 +180,8 @@ export const getActorsForAudition = async (req, res, next) => {
     const actor_ids = data.map((actor) => actor.actor_id);
     return res.status(200).json(actor_ids);
   } catch (error) {
+    console.log("Error getting actors for audition");
+    console.error(error);
     next(error);
   }
 };
@@ -177,6 +193,8 @@ export const getAuditionSubmissions = async (req, res, next) => {
     );
     return res.status(200).json(submissions);
   } catch (error) {
+    console.log("Error getting audition submissions");
+    console.error(error);
     next(error);
   }
 };
@@ -218,6 +236,8 @@ export const reviewSubmission = async (req, res, next) => {
     );
     return res.status(200).json(submission);
   } catch (error) {
+    console.log("Error reviewing submission");
+    console.error(error);
     next(error);
   }
 };
@@ -227,6 +247,8 @@ export const getAuditionCallbacks = async (req, res, next) => {
     const callbacks = await Callback.findByAuditionId(req.params.audition_id);
     return res.status(200).json(callbacks);
   } catch (error) {
+    console.log("Error getting audition callbacks");
+    console.error(error);
     next(error);
   }
 };
@@ -248,6 +270,8 @@ export const rescheduleCallback = async (req, res, next) => {
     );
     return res.status(200).json(callback);
   } catch (error) {
+    console.log("Error rescheduling callback");
+    console.error(error);
     next(error);
   }
 };
@@ -278,6 +302,8 @@ export const createNewCallbackMeeting = async (req, res, next) => {
       .status(200)
       .json({ message: "New Callback link created successfully", link });
   } catch (error) {
+    console.log("Error creating new callback meeting");
+    console.error(error);
     next(error);
   }
 };
@@ -300,6 +326,8 @@ export const reviewCallback = async (req, res, next) => {
     );
     return res.status(200).json({ message: "Callback reviewed successfully", callback });
   } catch (error) {
+    console.log("Error reviewing callback");
+    console.error(error);
     next(error);
   }
 };
@@ -318,6 +346,8 @@ export const connectGoogleMeet = async (req, res, next) => {
   try {
     res.redirect(buildGoogleMeetAuthUrl(req.user.user_id));
   } catch (error) {
+    console.log("Error connecting google meet");
+    console.error(error);
     next(error);
   }
 };
@@ -327,6 +357,8 @@ export const connectGoogleMeetAuthUrl = async (req, res, next) => {
   try {
     res.status(200).json({ url: buildGoogleMeetAuthUrl(req.user.user_id) });
   } catch (error) {
+    console.log("Error connecting google meet auth url");
+    console.error(error);
     next(error);
   }
 };
@@ -359,8 +391,31 @@ export const connectGoogleMeetCallBack = async (req, res, next) => {
     const frontendUrl = FRONTEND_LINK;
     res.redirect(`${frontendUrl}?google_connected=true`);
   } catch (error) {
-    console.log(error);
+    console.log("Error connecting google meet call back");
+    console.error(error);
     const frontendUrl = FRONTEND_LINK;
     res.redirect(`${frontendUrl}?google_connected=false&error=connection_failed`);
+  }
+};
+
+export const disconnectGoogleMeet = async (req, res, next) => {
+  try {
+    await GoogleCalendarCredentials.deleteByDirectorId(req.user.user_id);
+    return res.status(200).json({ message: "Google connection disconnected successfully" });
+  } catch (error) {
+    console.log("Error disconnecting google meet");
+    console.error(error);
+    next(error);
+  }
+};
+
+export const getGoogleMeetConnectionStatus = async (req, res, next) => {
+  try {
+    const googleCredentials = await GoogleCalendarCredentials.findByDirectorId(req.user.user_id);
+    return res.status(200).json({ isConnectedToGoogle: googleCredentials ? true : false });
+  } catch (error) {
+    console.log("Error getting google meet connection status");
+    console.error(error);
+    next(error);
   }
 };

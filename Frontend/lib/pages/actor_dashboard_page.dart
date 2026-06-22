@@ -398,7 +398,7 @@ class _ActorHero extends StatelessWidget {
       ),
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
@@ -1038,7 +1038,7 @@ class _ActorSubmissionCard extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,

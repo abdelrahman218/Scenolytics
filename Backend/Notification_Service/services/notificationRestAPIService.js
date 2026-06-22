@@ -8,6 +8,8 @@ export const getNotificationPreferences = async (req, res, next) => {
     );
     return res.status(200).json(preferences);
   } catch (error) {
+    console.log("Error getting notification preferences");
+    console.error(error);
     next(error);
   }
 };
@@ -20,6 +22,8 @@ export const updateNotificationPreferences = async (req, res, next) => {
     );
     return res.status(200).json(preferences);
   } catch (error) {
+    console.log("Error updating notification preferences");
+    console.error(error);
     next(error);
   }
 };
@@ -29,6 +33,8 @@ export const getUserNotifications = async (req, res, next) => {
     const notifications = await Notification.findByUserId(req.user.user_id);
     return res.status(200).json({ notifications });
   } catch (error) {
+    console.log("Error getting user notifications");
+    console.error(error);
     next(error);
   }
 };
@@ -40,6 +46,8 @@ export const markNotificationAsRead = async (req, res, next) => {
     );
     return res.status(200).json(notification);
   } catch (error) {
+    console.log("Error marking notification as read");
+    console.error(error);
     return res
       .status(500)
       .json({ message: "Couldn't mark notification as read" });
@@ -53,6 +61,8 @@ export const deleteNotification = async (req, res, next) => {
       .status(200)
       .json({ message: "Notification deleted successfully" });
   } catch (error) {
+    console.log("Error deleting notification");
+    console.error(error);
     next(error);
   }
 };

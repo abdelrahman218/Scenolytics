@@ -32,6 +32,27 @@ class AppEnv {
     return t.isEmpty ? 'http://localhost' : t;
   }
 
+  /// Optional separate base URL for the AI Evaluation service (e.g. Modal).
+  /// When empty, evaluations use [apiBaseUrl] via the API gateway (`/api/v1/evaluations/...`).
+  static const String _evaluationApiUrlEnv = String.fromEnvironment(
+    'SCENO_EVALUATION_API_URL',
+    defaultValue: '',
+  );
+
+  static String get evaluationApiBaseUrl {
+    final t = _evaluationApiUrlEnv.trim();
+    if (t.isNotEmpty) return t.replaceAll(RegExp(r'/$'), '');
+    return apiBaseUrl;
+  }
+
+  /// Path prefix for evaluation GET routes — gateway vs direct Modal differ.
+  static String get evaluationApiPathPrefix {
+    if (_evaluationApiUrlEnv.trim().isNotEmpty) {
+      return '/api/evaluations';
+    }
+    return '/api/v1/evaluations';
+  }
+
   /// Full Socket.IO server URL (`http(s)://host:port`). When empty, we build from [apiBaseUrl]
   /// and [notificationSocketWsPort].
   static const String _notificationSocketUrlEnv = String.fromEnvironment(
@@ -99,6 +120,82 @@ class AppEnv {
   static String get minioVideosBase {
     final t = _minioVideosBaseEnv.trim();
     return t.isEmpty ? 'http://localhost:9000/videos' : t;
+  }
+
+  /// Optional explicit MinIO/S3 origin (`scheme://host[:port]`, no path).
+  /// Use on LAN devices, e.g. `http://192.168.1.42:9000`.
+  static const String _minioOriginEnv = String.fromEnvironment(
+    'SCENO_MINIO_ORIGIN',
+    defaultValue: '',
+  );
+
+  static String get minioOrigin {
+    final explicit = _minioOriginEnv.trim();
+    if (explicit.isNotEmpty) {
+      return explicit.replaceAll(RegExp(r'/$'), '');
+    }
+
+    try {
+      final u = Uri.parse(minioVideosBase);
+      if (u.hasScheme && u.host.isNotEmpty) {
+        final host = u.host.toLowerCase();
+        if (host != 'localhost' && host != '127.0.0.1') {
+          return Uri(
+            scheme: u.scheme,
+            host: u.host,
+            port: u.hasPort ? u.port : null,
+          ).toString().replaceAll(RegExp(r'/$'), '');
+        }
+      }
+    } catch (_) {}
+
+    // When the API uses a LAN host, MinIO is usually on the same machine at 9000.
+    try {
+      final api = Uri.parse(apiBaseUrl);
+      final host = api.host.toLowerCase();
+      if (api.hasScheme &&
+          host.isNotEmpty &&
+          host != 'localhost' &&
+          host != '127.0.0.1') {
+        return Uri(scheme: api.scheme, host: api.host, port: 9000)
+            .toString()
+            .replaceAll(RegExp(r'/$'), '');
+      }
+    } catch (_) {}
+
+    return 'http://localhost:9000';
+  }
+
+  /// Resolves a MinIO object reference to a URL the app/browser can GET.
+  ///
+  /// Accepts either an already-absolute `http(s)://…` URL (returned as-is) or a
+  /// path-style `bucket/key` reference (e.g. `eye-analysis/…png`), which is
+  /// prefixed with [minioOrigin]. Returns null for empty input.
+  ///
+  /// Rewrites `localhost` / `127.0.0.1` MinIO hosts to [minioOrigin] so eye
+  /// images saved by the backend still load on phones testing against a LAN API.
+  static String? minioObjectUrl(String? ref) {
+    final r = ref?.trim();
+    if (r == null || r.isEmpty) return null;
+    final lower = r.toLowerCase();
+    if (lower.startsWith('http://') || lower.startsWith('https://')) {
+      try {
+        final u = Uri.parse(r);
+        final host = u.host.toLowerCase();
+        if (host == 'localhost' || host == '127.0.0.1') {
+          final origin = Uri.parse(minioOrigin);
+          return Uri(
+            scheme: origin.scheme,
+            host: origin.host,
+            port: origin.hasPort ? origin.port : null,
+            path: u.path,
+          ).toString();
+        }
+      } catch (_) {}
+      return r;
+    }
+    final cleaned = r.startsWith('/') ? r.substring(1) : r;
+    return '$minioOrigin/$cleaned';
   }
 
   /// Optional compile-time fallbacks. The app uses JWTs from in-app sign-in; these

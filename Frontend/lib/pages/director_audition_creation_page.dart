@@ -877,7 +877,7 @@ class _ScriptSentenceSlot {
   _ScriptSentenceSlot();
 
   final TextEditingController controller = TextEditingController();
-  String emotion = 'neutral';
+  String emotion = 'calm';
 }
 
 /// Top hero card — same gradient family as the rest of the app.

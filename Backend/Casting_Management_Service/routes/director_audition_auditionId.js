@@ -22,6 +22,7 @@ import {
   checkRequiredFieldsReviewSubmission,
   checkSubmissionExists,
   checkValidValuesAuditionData,
+  checkValidValuesAuditionScriptEmotions,
   checkValidValuesReviewCallback,
   checkValidValuesReviewSubmission,
 } from "../validators/director.js";
@@ -31,7 +32,7 @@ const router = express.Router({ mergeParams: true });
 // ==================== AUDITION ENDPOINTS ====================
 
 // Update audition
-const updateAudtionValidators = [checkValidValuesAuditionData];
+const updateAudtionValidators = [checkValidValuesAuditionData, checkValidValuesAuditionScriptEmotions];
 router.patch("/", updateAudtionValidators, updateAudition);
 
 // Delete audition

@@ -19,7 +19,7 @@ export const validateJWTToken = (req, res, next) => {
         const decoded = jwt.verify(token, JWT_SECRET);
         req.user = decoded;
         next();
-    } catch (err) {
+    } catch (error) {
         return res.status(401).json({
             message: "Invalid or expired token",
         });
@@ -37,7 +37,7 @@ export const validateDirectorAccess = (req, res, next) => {
         }
         req.user = decoded;
         next();
-    } catch (err) {
+    } catch (error) {
         return res.status(401).json({
             message: "Invalid or expired token",
         });
@@ -55,7 +55,7 @@ export const validateActorAccess = (req, res, next) => {
         }
         req.user = decoded;
         next();
-    } catch (err) {
+    } catch (error) {
         return res.status(401).json({
             message: "Invalid or expired token",
         });

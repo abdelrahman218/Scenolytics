@@ -2,18 +2,20 @@
 
 import 'package:flutter/material.dart';
 
+// Emotions a director can assign to a script sentence. `fearful`, `disgust`
+// and `neutral` are intentionally omitted from the picker to reduce confusion,
+// even though the backend ENUM still accepts them (frontend-only narrowing).
 const List<String> kAuditionScriptEmotions = <String>[
-  'neutral',
   'calm',
   'happy',
   'sad',
   'angry',
-  'fearful',
-  'disgust',
   'surprised',
 ];
 
-/// Emoji glyph for each backend emotion enum (1:1 with [kAuditionScriptEmotions]).
+/// Emoji glyph per emotion. Includes emotions no longer selectable in the
+/// picker (`neutral`, `fearful`, `disgust`) so legacy auditions and backend
+/// evaluation data (e.g. tone segments tagged `neutral`) still render.
 const Map<String, String> kAuditionEmotionEmoji = <String, String>{
   'neutral': '😐',
   'calm': '😌',
@@ -68,10 +70,12 @@ const List<String> kAuditionBodyTypes = <String>[
   'Any',
 ];
 
-/// Maps common synonyms / labels to backend emotion strings.
+/// Maps common synonyms / labels to a *selectable* emotion. Emotions removed
+/// from the picker (`neutral`, `fearful`, `disgust`) collapse to `calm` so the
+/// chosen value always exists in [kAuditionScriptEmotions].
 String coerceAuditionEmotion(String raw) {
   final key = raw.trim().toLowerCase();
-  if (key.isEmpty) return 'neutral';
+  if (key.isEmpty) return 'calm';
   if (kAuditionScriptEmotions.contains(key)) return key;
 
   const synonyms = <String, String>{
@@ -80,18 +84,22 @@ String coerceAuditionEmotion(String raw) {
     'excited': 'happy',
     'mad': 'angry',
     'anger': 'angry',
-    'scared': 'fearful',
-    'afraid': 'fearful',
-    'fear': 'fearful',
     'surprise': 'surprised',
-    'disgusted': 'disgust',
-    'neutral_tone': 'neutral',
+    // Removed-from-picker emotions fall back to a neutral-ish selectable value.
+    'neutral': 'calm',
+    'neutral_tone': 'calm',
+    'fearful': 'sad',
+    'scared': 'sad',
+    'afraid': 'sad',
+    'fear': 'sad',
+    'disgust': 'angry',
+    'disgusted': 'angry',
   };
   final mapped = synonyms[key];
   if (mapped != null && kAuditionScriptEmotions.contains(mapped)) {
     return mapped;
   }
-  return 'neutral';
+  return 'calm';
 }
 
 String emotionLabelForUi(String backendValue) {

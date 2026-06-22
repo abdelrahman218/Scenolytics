@@ -19,6 +19,7 @@ class ActorAuditionSubmission {
     this.actorId,
     this.actorProfile,
     this.evaluationCompleted = true,
+    this.evaluationDetail,
   });
 
   final String id;
@@ -48,6 +49,14 @@ class ActorAuditionSubmission {
   /// Casting `submission_status` (`pending`, `under_review`, `accepted`, `rejected`).
   final AuditionSubmissionStatus submissionStatus;
 
+  /// Raw AI evaluation payload from `GET /api/v1/evaluations/by-submission/:id`.
+  ///
+  /// Holds the full per-submission breakdown (`detected_emotions_video`,
+  /// `detected_emotions_vocal`, `script_alignment_details`, `eye_expression_score`,
+  /// `tone_analysis`, `ai_feedback`, …) so detail tabs can render real data.
+  /// Null when no evaluation row exists yet (analysis pending).
+  final Map<String, dynamic>? evaluationDetail;
+
   ActorAuditionSubmission copyWith({
     String? id,
     String? actorName,
@@ -66,6 +75,7 @@ class ActorAuditionSubmission {
     String? actorId,
     Map<String, dynamic>? actorProfile,
     bool? evaluationCompleted,
+    Map<String, dynamic>? evaluationDetail,
   }) {
     return ActorAuditionSubmission(
       id: id ?? this.id,
@@ -85,6 +95,7 @@ class ActorAuditionSubmission {
       mediaId: mediaId ?? this.mediaId,
       submissionStatus: submissionStatus ?? this.submissionStatus,
       evaluationCompleted: evaluationCompleted ?? this.evaluationCompleted,
+      evaluationDetail: evaluationDetail ?? this.evaluationDetail,
     );
   }
 }

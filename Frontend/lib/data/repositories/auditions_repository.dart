@@ -341,18 +341,31 @@ class AuditionsRepository {
       if (nested is num) merged['eyes_analysis_score'] = nested.round();
     }
 
-    final tone = evaluation['tone_analysis'];
-    if (tone is num) {
-      merged['tone_analysis_score'] = tone.round();
-    } else if (tone is Map) {
-      final nested = tone['score'] ?? tone['overall_score'];
-      if (nested is num) merged['tone_analysis_score'] = nested.round();
+    // Tone score lives at the top level (`tone_score`) in the AI response.
+    // `tone_analysis` is a separate object holding the per-segment timeline
+    // (timestamps, pitch/loudness) and usually carries no scalar score, so we
+    // read `tone_score` first and only fall back to a nested score.
+    final toneScore = evaluation['tone_score'];
+    if (toneScore is num) {
+      merged['tone_analysis_score'] = toneScore.round();
+    } else {
+      final tone = evaluation['tone_analysis'];
+      if (tone is num) {
+        merged['tone_analysis_score'] = tone.round();
+      } else if (tone is Map) {
+        final nested = tone['score'] ?? tone['overall_score'];
+        if (nested is num) merged['tone_analysis_score'] = nested.round();
+      }
     }
 
     final status = evaluation['evaluation_status']?.toString();
     if (status != null && status.isNotEmpty) {
       merged['evaluation_status'] = status;
     }
+
+    // Retain the full evaluation payload so detail tabs can render the
+    // per-sentence / script / eyes / tone breakdowns (not just the scalars).
+    merged['__evaluation_detail'] = evaluation;
 
     return merged;
   }
@@ -1318,6 +1331,11 @@ class AuditionsRepository {
 
     final actorId = _actorUserIdFromSubmission(source);
 
+    final evaluationDetailRaw = source['__evaluation_detail'];
+    final evaluationDetail = evaluationDetailRaw is Map
+        ? evaluationDetailRaw.map((k, v) => MapEntry(k.toString(), v))
+        : null;
+
     return ActorAuditionSubmission(
       id: id,
       actorId: actorId,
@@ -1342,6 +1360,7 @@ class AuditionsRepository {
         source['submission_status'] ?? source['submissionStatus'],
       ),
       evaluationCompleted: evaluationCompleted,
+      evaluationDetail: evaluationDetail,
     );
   }
 

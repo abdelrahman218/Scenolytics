@@ -47,7 +47,7 @@ class AuthFlowScaffold extends StatelessWidget {
               return _NarrowLayout(
                 title: title,
                 subtitle: subtitle,
-                formChild: _FormCard(child: child),
+                formChild: _FormCard(scrollable: false, child: child),
               );
             },
           ),
@@ -122,6 +122,7 @@ class _WideLayout extends StatelessWidget {
                 child: _FormColumn(
                   title: title,
                   subtitle: subtitle,
+                  fillRemaining: true,
                   child: formChild,
                 ),
               ),
@@ -146,26 +147,30 @@ class _NarrowLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(
-          20,
-          24,
-          20,
-          24 + MediaQuery.viewInsetsOf(context).bottom,
-        ),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            maxWidth: AuthFlowScaffold._maxFormWidth,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(
+            20,
+            24,
+            20,
+            24 + MediaQuery.viewInsetsOf(context).bottom,
           ),
-          child: _FormColumn(
-            title: title,
-            subtitle: subtitle,
-            showLogo: true,
-            child: formChild,
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: constraints.maxHeight,
+              maxWidth: AuthFlowScaffold._maxFormWidth,
+            ),
+            child: _FormColumn(
+              title: title,
+              subtitle: subtitle,
+              showLogo: true,
+              child: formChild,
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -176,6 +181,7 @@ class _FormColumn extends StatelessWidget {
     required this.subtitle,
     required this.child,
     this.showLogo = false,
+    this.fillRemaining = false,
   });
 
   final String title;
@@ -183,12 +189,17 @@ class _FormColumn extends StatelessWidget {
   final Widget child;
   final bool showLogo;
 
+  /// When true (wide desktop layout), the form expands in a bounded column.
+  /// Must stay false inside [SingleChildScrollView] on mobile/narrow layouts.
+  final bool fillRemaining;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final logo = ScenolyticsBranding.of(context).logo;
     return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisAlignment:
+          fillRemaining ? MainAxisAlignment.center : MainAxisAlignment.start,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (showLogo) ...[
@@ -221,16 +232,17 @@ class _FormColumn extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 22),
-        Flexible(child: child),
+        if (fillRemaining) Flexible(child: child) else child,
       ],
     );
   }
 }
 
 class _FormCard extends StatelessWidget {
-  const _FormCard({required this.child});
+  const _FormCard({required this.child, this.scrollable = true});
 
   final Widget child;
+  final bool scrollable;
 
   @override
   Widget build(BuildContext context) {
@@ -256,12 +268,14 @@ class _FormCard extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(22, 24, 22, 22),
-        child: SingleChildScrollView(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.viewInsetsOf(context).bottom,
-          ),
-          child: child,
-        ),
+        child: scrollable
+            ? SingleChildScrollView(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.viewInsetsOf(context).bottom,
+                ),
+                child: child,
+              )
+            : child,
       ),
     );
   }

@@ -55,7 +55,7 @@
         "group": null
       },
       "7Dua43_z": {
-        "type": "task/http-request@1",
+        "type": "task/http-request@2",
         "pos": {
           "x": 1896,
           "y": -1088
@@ -90,19 +90,19 @@
           ],
           "scriptsModifyEnvVars": true,
           "trackGlobalEnvironment": true,
-          "requestVariables__expanded": true
+          "requestVariables__expanded": true,
+          "ignoreTestResults": true
         },
         "ui": {
           "data": {},
           "namedInputsExpanded": true
-        },
-        "group": null
+        }
       },
       "2unVkuDD": {
-        "type": "task/http-request@1",
+        "type": "task/http-request@2",
         "pos": {
-          "x": 2512,
-          "y": -1136
+          "x": 2504,
+          "y": -1088
         },
         "config": {
           "element": {
@@ -134,13 +134,13 @@
           ],
           "scriptsModifyEnvVars": true,
           "trackGlobalEnvironment": true,
-          "requestVariables__expanded": true
+          "requestVariables__expanded": true,
+          "ignoreTestResults": true
         },
         "ui": {
           "data": {},
           "namedInputsExpanded": true
-        },
-        "group": null
+        }
       },
       "FyOw5LGb": {
         "type": "system/module@1",
@@ -282,6 +282,6 @@
   "info": {
     "_postman_id": "4cb15d1b-de7d-4be2-b4bd-35e0660814bb"
   },
-  "_postman_exported_at": "2026-05-11T13:36:11.029Z",
+  "_postman_exported_at": "2026-06-12T15:35:51.022Z",
   "_postman_exported_using": "Postman/Local Mode"
 }

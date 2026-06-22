@@ -5,12 +5,14 @@ import {
   getDirectorPendingInvitations,
   connectGoogleMeet,
   connectGoogleMeetAuthUrl,
-  connectGoogleMeetCallBack,
+  disconnectGoogleMeet,
+  getGoogleMeetConnectionStatus
 } from "../services/director.js";
 import {
   checkDirectorOwnershipOfAudition,
   checkRequiredFieldsCreateAudition,
   checkValidValuesAuditionData,
+  checkValidValuesAuditionScriptEmotions,
 } from "../validators/director.js";
 import { checkAuditionExists } from "../validators/general.js";
 import directorAuditionRouter from "./director_audition_auditionId.js";
@@ -22,6 +24,7 @@ const router = express.Router();
 const createAuditionValidators = [
   checkRequiredFieldsCreateAudition,
   checkValidValuesAuditionData,
+  checkValidValuesAuditionScriptEmotions
 ];
 router.post(
   "/auditions/create_audition",
@@ -52,5 +55,7 @@ router.get("/invitations/pending", getDirectorPendingInvitations);
 
 router.get("/google/connect", connectGoogleMeet);
 router.get("/google/connect-url", connectGoogleMeetAuthUrl);
+router.get("/google/connection-status", getGoogleMeetConnectionStatus);
+router.delete("/google/disconnect", disconnectGoogleMeet);
 
 export default router;

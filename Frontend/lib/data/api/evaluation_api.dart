@@ -2,17 +2,21 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../../config/app_env.dart';
 import 'casting_api.dart';
 
-/// Reads AI evaluation rows via the API gateway (`/api/v1/evaluations/...`).
+/// Reads AI evaluation rows via the API gateway or a direct evaluation service URL.
 class EvaluationApi {
   EvaluationApi({
     required String baseUrl,
+    String? pathPrefix,
     http.Client? client,
   })  : _baseUri = Uri.parse(baseUrl),
+        _pathPrefix = pathPrefix ?? AppEnv.evaluationApiPathPrefix,
         _client = client ?? http.Client();
 
   final Uri _baseUri;
+  final String _pathPrefix;
   final http.Client _client;
 
   Uri _uri(String path) => _baseUri.resolve(path);
@@ -25,7 +29,7 @@ class EvaluationApi {
     final id = submissionId.trim();
     if (id.isEmpty) return null;
     return _getEvaluation(
-      '/api/v1/evaluations/by-submission/$id',
+      '$_pathPrefix/by-submission/$id',
       'submission $id',
       bearerToken: bearerToken,
     );
@@ -39,7 +43,7 @@ class EvaluationApi {
     final id = mediaId.trim();
     if (id.isEmpty) return null;
     return _getEvaluation(
-      '/api/v1/evaluations/by-media/$id',
+      '$_pathPrefix/by-media/$id',
       'media $id',
       bearerToken: bearerToken,
     );

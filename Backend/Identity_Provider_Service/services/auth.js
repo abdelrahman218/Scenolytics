@@ -27,6 +27,8 @@ export const signUp = async (req, res, next) => {
       user
     });
   } catch (error) {
+    console.log("Error signing up");
+    console.error(error);
     next(error);
   }
 };
@@ -61,6 +63,8 @@ export const logIn = async (req, res, next) => {
       },
     });
   } catch (error) {
+    console.log("Error logging in");
+    console.error(error);
     next(error);
   }
 };
@@ -86,6 +90,8 @@ export const validateUserExists = async (req, res, next) => {
       },
     });
   } catch (error) {
+    console.log("Error validating user exists");
+    console.error(error);
     next(error);
   }
 };
@@ -107,6 +113,8 @@ export const deleteUser = async (req, res, next) => {
       message: "User deleted successfully",
     });
   } catch (error) {
+    console.log("Error deleting user");
+    console.error(error);
     next(error);
   }
 };
