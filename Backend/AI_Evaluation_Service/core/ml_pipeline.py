@@ -2,33 +2,34 @@
 ML Pipeline for AI Evaluation Service
 ======================================
 Integrates 3 trained models to evaluate audition videos:
-
+ 
   1. Video Emotion Model  -> emotional_expression_score (40%)
      - Architecture : ResNet50 + 2-layer Bidirectional LSTM + Attention
      - File         : ./models/best_video_emotion_model.h5
      - Framework    : TensorFlow / Keras
      - Input        : (1, 16, 224, 224, 3)  <- 16 frames @ 224x224, ImageNet-normalised
      - Face detector: OpenCV Haar cascade   <- matches training
-
+ 
   2. Audio Emotion Model  -> vocal_tone_score (35%)
      - Architecture : facebook/wav2vec2-base fine-tuned on RAVDESS
      - Folder       : ./emotion-recognition-final/
      - Framework    : PyTorch / HuggingFace Transformers
      - NEW: Supports sentence-level emotion detection with script alignment
-
+ 
   3. Script Alignment     -> script_alignment_score (25%)
      - Architecture : facebook/seamless-m4t-v2-large (ASR) + difflib
      - Framework    : transformers (SeamlessM4Tv2Model + AutoProcessor)
      - NEW: Optional - if no script provided, uses transcription only
-
+     - NEW: Runs fully locally -- no remote Colab/ngrok dependency
+ 
   Eye contact score (informational only -- not in overall_performance_score)
      - Method : dlib 68-point face landmark EAR (Eye Aspect Ratio)
      - Replaces MediaPipe FaceMesh which broke on mediapipe >= 0.10
-
+ 
 Overall score = emotional_expression * 0.40
               + vocal_tone            * 0.35
               + script_alignment      * 0.25
-
+ 
 Changelog
 ---------
 - Added sentence-level emotion detection for audio
@@ -38,21 +39,23 @@ Changelog
 - Fixed SeamlessM4T tokenizer Metaspace bug (patch tokenizer.json in place)
 - Fixed memory issues with 8-bit quantization and offloading
 - Fixed logging errors and task parameter issues
+- Migrated script alignment from remote Colab/ngrok API to a fully local
+  SeamlessM4T v2 model loaded from disk (SEAMLESS_MODEL_CANDIDATES)
 """
-
+ 
 # ---------------------------------------------------------------------------
 # Numpy 2.x compatibility shim -- must be before ALL other imports
 # ---------------------------------------------------------------------------
 import numpy as np
-
+ 
 _numpy_compat = {"NaN": np.nan, "Inf": np.inf}
 for _attr, _val in _numpy_compat.items():
     if not hasattr(np, _attr):
         setattr(np, _attr, _val)
-
+ 
 import os
 os.environ["TF_USE_LEGACY_KERAS"] = "1"
-
+ 
 import re
 import json
 import logging
@@ -62,15 +65,16 @@ import subprocess
 import tempfile
 import cv2
 import tensorflow as tf
-
+ 
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from collections import Counter
-
+ 
 from core.eye_analysis import analyze_eye_expression
-
+from core import script
+ 
 logger = logging.getLogger(__name__)
-
+ 
 # ---------------------------------------------------------------------------
 # Emotion label mapping -- shared by both video and audio models
 # ---------------------------------------------------------------------------
@@ -87,7 +91,7 @@ EMOTIONS = {
 EMOTION_NAMES: List[str] = list(EMOTIONS.values())
 NUM_CLASSES = len(EMOTION_NAMES)  # 8
 EXCLUDED_EMOTIONS = ["fearful", "disgust", "neutral"]
-
+ 
 def _get_valid_emotion(all_scores: dict) -> Tuple[str, float]:
     sorted_emotions = sorted(all_scores.items(), key=lambda x: x[1], reverse=True)
     for emotion, score in sorted_emotions:
@@ -107,23 +111,23 @@ FRAMES_PER_VIDEO = 10        # training: num_frames=16
 IMG_SIZE         = 160       # training: target_size=(224, 224)
 IMAGENET_MEAN    = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 IMAGENET_STD     = np.array([0.229, 0.224, 0.225], dtype=np.float32)
-
+ 
 # ---------------------------------------------------------------------------
 # Model file locations
 # ---------------------------------------------------------------------------
 VIDEO_MODEL_CANDIDATES = [
+    "/app/models/best_video_emotion_model.h5",  # Modal volume (scenolytics-models), mounted at MODEL_DIR in modal_app.py
     "./models/best_video_emotion_model.h5",
-    "/app/models/best_video_emotion_model.h5",
     "models/best_video_emotion_model.h5",
 ]
-
+ 
 AUDIO_MODEL_CANDIDATES = [
+    "/app/models/emotion-recognition-final",  # Modal volume (scenolytics-models), mounted at MODEL_DIR in modal_app.py
     "./emotion-recognition-final",
     "./models/emotion-recognition-final",
-    "/app/models/emotion-recognition-final",
     "models/emotion-recognition-final",
 ]
-
+ 
 # dlib shape predictor -- download from:
 # http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2
 DLIB_PREDICTOR_CANDIDATES = [
@@ -131,27 +135,24 @@ DLIB_PREDICTOR_CANDIDATES = [
     "/app/models/shape_predictor_68_face_landmarks.dat",
     "shape_predictor_68_face_landmarks.dat",
 ]
-
+ 
 # SeamlessM4T local model folder
-# Prioritize fp32 converted model to avoid quantization issues on CPU
+# Prioritize the Modal volume copy (downloaded fresh from HF Hub by
+# modal_app/seed_models.py), then fall back to local fp32/clean conversions.
 SEAMLESS_MODEL_CANDIDATES = [
-    "./models/seamless-m4t-v2-large-fp32",
-    "/app/models/seamless-m4t-v2-large-fp32",
-    "models/seamless-m4t-v2-large-fp32",
-    "./seamless-m4t-v2-large-clean",
-    "./models/seamless-m4t-v2-large-clean",
-    "/app/models/seamless-m4t-v2-large-clean",
-    "models/seamless-m4t-v2-large-clean",
+    "/app/models/seamless-m4t-v2-large",  # Modal volume (scenolytics-models), mounted at MODEL_DIR in modal_app.py
+    "./models/seamless-m4t-v2-large",
+    "models/seamless-m4t-v2-large",
 ]
-
+ 
 SEAMLESS_SRC_LANG    = "eng"
 SEAMLESS_SAMPLE_RATE = 16_000
-
-
+ 
+ 
 # ===========================================================================
 # Helper utilities
 # ===========================================================================
-
+ 
 def _find_path(candidates: List[str]) -> Optional[Path]:
     """Return the first existing path from a list of candidates."""
     for p in candidates:
@@ -159,8 +160,8 @@ def _find_path(candidates: List[str]) -> Optional[Path]:
         if path.exists():
             return path
     return None
-
-
+ 
+ 
 def _extract_audio_ffmpeg(video_path: str, output_wav: str) -> str:
     """
     Use ffmpeg to extract the audio track as a 16 kHz mono WAV.
@@ -184,59 +185,65 @@ def _extract_audio_ffmpeg(video_path: str, output_wav: str) -> str:
     if not Path(output_wav).exists():
         raise ValueError("ffmpeg produced no output file -- video may have no audio track.")
     return output_wav
-
-
-
-
-
+ 
+ 
+ 
+ 
+ 
 @tf.keras.utils.register_keras_serializable(package="Custom")
 class SumPooling(tf.keras.layers.Layer):
     def __init__(self, axis=1, **kwargs):
         super().__init__(**kwargs)
         self.axis = axis
-
+ 
     def call(self, inputs):
         return tf.reduce_sum(inputs, axis=self.axis)
-
+ 
     def get_config(self):
         config = super().get_config()
         config.update({"axis": self.axis})
         return config
-
-
+ 
+ 
 # ===========================================================================
 # MLPipeline
 # ===========================================================================
-
+ 
 class MLPipeline:
     """
     Load models once at startup, then call evaluate_video() per audition.
-
+ 
     Usage
     -----
     pipeline = MLPipeline()
     await pipeline.initialize()
     result = await pipeline.evaluate_video(video_path, script_text=script)
     """
-
+ 
     def __init__(self):
         # ---- Video model (TensorFlow / Keras) ----
         self.emotion_model = None
-
+ 
         # ---- Audio model (PyTorch / HuggingFace) ----
         self.audio_feature_extractor = None
         self.audio_model             = None
         self.audio_label_mapping     = None
-
-        # ---- Script alignment (SeamlessM4T) ----
+ 
+        # ---- Script alignment (SeamlessM4T, local) ----
         self.script_processor = None   # AutoProcessor
         self.script_model     = None   # SeamlessM4Tv2Model
-
+        import torch as _torch
+        self.script_device = "cuda" if _torch.cuda.is_available() else "cpu"  # CPU-first, matches WhisperX alignment
+ 
+        # ---- WhisperX forced-alignment models, cached per language code ----
+        # populated lazily by script._align_with_whisperx()
+        self._whisperx_align_cache: Dict[str, Tuple] = {}
+ 
         # ---- dlib eye-contact scorer (lazy-loaded on first use) ----
         self._dlib_detector  = None
         self._dlib_predictor = None
         self._dlib_loaded    = False   # True once load has been attempted
-
+ 
         # ---- OpenCV Haar cascade for frame extraction (lazy-loaded) ----
         self._face_cascade = None
         try:
@@ -256,28 +263,28 @@ class MLPipeline:
             "script_alignment_score":     0.25,
         }
         assert abs(sum(self.weights.values()) - 1.0) < 1e-6, "Weights must sum to 1.0"
-
+ 
     # -----------------------------------------------------------------------
     # Initialization
     # -----------------------------------------------------------------------
     async def initialize(self):
         """Load all three models. Call this once at service startup."""
         logger.info("Initializing ML pipeline -- loading models...")
-
+ 
         logger.info("Step 1/3: Loading video emotion model...")
         await self._load_emotion_model()
         logger.info("Step 1/3: Done.")
-
+ 
         logger.info("Step 2/3: Loading audio emotion model...")
         await self._load_audio_model()
         logger.info("Step 2/3: Done.")
-
+ 
         logger.info("Step 3/3: Loading SeamlessM4T script model...")
         await self._load_script_model()
         logger.info("Step 3/3: Done.")
-
+ 
         logger.info("ML pipeline ready.")
-
+ 
     async def _load_emotion_model(self):
         try:
             model_path = _find_path(VIDEO_MODEL_CANDIDATES)
@@ -286,7 +293,7 @@ class MLPipeline:
                     "Video emotion model not found. Tried: %s", VIDEO_MODEL_CANDIDATES
                 )
                 return
-
+ 
             custom_objects = {"SumPooling": SumPooling}
             try:
                 import tf_keras
@@ -307,26 +314,26 @@ class MLPipeline:
                         str(model_path), custom_objects=custom_objects, compile=False
                     )
                 logger.info("Video emotion model loaded via tf.keras from %s", model_path)
-
+ 
         except Exception as e:
             logger.error("Could not load video emotion model: %s", e)
-
+ 
     async def _load_audio_model(self):
         """Load the fine-tuned wav2vec2 audio-emotion model."""
         try:
             from transformers import AutoFeatureExtractor, AutoModelForAudioClassification
-
+ 
             model_path = _find_path(AUDIO_MODEL_CANDIDATES)
             if model_path is None:
                 logger.warning(
                     "Audio emotion model not found. Tried: %s", AUDIO_MODEL_CANDIDATES
                 )
                 return
-
+ 
             self.audio_feature_extractor = AutoFeatureExtractor.from_pretrained(str(model_path))
             self.audio_model = AutoModelForAudioClassification.from_pretrained(str(model_path))
             self.audio_model.eval()
-
+ 
             label_file = model_path / "label_mapping.json"
             if label_file.exists():
                 with open(label_file, "r") as f:
@@ -336,21 +343,42 @@ class MLPipeline:
                     "id2label": {str(i): name for i, name in enumerate(EMOTION_NAMES)},
                     "label2id": {name: str(i) for i, name in enumerate(EMOTION_NAMES)},
                 }
-
+ 
             logger.info("Audio emotion model loaded from %s", model_path)
-
+ 
         except Exception as e:
             logger.error("Could not load audio emotion model: %s", e)
-
+ 
     async def _load_script_model(self):
-        """Use remote Colab SeamlessM4T GPU API."""
-        api_url ="https://dolly-reckless-celibacy.ngrok-free.dev/transcribe"
-        if api_url:
-            self.script_model     = api_url
-            self.script_processor = "remote"
-            logger.info("✓ Using remote SeamlessM4T API at %s", api_url)
-        else:
-            logger.warning("SEAMLESS_API_URL not set -- script alignment disabled")
+        """
+        Load SeamlessM4T v2 locally from disk (transformers SeamlessM4Tv2Model +
+        AutoProcessor). Replaces the old remote Colab/ngrok HTTP API.
+        """
+        try:
+            from transformers import AutoProcessor, SeamlessM4Tv2Model
+ 
+            model_path = _find_path(SEAMLESS_MODEL_CANDIDATES)
+            if model_path is None:
+                logger.warning(
+                    "SeamlessM4T model not found on disk. Tried: %s -- "
+                    "script alignment disabled.",
+                    SEAMLESS_MODEL_CANDIDATES,
+                )
+                self.script_model     = None
+                self.script_processor = None
+                return
+ 
+            logger.info("Loading SeamlessM4T v2 from %s ...", model_path)
+            self.script_processor = AutoProcessor.from_pretrained(str(model_path))
+            self.script_model = SeamlessM4Tv2Model.from_pretrained(str(model_path))
+            self.script_model.to(self.script_device)
+            self.script_model.eval()
+ 
+            logger.info("✓ SeamlessM4T v2 loaded locally from %s (device=%s)",
+                         model_path, self.script_device)
+ 
+        except Exception as e:
+            logger.error("Could not load local SeamlessM4T model: %s", e, exc_info=True)
             self.script_model     = None
             self.script_processor = None
     # -----------------------------------------------------------------------
@@ -1703,123 +1731,161 @@ class MLPipeline:
         script_text: str,
     ) -> Tuple[float, Optional[Dict]]:
         """
-        Transcribe with remote SeamlessM4T API, align with script, and return both:
+        Transcribe locally with SeamlessM4T, force-align with WhisperX, diff
+        against the script with script.compare(), and return both:
         - alignment score (0-100)
         - sentence-level alignment data for emotion detection
         """
         if self.script_model is None or self.script_processor is None:
             logger.warning("SeamlessM4T not loaded -- script alignment score = 0.")
             return 0.0, None
-
+ 
         if not script_text or not audio_path:
             logger.info("No script text or audio provided -- script score = 0.")
             return 0.0, None
-
+ 
         if not Path(audio_path).exists():
             logger.warning("Audio file not found: %s", audio_path)
             return 0.0, None
-
+ 
         try:
-            import aiohttp
             import soundfile as sf
             import librosa
-
-            logger.info("Sending audio to remote SeamlessM4T API...")
-            # Guard: reject tiny/empty files before sending
+ 
+            # Guard: reject tiny/empty files before running ASR
             audio_size = Path(audio_path).stat().st_size
             if audio_size < 8000:
                 logger.warning("Audio file too small (%d bytes), skipping ASR", audio_size)
                 return 0.0, None
+ 
+            audio_array, sr = sf.read(audio_path)
+            audio_array = np.asarray(audio_array, dtype=np.float32).flatten()
+            if audio_array.size == 0:
+                logger.warning("Empty audio array read from %s", audio_path)
+                return 0.0, None
+ 
+            total_duration = len(audio_array) / sr
+            if sr != SEAMLESS_SAMPLE_RATE:
+                audio_array = librosa.resample(
+                    audio_array, orig_sr=sr, target_sr=SEAMLESS_SAMPLE_RATE
+                )
+ 
+            # Parse the script (raw text with embedded "emotion" labels, JSON
+            # list, or plain text -- handled by parse_script_to_json).
             try:
-                async with aiohttp.ClientSession() as health_session:
-                    from urllib.parse import urlparse, urljoin
-                    parsed = urlparse(self.script_model)
-                    health_url = urljoin(self.script_model, parsed.path.rsplit("/transcribe", 1)[0] + "/health")
-                    async with health_session.get(
-                        health_url,
-                        timeout=aiohttp.ClientTimeout(connect=10, sock_read=10)
-                    ) as r:
-                        logger.info("SeamlessM4T health check: %s", await r.text())
+                sentences = script.parse_script_to_json(script_text)
             except Exception as e:
-                logger.error("SeamlessM4T API unreachable: %s", e)
+                logger.error("Failed to parse script_text: %s", e, exc_info=True)
                 return 0.0, None
-            async with aiohttp.ClientSession() as session:
-                with open(audio_path, "rb") as f:
-                    form = aiohttp.FormData()
-                    form.add_field(
-                        "audio", f,
-                        filename="audio.wav",
-                        content_type="audio/wav",
-                    )
-                    import json
-                    sentences = json.loads(script_text)
-                    clean_script = "\n".join(
-                        f'{s["content"]} "{s["emotion"]}"'  
-                        for s in sentences
-                    )
-                    form.add_field(
-                        "script",
-                        clean_script.encode("utf-8"),
-                        filename="script.txt",
-                        content_type="text/plain",
-                    )
-                    async with session.post(
-                        self.script_model,
-                        data=form,
-                        timeout=aiohttp.ClientTimeout(
-                            connect=30,
-                            sock_read=1800,
-                            ),
-                    ) as resp:
-                        if resp.status != 200:
-                           logger.error("Remote ASR API error: %s", await resp.text())
-                           return 0.0, None
-                        api_result = await resp.json()
-
-            full_transcript   = api_result.get("text", "")
-            sentences_aligned = api_result.get("sentences_aligned", [])
-            summary           = api_result.get("summary", {})
-
-            if not full_transcript:
-                logger.warning("Empty transcript from remote API")
+ 
+            if not sentences:
+                logger.warning("Script parsed to zero sentences -- script score = 0.")
                 return 0.0, None
+            logger.info("Parsed script: %d sentences (first=%s)", len(sentences), sentences[0])
 
-            matched  = summary.get("matched",0)
-            changed  = summary.get("changed",0)
-            skipped  = summary.get("skipped",0)
-            added    = summary.get("added",0)
-            matched_words = summary.get("matched_words",[])
-            added_words   = summary.get("added_words",[])
-            changed_words = summary.get("changed_words",[])
-            skipped_words = summary.get("skipped_words",[])
+            joined_script = " ".join(s["script_text"] for s in sentences)
+            detected_lang = script._detect_language(joined_script)
+            logger.debug("[DEBUG] Detected language=%s", detected_lang)
+ 
+            logger.info(
+                "Running local SeamlessM4T transcription (lang=%s). Audio duration: %.2fs",
+                detected_lang, len(audio_array) / sr,
+            )
+            transcription = script._transcribe_with_chunking(
+                self.script_processor,
+                self.script_model,
+                self.script_device,
+                audio_array,
+                tgt_lang=detected_lang,
+            )
+            logger.info(
+                "Transcript length: %d words. Full transcript: %s",
+                len(transcription.split()), transcription,
+            )
+            if not transcription or not transcription.strip():
+                logger.warning("Empty transcript from local SeamlessM4T model")
+                return 0.0, None
+ 
+ 
+            # Force-align transcript words to audio timestamps via WhisperX
+            aligned_words = []
+            try:
+                aligned_words = self._align_with_whisperx(
+                    audio_array, transcription, language=detected_lang,
+                )
+            except Exception as e:
+                logger.error("[DEBUG] Alignment error: %s", e, exc_info=True)
+
+            logger.debug("[DEBUG] Aligned words=%d", len(aligned_words))
+
+            # Step 3: Compare with script and reconstruct timestamps
+            norm_script     = script.normalize_arabic(joined_script)
+            norm_transcript = " ".join(
+                script.normalize_arabic(w["word"]) for w in aligned_words
+            )
+
+            df_comparison = script.compare(norm_script, norm_transcript, aligned_words)
+            summary       = script.compute_summary(df_comparison)
+            logger.debug("[DEBUG] Comparison rows=%d, summary=%s", len(df_comparison), summary)
+
+            script_word_to_sent = script.build_word_sent_map(sentences)
+            df_annotated         = script.annotate_sent_idx(df_comparison, script_word_to_sent)
+            sentences_aligned    = script.reconstruct_timestamps(
+                df_annotated, sentences, total_duration
+            )
+
+            matched = summary.get("matched", 0)
+            changed = summary.get("changed", 0)
+            skipped = summary.get("skipped", 0)
+            added   = summary.get("added", 0)
+
             total_script_words = matched + changed + skipped
             overall_coverage   = matched / total_script_words if total_script_words else 0.0
             score              = round(min(overall_coverage, 1.0) * 100, 2)
 
             logger.info(
                 "Script alignment -- matched=%d changed=%d skipped=%d added=%d -> score=%.2f",
-                 matched, changed, skipped, added, score,
+                matched, changed, skipped, added, score,
             )
-            logger.info("API result keys: %s", list(api_result.keys()))
-            logger.info("Summary: %s", api_result.get("summary"))
-            logger.info("Transcript length: %d words", len(api_result.get("text", "").split()))
+ 
             return score, {
                 "sentences_aligned": sentences_aligned,
-                "transcript":        full_transcript,
+                "transcript":        transcription,
                 "coverage":          overall_coverage,
                 "matched_count":     matched,
                 "added_count":       added,
                 "changed_count":     changed,
                 "skipped_count":     skipped,
-                "matched_words":     matched_words,
-                "added_words":       added_words,
-                "changed_words":     changed_words,
-                "skipped_words":     skipped_words,
+                "matched_words":     summary.get("matched_words", []),
+                "added_words":       summary.get("added_words", []),
+                "changed_words":     summary.get("changed_words", []),
+                "skipped_words":     summary.get("skipped_words", []),
             }
-
+ 
         except Exception as e:
             logger.error("Script alignment scoring failed: %s", e, exc_info=True)
             return 0.0, None
+ 
+    def _align_with_whisperx(
+        self,
+        audio_array: np.ndarray,
+        transcript_text: str,
+        sample_rate: int = SEAMLESS_SAMPLE_RATE,
+        language: Optional[str] = None,
+    ) -> List[Dict]:
+        """
+        Thin wrapper so script._align_with_whisperx can use this
+        instance's WhisperX model cache (self._whisperx_align_cache) and
+        device, without script needing to manage pipeline state.
+        """
+        return script._align_with_whisperx(
+            audio_array,
+            transcript_text,
+            sample_rate=sample_rate,
+            language=language,
+            device=self.script_device,
+        )
+ 
     async def _score_script_alignment(
         self,
         audio_path: Optional[str],

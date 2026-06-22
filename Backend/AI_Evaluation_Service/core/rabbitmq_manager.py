@@ -58,11 +58,9 @@ class RabbitMQManager:
         for attempt in range(max_retries):
             try:
                 self.connection = await aio_pika.connect_robust(
-                    os.environ.get('RABBITMQ_URL', 'amqp://guest:guest@localhost/'),
-                    heartbeat=60,                    # keep-alive ping every 60 s so the
-                                                     # broker never closes an idle connection
-                                                     # during long ML pipeline runs
-                    blocked_connection_timeout=300,  # allow up to 5 min of back-pressure
+                    os.environ.get('RABBITMQ_URL', 'amqp://rabbitmq/'),
+                    heartbeat=60,
+                    blocked_connection_timeout=300,
                 )
 
                 # ── Publisher channel (publishing only) ──────────────────────
@@ -104,6 +102,8 @@ class RabbitMQManager:
                 await audition_queue.bind(self.audition_exchange, routing_key=AUDITION_UPDATED_ROUTING_KEY)
                 await audition_queue.bind(self.audition_exchange, routing_key=AUDITION_SUBMITTED_ROUTING_KEY)
 
+                logger.info(f"✓ Declared and bound queue '{AUDITION_EVENTS_QUEUE}' on exchange '{AUDITION_EVENTS_EXCHANGE}'")
+                logger.info(f"✓ Connection details: {self.connection.url if hasattr(self.connection, 'url') else 'unknown'}")
                 logger.info("✓ Connected to RabbitMQ")
                 return True
 
@@ -125,9 +125,25 @@ class RabbitMQManager:
         """
         Return a live evaluation exchange, transparently reopening the
         publisher channel if it has been closed (e.g. after a long ML run).
+        Also waits for the underlying connection to finish reconnecting,
+        since aio_pika won't open a channel on a connection that's mid-reconnect.
         """
         if self.publisher_channel is None or self.publisher_channel.is_closed:
             logger.warning("Publisher channel closed — reopening...")
+
+            # Wait for the robust connection to actually come back up before
+            # asking it for a channel -- otherwise we hit
+            # "RuntimeError: Connection was not opened" mid-reconnect.
+            for attempt in range(10):
+                if self.connection and not self.connection.is_closed:
+                    break
+                logger.warning(
+                    "Connection not ready yet (attempt %d/10), waiting...", attempt + 1
+                )
+                await asyncio.sleep(1)
+            else:
+                raise RuntimeError("RabbitMQ connection did not recover in time")
+
             self.publisher_channel = await self.connection.channel()
             self.evaluation_exchange = await self.publisher_channel.declare_exchange(
                 EVALUATION_EXCHANGE,
@@ -136,10 +152,12 @@ class RabbitMQManager:
             )
             logger.info("✓ Publisher channel reopened")
         return self.evaluation_exchange
-
     async def publish_evaluation_completed(self, evaluation_id: str, **kwargs):
         """
         Publish evaluation completed event with flexible parameters.
+
+        Retries a few times with backoff, since a long ML run can leave the
+        AMQP connection mid-reconnect right when we try to publish.
 
         Args:
             evaluation_id: Unique evaluation identifier
@@ -148,30 +166,38 @@ class RabbitMQManager:
         """
         logger.debug(f"publish_evaluation_completed called for {evaluation_id}")
 
-        try:
-            exchange = await self._get_evaluation_exchange()
+        message_body = {
+            'evaluation_id': evaluation_id,
+            'eventType': 'EVALUATION_COMPLETED',
+            'timestamp': __import__('datetime').datetime.utcnow().isoformat(),
+            **kwargs,
+        }
+        message = aio_pika.Message(
+            body=json.dumps(message_body).encode(),
+            content_type='application/json',
+            delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
+        )
 
-            message_body = {
-                'evaluation_id': evaluation_id,
-                'eventType': 'EVALUATION_COMPLETED',
-                'timestamp': __import__('datetime').datetime.utcnow().isoformat(),
-                **kwargs,
-            }
-
-            message = aio_pika.Message(
-                body=json.dumps(message_body).encode(),
-                content_type='application/json',
-                delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
-            )
-
-            await exchange.publish(message, routing_key=EVALUATION_ROUTING_KEY)
-            logger.info(f"✓ Published evaluation completed event for {evaluation_id}")
-
-        except Exception as e:
-            logger.error(
-                f"✗ Failed to publish evaluation completed event for {evaluation_id}: {str(e)}",
-                exc_info=True,
-            )
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                exchange = await self._get_evaluation_exchange()
+                await exchange.publish(message, routing_key=EVALUATION_ROUTING_KEY)
+                logger.info(f"✓ Published evaluation completed event for {evaluation_id}")
+                return
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    logger.warning(
+                        f"Publish attempt {attempt + 1}/{max_retries} failed for "
+                        f"{evaluation_id}: {str(e)}. Retrying in {2 * (attempt + 1)}s..."
+                    )
+                    await asyncio.sleep(2 * (attempt + 1))
+                else:
+                    logger.error(
+                        f"✗ Failed to publish evaluation completed event for "
+                        f"{evaluation_id} after {max_retries} attempts: {str(e)}",
+                        exc_info=True,
+                    )
 
     async def publish_evaluation_result(
         self,

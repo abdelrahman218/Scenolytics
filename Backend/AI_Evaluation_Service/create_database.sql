@@ -1,1 +1,1 @@
-CREATE DATABASE IF NOT EXISTS ai_evaluation_db;
+CREATE DATABASE IF NOT EXISTS submission_evaluation_db;
